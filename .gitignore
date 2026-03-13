@@ -1,0 +1,16 @@
+# macOS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# Node backend
+backend/node_modules/
+backend/.env
+backend/www.instagram.com_cookies.json
+backend/post-links.json
+
+# iOS / Xcode
+ios/DailyWidgets.xcodeproj/project.xcworkspace/
+ios/DailyWidgets.xcodeproj/xcuserdata/
+ios/DailyWidgets/DerivedData/
+ios/DailyWidgets/Build/

@@ -1,0 +1,22 @@
+{
+  "name": "instagram-sync",
+  "version": "1.0.0",
+  "description": "Scrape Instagram profile and sync images to Supabase",
+  "type": "module",
+  "main": "sync.js",
+  "scripts": {
+    "sync": "node sync.js",
+    "bulk": "node sync.js --bulk",
+    "collect-links": "node collect-links.js",
+    "import-links": "node import-from-links.js",
+    "clear-posts": "node clear-posts-and-storage.js",
+    "prune-orphans": "node prune-orphan-posts.js",
+    "install-browser": "npx playwright install chromium"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "dotenv": "^16.4.5",
+    "playwright": "^1.49.0",
+    "sharp": "^0.33.5"
+  }
+}
