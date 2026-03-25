@@ -50,3 +50,26 @@ If `sessionid` alone still only returns ~12 posts, export your full cookies and 
    - `INSTAGRAM_COOKIES_PATH=/Users/aryapatel/code/widget/backend/instagram-cookies.json`
 
 Security: treat this file like a password. Don’t commit it.
+
+## Admin UI (browse & delete Storage + DB rows)
+
+Small **local-only** web UI that lists objects in the `instagram-posts/posts/` prefix and lets you delete selected images. Each delete removes the file from Storage **and** the row in `public.posts` where `storage_path` matches (not a DB foreign-key cascade, but the same outcome).
+
+1. Ensure `.env` has `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`.
+2. Optional: set `ADMIN_TOKEN` in `.env`; the page will prompt once and send it as `X-Admin-Token`.
+3. Run:
+
+   ```bash
+   npm run admin
+   ```
+
+4. Open `http://127.0.0.1:3847/` (or the port you set with `ADMIN_PORT`).
+
+**Do not** expose this server to the internet; it uses the service role key.
+
+### Import tab (Instagram links → Storage + DB)
+
+1. **Preview** pastes post/reel URLs (one per line). The server uses **Playwright** to open each page (same optional `INSTAGRAM_SESSIONID` / `INSTAGRAM_COOKIES_PATH` as `sync.js` if login is required).
+2. Choose thumbnails (all selected by default), then **Add selected to Glance** — uploads `posts/<shortcode>.jpg` and upserts `public.posts` (same as `import-from-links.js`).
+
+Requires Chromium: `npx playwright install chromium` (if you have not already).
