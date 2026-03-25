@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Glance — Admin</title>
+  <style>
+    :root { font-family: system-ui, sans-serif; background: #0f1115; color: #e8eaed; }
+    body { max-width: 1200px; margin: 0 auto; padding: 1.25rem; }
+    h1 { font-size: 1.25rem; font-weight: 600; margin: 0 0 0.5rem; }
+    p { color: #9aa0a6; font-size: 0.9rem; margin: 0 0 1rem; }
+    .tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+    .tabs button {
+      padding: 0.5rem 1rem; border-radius: 8px; border: 1px solid #3c4043;
+      background: #1a1d24; color: inherit; cursor: pointer; font-size: 0.875rem;
+    }
+    .tabs button.active { background: #8ab4f8; color: #0f1115; border-color: transparent; font-weight: 600; }
+    .panel { display: none; }
+    .panel.active { display: block; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 1rem; }
+    button, textarea {
+      padding: 0.45rem 0.75rem; border-radius: 8px; border: 1px solid #3c4043;
+      background: #1a1d24; color: inherit; font-size: 0.875rem;
+    }
+    textarea { width: 100%; min-height: 100px; box-sizing: border-box; font-family: inherit; resize: vertical; }
+    button.primary { background: #8ab4f8; color: #0f1115; border-color: transparent; font-weight: 600; }
+    button.danger { background: #f28b82; color: #1a0e0e; border-color: transparent; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.75rem;
+    }
+    .card {
+      border: 1px solid #3c4043; border-radius: 10px; overflow: hidden; background: #1a1d24;
+      cursor: pointer; user-select: none;
+    }
+    .card.import-fail { cursor: default; opacity: 0.85; outline: 1px solid #f28b82; }
+    .is-selected { outline: 2px solid #8ab4f8; outline-offset: 2px; }
+    .card img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; background: #000; }
+    .meta { padding: 0.35rem 0.5rem; font-size: 0.65rem; color: #9aa0a6; word-break: break-all; }
+    .status { margin-top: 1rem; font-size: 0.8rem; color: #9aa0a6; }
+    .err { color: #f28b82; }
+  </style>
+</head>
+<body>
+  <h1>Glance admin</h1>
+  <p>Local only. Uses your Supabase service role. Import uses Playwright (same cookies as <code>sync.js</code> if set).</p>
+
+  <div class="tabs">
+    <button type="button" class="tab active" data-tab="storage">Storage</button>
+    <button type="button" class="tab" data-tab="import">Import links</button>
+  </div>
+
+  <div id="panel-storage" class="panel active">
+    <div class="toolbar">
+      <button type="button" id="reload">Reload</button>
+      <button type="button" class="danger" id="del" disabled>Delete selected</button>
+      <span id="count" class="status"></span>
+    </div>
+    <div id="msg-storage" class="status"></div>
+    <div class="grid" id="grid"></div>
+  </div>
+
+  <div id="panel-import" class="panel">
+    <p>Paste Instagram post or reel URLs (one per line). Preview loads images; then add selected to Storage + <code>posts</code>.</p>
+    <textarea id="urls" placeholder="https://www.instagram.com/p/DWRd7OqjFVd/"></textarea>
+    <div class="toolbar" style="margin-top:0.75rem;">
+      <button type="button" class="primary" id="previewBtn">Preview</button>
+      <button type="button" class="primary" id="importBtn" disabled>Add selected to Glance</button>
+    </div>
+    <div id="msg-import" class="status"></div>
+    <div class="grid" id="importGrid"></div>
+  </div>
+
+  <script>
+    const msgStorage = document.getElementById("msg-storage");
+    const msgImport = document.getElementById("msg-import");
+    const grid = document.getElementById("grid");
+    const countEl = document.getElementById("count");
+    const delBtn = document.getElementById("del");
+    let items = [];
+    const selected = new Set();
+
+    const importGrid = document.getElementById("importGrid");
+    const importBtn = document.getElementById("importBtn");
+    let previewItems = [];
+    /** Selected preview rows: keys `kind|shortcode` (reel vs /p/ matters for scraping). */
+    const importSelected = new Set();
+
+    function importSelKey(it) {
+      const kind = it.kind === "reel" ? "reel" : "p";
+      return `${kind}|${it.shortcode}`;
+    }
+
+    function importTargetsFromSelection() {
+      return [...importSelected].map((k) => {
+        const pipe = k.indexOf("|");
+        const kind = k.slice(0, pipe) === "reel" ? "reel" : "p";
+        const shortcode = k.slice(pipe + 1);
+        return { shortcode, kind };
+      });
+    }
+
+    function setMsg(el, text, isErr) {
+      el.textContent = text || "";
+      el.className = "status" + (isErr ? " err" : "");
+    }
+
+    function esc(s) {
+      const d = document.createElement("div");
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    async function api(path, options = {}) {
+      const headers = { "Content-Type": "application/json", ...options.headers };
+      const token = localStorage.getItem("adminToken");
+      if (token) headers["X-Admin-Token"] = token;
+      const r = await fetch(path, { ...options, headers });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.error || r.statusText || "Request failed");
+      return body;
+    }
+
+    document.querySelectorAll(".tab").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".tab").forEach((b) => b.classList.remove("active"));
+        document.querySelectorAll(".panel").forEach((p) => p.classList.remove("active"));
+        btn.classList.add("active");
+        document.getElementById("panel-" + btn.dataset.tab).classList.add("active");
+      });
+    });
+
+    function renderStorage() {
+      grid.innerHTML = "";
+      selected.clear();
+      delBtn.disabled = true;
+      countEl.textContent = items.length ? `${items.length} images` : "No images";
+      for (const it of items) {
+        const card = document.createElement("div");
+        card.className = "card";
+        card.dataset.path = it.storagePath;
+        card.innerHTML = `<img src="${it.publicUrl}" alt="" loading="lazy" /><div class="meta">${it.storagePath}</div>`;
+        card.addEventListener("click", () => {
+          const p = it.storagePath;
+          if (selected.has(p)) { selected.delete(p); card.classList.remove("is-selected"); }
+          else { selected.add(p); card.classList.add("is-selected"); }
+          delBtn.disabled = selected.size === 0;
+        });
+        grid.appendChild(card);
+      }
+    }
+
+    async function loadStorage() {
+      setMsg(msgStorage, "Loading…");
+      try {
+        const data = await api("/api/images");
+        items = data.items || [];
+        setMsg(msgStorage, "");
+        renderStorage();
+      } catch (e) {
+        setMsg(msgStorage, e.message, true);
+        items = [];
+        renderStorage();
+      }
+    }
+
+    document.getElementById("reload").addEventListener("click", loadStorage);
+
+    delBtn.addEventListener("click", async () => {
+      if (!selected.size || !confirm(`Remove ${selected.size} file(s) from Storage and matching rows?`)) return;
+      setMsg(msgStorage, "Deleting…");
+      delBtn.disabled = true;
+      try {
+        const data = await api("/api/delete", {
+          method: "POST",
+          body: JSON.stringify({ paths: [...selected] }),
+        });
+        setMsg(msgStorage, data.message || "Done.");
+        await loadStorage();
+      } catch (e) {
+        setMsg(msgStorage, e.message, true);
+        delBtn.disabled = false;
+      }
+    });
+
+    function renderImportPreviews() {
+      importGrid.innerHTML = "";
+      importSelected.clear();
+      importBtn.disabled = true;
+      for (const it of previewItems) {
+        const card = document.createElement("div");
+        if (it.error) {
+          card.className = "card import-fail";
+          card.innerHTML = `<div class="meta" style="padding:0.75rem;">${esc(it.shortcode)}<br><span class="err">${esc(it.error)}</span></div>`;
+          importGrid.appendChild(card);
+          continue;
+        }
+        card.className = "card is-selected";
+        const ikey = importSelKey(it);
+        importSelected.add(ikey);
+        card.dataset.selKey = ikey;
+        const kindLabel = it.kind === "reel" ? "reel" : "post";
+        const cap = it.caption ? it.caption.slice(0, 80) + (it.caption.length > 80 ? "…" : "") : "";
+        card.innerHTML = `<img src="${it.previewDataUrl}" alt="" /><div class="meta">${esc(it.shortcode)} · ${kindLabel}${cap ? "<br>" + esc(cap) : ""}</div>`;
+        card.addEventListener("click", () => {
+          if (importSelected.has(ikey)) { importSelected.delete(ikey); card.classList.remove("is-selected"); }
+          else { importSelected.add(ikey); card.classList.add("is-selected"); }
+          importBtn.disabled = importSelected.size === 0;
+        });
+        importGrid.appendChild(card);
+      }
+      importBtn.disabled = importSelected.size === 0;
+    }
+
+    document.getElementById("previewBtn").addEventListener("click", async () => {
+      const input = document.getElementById("urls").value;
+      setMsg(msgImport, "Fetching previews (Playwright)…");
+      importBtn.disabled = true;
+      previewItems = [];
+      importGrid.innerHTML = "";
+      try {
+        const data = await api("/api/preview", { method: "POST", body: JSON.stringify({ input }) });
+        previewItems = data.items || [];
+        setMsg(msgImport, previewItems.length ? "Click tiles to toggle selection, then add to Glance." : "No previews.");
+        renderImportPreviews();
+      } catch (e) {
+        setMsg(msgImport, e.message, true);
+      }
+    });
+
+    importBtn.addEventListener("click", async () => {
+      if (!importSelected.size) return;
+      if (!confirm(`Upload ${importSelected.size} post(s) to Storage and posts table?`)) return;
+      setMsg(msgImport, "Importing…");
+      importBtn.disabled = true;
+      try {
+        const data = await api("/api/import-posts", {
+          method: "POST",
+          body: JSON.stringify({ targets: importTargetsFromSelection() }),
+        });
+        const bad = (data.results || []).filter((r) => !r.ok);
+        setMsg(
+          msgImport,
+          data.message + (bad.length ? " Errors: " + bad.map((b) => b.shortcode).join(", ") : ""),
+          bad.length > 0
+        );
+        await loadStorage();
+      } catch (e) {
+        setMsg(msgImport, e.message, true);
+      }
+      importBtn.disabled = importSelected.size === 0;
+    });
+
+    (function tokenGate() {
+      const t = localStorage.getItem("adminToken");
+      if (t) return;
+      const want = prompt("Admin token (ADMIN_TOKEN in .env). Leave empty if unused:");
+      if (want != null && want !== "") localStorage.setItem("adminToken", want);
+      else localStorage.removeItem("adminToken");
+    })();
+
+    loadStorage();
+  </script>
+</body>
+</html>
