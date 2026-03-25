@@ -3,7 +3,7 @@
 Resolve Instagram post/reel targets to image URL + caption using Instaloader.
 
 Input (stdin JSON): {"targets":[{"shortcode":"DWRd7OqjFVd","kind":"p"}]}
-Output (stdout JSON): {"items":[{"shortcode":"...","kind":"p","image_url":"...","caption":"..."}]}
+Output (stdout JSON): {"items":[{"shortcode":"...","kind":"p","media_index":1,"media_count":1,"image_url":"...","caption":"..."}]}
 """
 import json
 import sys
@@ -49,18 +49,35 @@ def main() -> int:
             image_url = None
             caption = post.caption if hasattr(post, "caption") else None
 
-            # For sidecars, pick first node display URL; for single media use post.url.
             if post.typename == "GraphSidecar":
+                nodes = []
                 try:
-                    first = next(post.get_sidecar_nodes())
-                    image_url = getattr(first, "display_url", None)
+                    nodes = list(post.get_sidecar_nodes())
                 except Exception:
-                    image_url = None
+                    nodes = []
 
-            if not image_url:
-                image_url = getattr(post, "url", None)
+                if not nodes:
+                    items.append({"shortcode": shortcode, "kind": kind, "error": "No media in carousel"})
+                    continue
 
-            # For video-only posts, .url can be thumbnail; still OK for our image widget.
+                media_count = len(nodes)
+                for idx, node in enumerate(nodes, start=1):
+                    image_url = getattr(node, "display_url", None)
+                    if not image_url:
+                        continue
+                    items.append(
+                        {
+                            "shortcode": shortcode,
+                            "kind": kind,
+                            "media_index": idx,
+                            "media_count": media_count,
+                            "image_url": image_url,
+                            "caption": caption,
+                        }
+                    )
+                continue
+
+            image_url = getattr(post, "url", None)
             if not image_url:
                 items.append({"shortcode": shortcode, "kind": kind, "error": "No media URL"})
                 continue
@@ -69,6 +86,8 @@ def main() -> int:
                 {
                     "shortcode": shortcode,
                     "kind": kind,
+                    "media_index": 1,
+                    "media_count": 1,
                     "image_url": image_url,
                     "caption": caption,
                 }
