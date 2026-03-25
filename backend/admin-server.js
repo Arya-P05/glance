@@ -9,7 +9,7 @@
  *   cd backend && npm run admin
  *   open http://127.0.0.1:3847/
  *
- * Import tab needs Playwright (`npx playwright install chromium`).
+ * Import tab needs Instaloader (`pip3 install instaloader`).
  */
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
