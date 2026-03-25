@@ -43,7 +43,7 @@
 </head>
 <body>
   <h1>Glance admin</h1>
-  <p>Local only. Uses your Supabase service role. Import uses Playwright (same cookies as <code>sync.js</code> if set).</p>
+  <p>Local only. Uses your Supabase service role. Import uses Instaloader (same cookies/session vars from <code>.env</code> still apply for other scripts).</p>
 
   <div class="tabs">
     <button type="button" class="tab active" data-tab="storage">Storage</button>
@@ -88,16 +88,25 @@
 
     function importSelKey(it) {
       const kind = it.kind === "reel" ? "reel" : "p";
-      return `${kind}|${it.shortcode}`;
+      const idx = Number(it.media_index || 1);
+      return `${kind}|${it.shortcode}|${idx}`;
     }
 
-    function importTargetsFromSelection() {
-      return [...importSelected].map((k) => {
-        const pipe = k.indexOf("|");
-        const kind = k.slice(0, pipe) === "reel" ? "reel" : "p";
-        const shortcode = k.slice(pipe + 1);
-        return { shortcode, kind };
-      });
+    function importItemsFromSelection() {
+      const selected = [];
+      for (const it of previewItems) {
+        const key = importSelKey(it);
+        if (!importSelected.has(key)) continue;
+        selected.push({
+          shortcode: it.shortcode,
+          kind: it.kind === "reel" ? "reel" : "p",
+          media_index: Number(it.media_index || 1),
+          media_count: Number(it.media_count || 1),
+          image_url: it.image_url || null,
+          caption: it.caption || null,
+        });
+      }
+      return selected;
     }
 
     function setMsg(el, text, isErr) {
@@ -200,8 +209,11 @@
         importSelected.add(ikey);
         card.dataset.selKey = ikey;
         const kindLabel = it.kind === "reel" ? "reel" : "post";
+        const idx = Number(it.media_index || 1);
+        const total = Number(it.media_count || 1);
+        const indexLabel = total > 1 ? ` · ${idx}/${total}` : "";
         const cap = it.caption ? it.caption.slice(0, 80) + (it.caption.length > 80 ? "…" : "") : "";
-        card.innerHTML = `<img src="${it.previewDataUrl}" alt="" /><div class="meta">${esc(it.shortcode)} · ${kindLabel}${cap ? "<br>" + esc(cap) : ""}</div>`;
+        card.innerHTML = `<img src="${it.previewDataUrl}" alt="" /><div class="meta">${esc(it.shortcode)} · ${kindLabel}${indexLabel}${cap ? "<br>" + esc(cap) : ""}</div>`;
         card.addEventListener("click", () => {
           if (importSelected.has(ikey)) { importSelected.delete(ikey); card.classList.remove("is-selected"); }
           else { importSelected.add(ikey); card.classList.add("is-selected"); }
@@ -214,7 +226,7 @@
 
     document.getElementById("previewBtn").addEventListener("click", async () => {
       const input = document.getElementById("urls").value;
-      setMsg(msgImport, "Fetching previews (Playwright)…");
+      setMsg(msgImport, "Fetching previews (Instaloader)…");
       importBtn.disabled = true;
       previewItems = [];
       importGrid.innerHTML = "";
@@ -236,7 +248,7 @@
       try {
         const data = await api("/api/import-posts", {
           method: "POST",
-          body: JSON.stringify({ targets: importTargetsFromSelection() }),
+          body: JSON.stringify({ items: importItemsFromSelection() }),
         });
         const bad = (data.results || []).filter((r) => !r.ok);
         setMsg(
