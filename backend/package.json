@@ -11,6 +11,7 @@
     "import-links": "node import-from-links.js",
     "clear-posts": "node clear-posts-and-storage.js",
     "prune-orphans": "node prune-orphan-posts.js",
+    "admin": "node admin-server.js",
     "install-browser": "npx playwright install chromium"
   },
   "dependencies": {
