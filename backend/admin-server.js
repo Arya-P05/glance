@@ -174,12 +174,12 @@ async function main() {
           const kind = it.kind === "reel" ? "reel" : "p";
           try {
             if (it.error) {
-              items.push({ shortcode, kind, caption: null, error: it.error });
+              items.push({ shortcode, kind, media_index: Number(it.media_index || 1), media_count: Number(it.media_count || 1), caption: null, error: it.error });
               continue;
             }
             const imageUrl = typeof it.image_url === "string" ? it.image_url : null;
             if (!imageUrl) {
-              items.push({ shortcode, kind, caption: null, error: "No image URL from resolver" });
+              items.push({ shortcode, kind, media_index: Number(it.media_index || 1), media_count: Number(it.media_count || 1), caption: null, error: "No image URL from resolver" });
               continue;
             }
             const raw = await downloadImage(imageUrl);
@@ -188,11 +188,14 @@ async function main() {
             items.push({
               shortcode,
               kind,
+              media_index: Number(it.media_index || 1),
+              media_count: Number(it.media_count || 1),
               caption: it.caption || null,
+              image_url: imageUrl,
               previewDataUrl: `data:image/jpeg;base64,${b64}`,
             });
           } catch (e) {
-            items.push({ shortcode, kind, caption: null, error: e.message || "Preview failed" });
+            items.push({ shortcode, kind, media_index: Number(it.media_index || 1), media_count: Number(it.media_count || 1), caption: null, error: e.message || "Preview failed" });
           }
         }
         res.writeHead(200, { "Content-Type": "application/json" });
@@ -215,49 +218,75 @@ async function main() {
         res.end(JSON.stringify({ error: "Invalid JSON" }));
         return;
       }
-      let targets = [];
-      if (Array.isArray(payload.targets) && payload.targets.length) {
-        for (const t of payload.targets) {
-          if (!t || typeof t.shortcode !== "string" || !/^[A-Za-z0-9_-]+$/.test(t.shortcode)) continue;
-          const kind = t.kind === "reel" ? "reel" : "p";
-          targets.push({ shortcode: t.shortcode, kind });
+      let items = [];
+      if (Array.isArray(payload.items) && payload.items.length) {
+        for (const it of payload.items) {
+          if (!it || typeof it.shortcode !== "string" || !/^[A-Za-z0-9_-]+$/.test(it.shortcode)) continue;
+          const image_url = typeof it.image_url === "string" ? it.image_url : null;
+          if (!image_url) continue;
+          items.push({
+            shortcode: it.shortcode,
+            kind: it.kind === "reel" ? "reel" : "p",
+            media_index: Number(it.media_index || 1),
+            media_count: Number(it.media_count || 1),
+            image_url,
+            caption: typeof it.caption === "string" ? it.caption : null,
+          });
         }
-        targets = targets.slice(0, 50);
+        items = items.slice(0, 100);
       } else {
-        const rawCodes = Array.isArray(payload.shortcodes) ? payload.shortcodes : [];
-        const shortcodes = [...new Set(rawCodes.filter((s) => typeof s === "string" && /^[A-Za-z0-9_-]+$/.test(s)))].slice(
-          0,
-          50
-        );
-        targets = shortcodes.map((shortcode) => ({ shortcode, kind: "p" }));
+        // Back-compat: if caller still sends targets/shortcodes, resolve now.
+        let targets = [];
+        if (Array.isArray(payload.targets) && payload.targets.length) {
+          for (const t of payload.targets) {
+            if (!t || typeof t.shortcode !== "string" || !/^[A-Za-z0-9_-]+$/.test(t.shortcode)) continue;
+            const kind = t.kind === "reel" ? "reel" : "p";
+            targets.push({ shortcode: t.shortcode, kind });
+          }
+          targets = targets.slice(0, 50);
+        } else {
+          const rawCodes = Array.isArray(payload.shortcodes) ? payload.shortcodes : [];
+          const shortcodes = [...new Set(rawCodes.filter((s) => typeof s === "string" && /^[A-Za-z0-9_-]+$/.test(s)))].slice(
+            0,
+            50
+          );
+          targets = shortcodes.map((shortcode) => ({ shortcode, kind: "p" }));
+        }
+        if (!targets.length) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "items[] (or targets[]/shortcodes[]) required" }));
+          return;
+        }
+        items = await resolveTargetsWithInstaloader(targets);
       }
 
-      if (!targets.length) {
+      if (!items.length) {
         res.writeHead(400, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "targets[] or shortcodes[] required" }));
+        res.end(JSON.stringify({ error: "No valid import items" }));
         return;
       }
 
       const results = [];
       try {
-        const resolved = await resolveTargetsWithInstaloader(targets);
-
-        for (const it of resolved) {
+        for (const it of items) {
           const shortcode = it.shortcode;
+          const mediaIndex = Number(it.media_index || 1);
+          const mediaCount = Number(it.media_count || 1);
           try {
             if (it.error) {
-              results.push({ shortcode, ok: false, error: it.error });
+              results.push({ shortcode, media_index: mediaIndex, ok: false, error: it.error });
               continue;
             }
             const imageUrl = typeof it.image_url === "string" ? it.image_url : null;
             if (!imageUrl) {
-              results.push({ shortcode, ok: false, error: "No image URL from resolver" });
+              results.push({ shortcode, media_index: mediaIndex, ok: false, error: "No image URL from resolver" });
               continue;
             }
 
             const imageBytes = await downloadImage(imageUrl);
             const toUpload = await resizeForWidget(imageBytes);
-            const storagePath = `${PREFIX}/${shortcode}.jpg`;
+            const storagePath = mediaCount > 1 ? `${PREFIX}/${shortcode}-${mediaIndex}.jpg` : `${PREFIX}/${shortcode}.jpg`;
+            const instagramId = mediaCount > 1 ? `${shortcode}_${mediaIndex}` : shortcode;
 
             const { error: uploadErr } = await supabase.storage.from(BUCKET).upload(storagePath, toUpload, {
               contentType: "image/jpeg",
@@ -267,7 +296,7 @@ async function main() {
 
             const { error: insertErr } = await supabase.from("posts").upsert(
               {
-                instagram_id: shortcode,
+                instagram_id: instagramId,
                 storage_path: storagePath,
                 caption: it.caption || null,
                 posted_at: null,
@@ -275,9 +304,9 @@ async function main() {
               { onConflict: "instagram_id" }
             );
             if (insertErr) throw insertErr;
-            results.push({ shortcode, ok: true, storagePath });
+            results.push({ shortcode, media_index: mediaIndex, ok: true, storagePath });
           } catch (e) {
-            results.push({ shortcode, ok: false, error: e.message || "Import failed" });
+            results.push({ shortcode, media_index: mediaIndex, ok: false, error: e.message || "Import failed" });
           }
         }
         const okn = results.filter((r) => r.ok).length;
@@ -285,7 +314,7 @@ async function main() {
         res.end(
           JSON.stringify({
             results,
-            message: `Imported ${okn} of ${targets.length}.`,
+            message: `Imported ${okn} of ${items.length}.`,
           })
         );
       } catch (e) {
