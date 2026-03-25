@@ -13,15 +13,14 @@
  */
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
+import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   BUCKET as IG_BUCKET,
-  createInstagramBrowser,
   downloadImage,
-  getPostImageAndCaption,
   parsePostTargetsFromInput,
   resizeForPreview,
   resizeForWidget,
@@ -69,6 +68,41 @@ async function listAllStoragePaths(supabase) {
     if (files.length < pageSize) break;
   }
   return paths;
+}
+
+async function resolveTargetsWithInstaloader(targets) {
+  const scriptPath = join(__dirname, "instaloader_resolve.py");
+  const py = spawn("python3", [scriptPath], {
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+
+  const input = JSON.stringify({ targets });
+  py.stdin.write(input);
+  py.stdin.end();
+
+  let out = "";
+  let err = "";
+  py.stdout.on("data", (d) => {
+    out += d.toString();
+  });
+  py.stderr.on("data", (d) => {
+    err += d.toString();
+  });
+
+  const code = await new Promise((resolve) => py.on("close", resolve));
+  if (code !== 0) {
+    throw new Error(err.trim() || "Instaloader resolver failed");
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(out || "{}");
+  } catch {
+    throw new Error("Instaloader resolver returned invalid JSON");
+  }
+  if (parsed.error) throw new Error(parsed.error);
+  if (!Array.isArray(parsed.items)) throw new Error("Instaloader resolver returned invalid items");
+  return parsed.items;
 }
 
 async function main() {
@@ -132,17 +166,20 @@ async function main() {
         return;
       }
 
-      let browser;
       try {
-        const { browser: b, context } = await createInstagramBrowser();
-        browser = b;
+        const resolved = await resolveTargetsWithInstaloader(targets);
         const items = [];
-        for (const { shortcode, kind } of targets) {
-          const page = await context.newPage();
+        for (const it of resolved) {
+          const shortcode = it.shortcode;
+          const kind = it.kind === "reel" ? "reel" : "p";
           try {
-            const { imageUrl, caption } = await getPostImageAndCaption(page, shortcode, kind);
+            if (it.error) {
+              items.push({ shortcode, kind, caption: null, error: it.error });
+              continue;
+            }
+            const imageUrl = typeof it.image_url === "string" ? it.image_url : null;
             if (!imageUrl) {
-              items.push({ shortcode, kind, caption: null, error: "No image found on page" });
+              items.push({ shortcode, kind, caption: null, error: "No image URL from resolver" });
               continue;
             }
             const raw = await downloadImage(imageUrl);
@@ -151,21 +188,16 @@ async function main() {
             items.push({
               shortcode,
               kind,
-              caption: caption || null,
+              caption: it.caption || null,
               previewDataUrl: `data:image/jpeg;base64,${b64}`,
             });
           } catch (e) {
             items.push({ shortcode, kind, caption: null, error: e.message || "Preview failed" });
-          } finally {
-            await page.close().catch(() => {});
           }
         }
-        await browser.close();
-        browser = null;
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ items }));
       } catch (e) {
-        if (browser) await browser.close().catch(() => {});
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: e.message }));
       }
@@ -206,20 +238,23 @@ async function main() {
         return;
       }
 
-      let browser;
       const results = [];
       try {
-        const { browser: b, context } = await createInstagramBrowser();
-        browser = b;
+        const resolved = await resolveTargetsWithInstaloader(targets);
 
-        for (const { shortcode, kind } of targets) {
-          const page = await context.newPage();
+        for (const it of resolved) {
+          const shortcode = it.shortcode;
           try {
-            const { imageUrl, caption } = await getPostImageAndCaption(page, shortcode, kind);
-            if (!imageUrl) {
-              results.push({ shortcode, ok: false, error: "No image" });
+            if (it.error) {
+              results.push({ shortcode, ok: false, error: it.error });
               continue;
             }
+            const imageUrl = typeof it.image_url === "string" ? it.image_url : null;
+            if (!imageUrl) {
+              results.push({ shortcode, ok: false, error: "No image URL from resolver" });
+              continue;
+            }
+
             const imageBytes = await downloadImage(imageUrl);
             const toUpload = await resizeForWidget(imageBytes);
             const storagePath = `${PREFIX}/${shortcode}.jpg`;
@@ -234,7 +269,7 @@ async function main() {
               {
                 instagram_id: shortcode,
                 storage_path: storagePath,
-                caption: caption || null,
+                caption: it.caption || null,
                 posted_at: null,
               },
               { onConflict: "instagram_id" }
@@ -243,13 +278,8 @@ async function main() {
             results.push({ shortcode, ok: true, storagePath });
           } catch (e) {
             results.push({ shortcode, ok: false, error: e.message || "Import failed" });
-          } finally {
-            await page.close().catch(() => {});
           }
         }
-
-        await browser.close();
-        browser = null;
         const okn = results.filter((r) => r.ok).length;
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(
@@ -259,7 +289,6 @@ async function main() {
           })
         );
       } catch (e) {
-        if (browser) await browser.close().catch(() => {});
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: e.message }));
       }
