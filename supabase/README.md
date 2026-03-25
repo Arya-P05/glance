@@ -6,8 +6,9 @@
    - Name: `instagram-posts`
    - Public bucket: **Yes** (so the widget can load images via public URLs without auth).
 
-3. **Run the migration** (Dashboard → SQL Editor → New query):
-   - Paste and run the contents of `migrations/20250310000000_initial.sql`.
+3. **Run the migrations** (Dashboard → SQL Editor → New query):
+   - Paste and run `migrations/20250310000000_initial.sql`.
+   - Then run `migrations/20260313000000_weighted_random_post.sql` (keeps randomness but boosts newer posts).
 
 4. **Keys:**
    - **Project URL** and **anon key**: used by the iOS app/widget (read-only).
