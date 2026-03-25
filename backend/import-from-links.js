@@ -9,69 +9,12 @@ import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
 import { readFile } from "node:fs/promises";
 import { chromium } from "playwright";
-import sharp from "sharp";
-
-const BUCKET = "instagram-posts";
-const POST_URL = (shortcode) => `https://www.instagram.com/p/${shortcode}/`;
+import { BUCKET, downloadImage, getPostImageAndCaption, resizeForWidget } from "./instagram-helper.js";
 
 function env(name) {
   const v = process.env[name];
   if (!v) throw new Error(`Missing env: ${name}`);
   return v;
-}
-
-async function downloadImage(url) {
-  const res = await fetch(url, {
-    headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36" },
-  });
-  if (!res.ok) throw new Error(`Download failed: ${res.status} ${url}`);
-  return Buffer.from(await res.arrayBuffer());
-}
-
-async function resizeForWidget(buffer, maxSize = 800) {
-  return sharp(buffer)
-    .resize(maxSize, maxSize, { fit: "inside", withoutEnlargement: true })
-    .jpeg({ quality: 85 })
-    .toBuffer();
-}
-
-function extFromUrl(url) {
-  try {
-    const path = new URL(url).pathname;
-    if (path.includes(".png")) return "png";
-    if (path.includes(".webp")) return "webp";
-  } catch (_) {}
-  return "jpg";
-}
-
-async function getPostImageAndCaption(page, shortcode) {
-  const url = POST_URL(shortcode);
-  await page.goto(url, { waitUntil: "domcontentloaded", timeout: 20000 });
-  await page.waitForTimeout(800);
-
-  const result = await page.evaluate(() => {
-    const imgs = Array.from(document.querySelectorAll("img"));
-    const scored = imgs
-      .map((img) => {
-        const src = img.getAttribute("src");
-        const w = img.naturalWidth || 0;
-        const h = img.naturalHeight || 0;
-        const score = w * h;
-        return src ? { src, w, h, score } : null;
-      })
-      .filter(Boolean)
-      .filter((x) => x.w >= 400 && x.h >= 400)
-      .sort((a, b) => b.score - a.score);
-
-    const ogImage =
-      document.querySelector('meta[property="og:image"]')?.getAttribute("content") || null;
-    const ogDesc =
-      document.querySelector('meta[property="og:description"]')?.getAttribute("content") || null;
-
-    return { imageUrl: scored[0]?.src || ogImage, caption: ogDesc };
-  });
-
-  return { imageUrl: result.imageUrl || null, caption: result.caption || null };
 }
 
 async function main() {
@@ -91,8 +34,6 @@ async function main() {
     userAgent:
       "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
   });
-  const page = await context.newPage();
-
   let added = 0;
   let skipped = 0;
   let failed = 0;
@@ -104,8 +45,9 @@ async function main() {
       continue;
     }
 
+    const page = await context.newPage();
     try {
-      const { imageUrl, caption } = await getPostImageAndCaption(page, shortcode);
+      const { imageUrl, caption } = await getPostImageAndCaption(page, shortcode, "p");
       if (!imageUrl) {
         failed++;
         continue;
@@ -132,6 +74,8 @@ async function main() {
     } catch (e) {
       failed++;
       console.warn(`Failed ${shortcode}: ${e.message}`);
+    } finally {
+      await page.close().catch(() => {});
     }
   }
 
