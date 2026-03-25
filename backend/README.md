@@ -69,7 +69,13 @@ Small **local-only** web UI that lists objects in the `instagram-posts/posts/` p
 
 ### Import tab (Instagram links → Storage + DB)
 
-1. **Preview** pastes post/reel URLs (one per line). The server uses **Playwright** to open each page (same optional `INSTAGRAM_SESSIONID` / `INSTAGRAM_COOKIES_PATH` as `sync.js` if login is required).
-2. Choose thumbnails (all selected by default), then **Add selected to Glance** — uploads `posts/<shortcode>.jpg` and upserts `public.posts` (same as `import-from-links.js`).
+1. **Preview** pastes post/reel URLs (one per line). The server resolves media with **Instaloader** (Python) instead of browser scraping.
+2. Choose thumbnails (all selected by default), then **Add selected to Glance** — uploads `posts/<shortcode>.jpg` and upserts `public.posts`.
 
-Requires Chromium: `npx playwright install chromium` (if you have not already).
+Install Instaloader once:
+
+```bash
+pip3 install instaloader
+```
+
+Reference: [Instaloader docs](https://instaloader.github.io)
