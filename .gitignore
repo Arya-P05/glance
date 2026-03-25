@@ -14,3 +14,7 @@ ios/DailyWidgets.xcodeproj/project.xcworkspace/
 ios/DailyWidgets.xcodeproj/xcuserdata/
 ios/DailyWidgets/DerivedData/
 ios/DailyWidgets/Build/
+# Nested Glance Xcode project (actual path)
+ios/DailyWidgets/DailyWidgets.xcodeproj/project.xcworkspace/xcuserdata/
+ios/DailyWidgets/DailyWidgets.xcodeproj/xcuserdata/
+**/UserInterfaceState.xcuserstate
