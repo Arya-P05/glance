@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import WidgetKit
 
 struct ContentView: View {
@@ -75,41 +76,48 @@ private struct PhotoHomeView: View {
     private var installedState: some View {
         VStack(spacing: 32) {
 
-            VStack(spacing: 6) {
-                Text("automatically updates")
+            // Sentence stays; only the underlined interval swaps for the wheel.
+            HStack(alignment: .center, spacing: 6) {
+                Text("automatically updates every")
                     .foregroundStyle(.white.opacity(0.6))
-
-                HStack(spacing: 4) {
-                    Text("every")
-
-                    Text(refreshInterval.display)
-                        .underline()
-                        .onTapGesture {
-                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                showIntervalPicker.toggle()
+                    .lineLimit(1)
+                    .onTapGesture {
+                        if showIntervalPicker {
+                            withAnimation(.easeInOut(duration: 0.28)) {
+                                showIntervalPicker = false
                             }
                         }
+                    }
+
+                Group {
+                    if showIntervalPicker {
+                        InfiniteIntervalWheel(selection: $refreshInterval)
+                            .frame(width: 130, height: 128)
+                            .onChange(of: refreshInterval) { _, newValue in
+                                saveRefreshInterval(newValue)
+                                WidgetCenter.shared.reloadTimelines(ofKind: Self.photoWidgetKind)
+                            }
+                            .transition(.opacity)
+                    } else {
+                        Text(refreshInterval.display)
+                            .underline()
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                            .onTapGesture {
+                                withAnimation(.easeInOut(duration: 0.28)) {
+                                    showIntervalPicker = true
+                                }
+                            }
+                            .transition(.opacity)
+                    }
                 }
+                .frame(width: 130, alignment: .center)
+                .animation(.easeInOut(duration: 0.28), value: showIntervalPicker)
             }
             .font(.system(size: 22, weight: .regular))
-            .foregroundStyle(.white)
-
-            // Interval selector
-            if showIntervalPicker {
-                GlanceIntervalSelector(
-                    selected: $refreshInterval,
-                    onSelect: {
-                        saveRefreshInterval(refreshInterval)
-                        WidgetCenter.shared.reloadTimelines(ofKind: Self.photoWidgetKind)
-
-                        withAnimation(.easeOut) {
-                            showIntervalPicker = false
-                        }
-                    }
-                )
-                .frame(height: 160)
-                .transition(.opacity)
-            }
+            .multilineTextAlignment(.leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
 
             // Refresh
             Text("another")
@@ -171,59 +179,79 @@ private struct PhotoHomeView: View {
     }
 }
 
-private struct GlanceIntervalSelector: View {
-    @Binding var selected: PhotoRefreshInterval
-    var onSelect: () -> Void
+/// Clock-style wheel: many repeated rows so scrolling feels endless; labels repeat via modulo.
+private struct InfiniteIntervalWheel: UIViewRepresentable {
+    @Binding var selection: PhotoRefreshInterval
 
-    @State private var scrollOffset: CGFloat = 0
+    private static let items = PhotoRefreshInterval.allCases
+    private static let rowCount = 10_000
+    private static let anchorRow = rowCount / 2
 
-    private let itemHeight: CGFloat = 36
-
-    var body: some View {
-        GeometryReader { outer in
-            let centerY = outer.size.height / 2
-
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(spacing: 12) {
-                    ForEach(PhotoRefreshInterval.allCases) { interval in
-                        GeometryReader { geo in
-                            let midY = geo.frame(in: .global).midY
-                            let distance = abs(centerY - midY)
-
-                            let normalized = min(distance / 120, 1)
-
-                            let opacity = 1 - (normalized * 0.7)
-                            let scale = 1 - (normalized * 0.15)
-
-                            Text(interval.display)
-                                .font(.system(size: 20))
-                                .scaleEffect(scale)
-                                .opacity(opacity)
-                                .frame(maxWidth: .infinity)
-                                .onTapGesture {
-                                    select(interval)
-                                }
-                                .onChange(of: normalized) { _, newVal in
-                                    // closest to center → select
-                                    if newVal < 0.1 && selected != interval {
-                                        select(interval)
-                                    }
-                                }
-                        }
-                        .frame(height: itemHeight)
-                    }
-                }
-                .padding(.vertical, centerY - itemHeight / 2)
-            }
-        }
+    func makeCoordinator() -> Coordinator {
+        Coordinator(selection: $selection)
     }
 
-    private func select(_ interval: PhotoRefreshInterval) {
-        selected = interval
+    func makeUIView(context: Context) -> UIPickerView {
+        let picker = UIPickerView()
+        picker.backgroundColor = .black
+        picker.delegate = context.coordinator
+        picker.dataSource = context.coordinator
+        return picker
+    }
 
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    func updateUIView(_ picker: UIPickerView, context: Context) {
+        guard let idx = Self.items.firstIndex(of: selection) else { return }
 
-        onSelect()
+        if !context.coordinator.didPlaceInitial {
+            let row = Self.alignedRow(containing: Self.anchorRow, index: idx)
+            picker.selectRow(row, inComponent: 0, animated: false)
+            context.coordinator.didPlaceInitial = true
+            return
+        }
+
+        let current = picker.selectedRow(inComponent: 0)
+        if Self.items[current % Self.items.count] == selection { return }
+
+        let target = Self.alignedRow(containing: current, index: idx)
+        picker.selectRow(target, inComponent: 0, animated: false)
+    }
+
+    private static func alignedRow(containing base: Int, index: Int) -> Int {
+        base - (base % items.count) + index
+    }
+
+    final class Coordinator: NSObject, UIPickerViewDelegate, UIPickerViewDataSource {
+        var selection: Binding<PhotoRefreshInterval>
+        var didPlaceInitial = false
+
+        init(selection: Binding<PhotoRefreshInterval>) {
+            self.selection = selection
+        }
+
+        func numberOfComponents(in pickerView: UIPickerView) -> Int { 1 }
+
+        func pickerView(_ pickerView: UIPickerView, numberOfRowsInComponent component: Int) -> Int {
+            InfiniteIntervalWheel.rowCount
+        }
+
+        func pickerView(_ pickerView: UIPickerView, attributedTitleForRow row: Int, forComponent component: Int) -> NSAttributedString? {
+            let text = InfiniteIntervalWheel.items[row % InfiniteIntervalWheel.items.count].display
+            return NSAttributedString(
+                string: text,
+                attributes: [
+                    .foregroundColor: UIColor.white,
+                    .font: UIFont.systemFont(ofSize: 22, weight: .regular),
+                ]
+            )
+        }
+
+        func pickerView(_ pickerView: UIPickerView, didSelectRow row: Int, inComponent component: Int) {
+            let interval = InfiniteIntervalWheel.items[row % InfiniteIntervalWheel.items.count]
+            if selection.wrappedValue != interval {
+                selection.wrappedValue = interval
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            }
+        }
     }
 }
 
