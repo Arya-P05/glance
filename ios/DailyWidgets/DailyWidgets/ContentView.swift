@@ -1,3 +1,4 @@
+import Photos
 import SwiftUI
 import UIKit
 import WidgetKit
@@ -8,10 +9,21 @@ struct ContentView: View {
     }
 }
 
+private enum ActionHighlight: Equatable {
+    case none
+    case save(Bool)
+    case copy(Bool)
+    case force(Bool)
+}
+
 private struct PhotoHomeView: View {
-    @State private var didRefresh = false
     @State private var hasPhotoWidget = false
     @State private var refreshInterval: PhotoRefreshInterval = .oneHour
+    @State private var sharedWidgetImage: UIImage?
+    @State private var showShareSheet = false
+    @State private var showSettings = false
+    /// Which control just succeeded (or failed); animates that label green / amber.
+    @State private var feedback: ActionFeedback = .idle
 
     @State private var showIntro = true
 
@@ -28,18 +40,31 @@ private struct PhotoHomeView: View {
                     .foregroundStyle(.white.opacity(0.7))
                     .transition(.opacity)
             } else {
-                VStack {
-                    Spacer()
-
+                Group {
                     if hasPhotoWidget {
-                        installedState
-                    } else {
-                        onboardingState
-                    }
+                        ZStack(alignment: .bottomTrailing) {
+                            installedState
 
-                    Spacer()
+                            Button {
+                                showSettings = true
+                            } label: {
+                                Image(systemName: "gearshape")
+                                    .font(.system(size: 20, weight: .regular))
+                                    .foregroundStyle(.white.opacity(0.5))
+                                    .frame(width: 44, height: 44)
+                                    .contentShape(Rectangle())
+                            }
+                            .accessibilityLabel("Settings")
+                        }
+                    } else {
+                        VStack {
+                            Spacer()
+                            onboardingState
+                            Spacer()
+                        }
+                    }
                 }
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(.horizontal, 28)
                 .transition(.opacity)
             }
@@ -47,11 +72,26 @@ private struct PhotoHomeView: View {
         .onAppear {
             loadRefreshInterval()
             checkWidgetPresence()
+            refreshSharedWidgetImage()
 
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                 withAnimation(.easeOut(duration: 0.6)) {
                     showIntro = false
                 }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+            refreshSharedWidgetImage()
+        }
+        .sheet(isPresented: $showShareSheet) {
+            if let sharedWidgetImage {
+                ActivityView(activityItems: [sharedWidgetImage])
+            }
+        }
+        .sheet(isPresented: $showSettings) {
+            PhotoRefreshSettingsSheet(selection: $refreshInterval) { newValue in
+                saveRefreshInterval(newValue)
+                WidgetCenter.shared.reloadTimelines(ofKind: Self.photoWidgetKind)
             }
         }
     }
@@ -74,49 +114,107 @@ private struct PhotoHomeView: View {
     }
 
     private var installedState: some View {
-        // Intrinsic height only — parent `Spacer()` / `Spacer()` centers this block vertically.
-        // VStack default horizontal alignment is `.center` so rows are centered, not stuck in a corner.
-        VStack(spacing: 36) {
-            HStack(alignment: .center, spacing: 1) {
-                Text("automatically updates every")
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.65)
-                    .multilineTextAlignment(.center)
+        GeometryReader { geo in
+            let imageSide = min(geo.size.width, geo.size.height * 0.52)
 
-                InfiniteIntervalWheel(selection: $refreshInterval)
-                    .frame(width: 92, height: InfiniteIntervalWheel.pickerHeight)
-                    .clipped()
-                    .onChange(of: refreshInterval) { _, newValue in
-                        saveRefreshInterval(newValue)
-                        WidgetCenter.shared.reloadTimelines(ofKind: Self.photoWidgetKind)
+            VStack(spacing: 0) {
+                HStack {
+                    Spacer(minLength: 0)
+                    Group {
+                        if let img = sharedWidgetImage {
+                            Image(uiImage: img)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: imageSide, height: imageSide)
+                                .clipped()
+                                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        } else {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .fill(Color.white.opacity(0.06))
+                                Text("your current widget photo will show here after it refreshes.")
+                                    .font(.system(size: 14))
+                                    .foregroundStyle(.white.opacity(0.35))
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal, 20)
+                            }
+                            .frame(width: imageSide, height: imageSide)
+                        }
                     }
-            }
-            .font(.system(size: 17, weight: .regular))
+                    Spacer(minLength: 0)
+                }
 
-            VStack(spacing: 10) {
-                HStack(spacing: 8) {
-                    Text("force")
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 16, weight: .medium))
-                        .symbolRenderingMode(.monochrome)
+                HStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    Text("save")
+                        .onTapGesture { saveSharedImageToPhotos() }
+                    Text(" · ")
+                        .foregroundStyle(.white.opacity(0.35))
+                    Text("copy")
+                        .onTapGesture { copySharedImage() }
+                    Text(" · ")
+                        .foregroundStyle(.white.opacity(0.35))
+                    Text("share")
+                        .onTapGesture {
+                            guard sharedWidgetImage != nil else { return }
+                            showShareSheet = true
+                        }
+                    Spacer(minLength: 0)
                 }
                 .font(.system(size: 16, weight: .regular))
-                .foregroundStyle(.white.opacity(0.52))
-                .onTapGesture {
-                    WidgetCenter.shared.reloadTimelines(ofKind: Self.photoWidgetKind)
-                    showTemporaryConfirmation()
-                }
+                .foregroundStyle(.white.opacity(sharedWidgetImage == nil ? 0.22 : 0.52))
+                .padding(.top, 14)
 
-                if didRefresh {
-                    Text("updated.")
-                        .font(.system(size: 13))
-                        .foregroundStyle(.white.opacity(0.38))
-                        .transition(.opacity)
+                Spacer(minLength: 20)
+
+                HStack(alignment: .center, spacing: 1) {
+                    Text("automatically updates every")
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.65)
+                        .multilineTextAlignment(.center)
+
+                    InfiniteIntervalWheel(selection: $refreshInterval)
+                        .frame(width: 92, height: InfiniteIntervalWheel.pickerHeight)
+                        .clipped()
+                        .onChange(of: refreshInterval) { _, newValue in
+                            saveRefreshInterval(newValue)
+                            WidgetCenter.shared.reloadTimelines(ofKind: Self.photoWidgetKind)
+                        }
                 }
+                .font(.system(size: 17, weight: .regular))
+
+                Spacer(minLength: 20)
+
+                VStack(spacing: 8) {
+                    HStack(spacing: 8) {
+                        Text("force")
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 16, weight: .medium))
+                            .symbolRenderingMode(.monochrome)
+                    }
+                    .font(.system(size: 16, weight: .regular))
+                    .foregroundStyle(.white.opacity(0.52))
+                    .onTapGesture { forceRefreshWidgetAndSnapshot() }
+
+                    if didRefresh {
+                        Text("updated.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.white.opacity(0.38))
+                            .transition(.opacity)
+                    }
+
+                    if let actionNotice {
+                        Text(actionNotice)
+                            .font(.system(size: 13))
+                            .foregroundStyle(.white.opacity(0.38))
+                            .transition(.opacity)
+                    }
+                }
+                .padding(.bottom, 8)
             }
+            .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
         }
-        .frame(maxWidth: .infinity)
     }
 
     private func onboardingStep(_ index: String, _ text: String) -> some View {
@@ -159,6 +257,85 @@ private struct PhotoHomeView: View {
             }
         }
     }
+
+    /// Reloads the widget timeline and waits for the extension to write a new snapshot so the large preview updates too.
+    private func forceRefreshWidgetAndSnapshot() {
+        let before = SharedPhotoSnapshot.lastUpdated
+        WidgetCenter.shared.reloadTimelines(ofKind: Self.photoWidgetKind)
+        showTemporaryConfirmation()
+        Task {
+            for _ in 0..<40 {
+                try? await Task.sleep(nanoseconds: 250_000_000)
+                let now = SharedPhotoSnapshot.lastUpdated
+                if now != before {
+                    await MainActor.run { refreshSharedWidgetImage() }
+                    return
+                }
+            }
+            await MainActor.run { refreshSharedWidgetImage() }
+        }
+    }
+
+    private func refreshSharedWidgetImage() {
+        sharedWidgetImage = SharedPhotoSnapshot.loadImage()
+    }
+
+    private func flashActionNotice(_ text: String) {
+        actionNotice = text
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            withAnimation {
+                actionNotice = nil
+            }
+        }
+    }
+
+    private func saveSharedImageToPhotos() {
+        guard let image = sharedWidgetImage else {
+            flashActionNotice("nothing to save yet.")
+            return
+        }
+        PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
+            DispatchQueue.main.async {
+                guard status == .authorized || status == .limited else {
+                    flashActionNotice("allow photo access in Settings to save.")
+                    return
+                }
+                PHPhotoLibrary.shared().performChanges {
+                    PHAssetChangeRequest.creationRequestForAsset(from: image)
+                } completionHandler: { ok, error in
+                    DispatchQueue.main.async {
+                        if ok {
+                            flashActionNotice("saved.")
+                        } else if let error {
+                            flashActionNotice(error.localizedDescription)
+                        } else {
+                            flashActionNotice("couldn’t save.")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func copySharedImage() {
+        guard let image = sharedWidgetImage else {
+            flashActionNotice("nothing to copy yet.")
+            return
+        }
+        UIPasteboard.general.image = image
+        flashActionNotice("copied.")
+    }
+}
+
+/// UIKit share sheet for `UIImage` (includes AirDrop, Messages, Save to Files, etc.).
+private struct ActivityView: UIViewControllerRepresentable {
+    let activityItems: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 /// Clock-style wheel: many repeated rows so scrolling feels endless; labels repeat via modulo.
