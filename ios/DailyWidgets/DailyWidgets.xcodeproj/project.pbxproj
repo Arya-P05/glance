@@ -82,6 +82,7 @@
 		5D5740D82F611A1300A2A5A2 /* Exceptions for "DailyWidgets" folder in "DailyWidgetExtensionExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				SharedPhotoSnapshot.swift,
 				SupabaseConfig.swift,
 			);
 			target = 5D5740932F61152800A2A5A2 /* DailyWidgetExtensionExtension */;
@@ -578,6 +579,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Glance;
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Glance uses your location to calculate sunrise and sunset times for the Sun widget.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Glance saves the current widget photo to your library when you choose Save.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -609,6 +611,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Glance;
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Glance uses your location to calculate sunrise and sunset times for the Sun widget.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Glance saves the current widget photo to your library when you choose Save.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
