@@ -382,7 +382,6 @@ private struct PhotoRefreshSettingsSheet: View {
                 }
                 .font(.system(size: 17, weight: .regular))
                 .frame(maxWidth: .infinity)
-                .multilineTextAlignment(.center)
                 .onChange(of: selection) { _, newValue in
                     onCommit(newValue)
                 }
