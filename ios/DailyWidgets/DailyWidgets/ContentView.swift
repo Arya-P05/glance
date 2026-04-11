@@ -391,7 +391,6 @@ private struct PhotoRefreshSettingsSheet: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.horizontal, 24)
             .background(Color.black)
-            .navigationTitle("settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
