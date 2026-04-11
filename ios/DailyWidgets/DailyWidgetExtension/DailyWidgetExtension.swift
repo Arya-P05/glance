@@ -66,6 +66,10 @@ struct RandomPostProvider: TimelineProvider {
 
                 let entry = RandomPostEntry(date: Date(), imageData: resizedData, caption: row.caption)
 
+                if let data = resizedData {
+                    SharedPhotoSnapshot.writeJPEGData(data, caption: row.caption, postId: row.id)
+                }
+
                 DispatchQueue.main.async {
                     completion(Timeline(entries: [entry], policy: .after(refreshDate)))
                 }
