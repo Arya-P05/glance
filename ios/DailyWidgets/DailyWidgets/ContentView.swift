@@ -115,10 +115,16 @@ private struct PhotoHomeView: View {
 
     private var installedState: some View {
         GeometryReader { geo in
-            let imageSide = min(geo.size.width, geo.size.height * 0.52)
+            let safeTop = geo.safeAreaInsets.top
+            let safeBottom = geo.safeAreaInsets.bottom
+            let imageSide = min(geo.size.width, geo.size.height * 0.5)
+            let topBias = max(safeTop, geo.size.height * 0.11)
+            let bottomBias = max(safeBottom + 56, geo.size.height * 0.2)
 
             VStack(spacing: 0) {
-                HStack {
+                Spacer(minLength: topBias)
+
+                HStack(alignment: .center) {
                     Spacer(minLength: 0)
                     Group {
                         if let img = sharedWidgetImage {
@@ -141,20 +147,26 @@ private struct PhotoHomeView: View {
                             .frame(width: imageSide, height: imageSide)
                         }
                     }
+                    .padding(.leading, geo.size.width * 0.06)
                     Spacer(minLength: 0)
                 }
 
                 HStack(spacing: 0) {
                     Spacer(minLength: 0)
                     Text("save")
+                        .foregroundStyle(actionForeground(base: sharedWidgetImage == nil ? 0.22 : 0.52, part: .save))
+                        .offset(y: actionBounce(part: .save))
                         .onTapGesture { saveSharedImageToPhotos() }
                     Text(" · ")
                         .foregroundStyle(.white.opacity(0.35))
                     Text("copy")
+                        .foregroundStyle(actionForeground(base: sharedWidgetImage == nil ? 0.22 : 0.52, part: .copy))
+                        .offset(y: actionBounce(part: .copy))
                         .onTapGesture { copySharedImage() }
                     Text(" · ")
                         .foregroundStyle(.white.opacity(0.35))
                     Text("share")
+                        .foregroundStyle(.white.opacity(sharedWidgetImage == nil ? 0.22 : 0.52))
                         .onTapGesture {
                             guard sharedWidgetImage != nil else { return }
                             showShareSheet = true
@@ -162,60 +174,58 @@ private struct PhotoHomeView: View {
                     Spacer(minLength: 0)
                 }
                 .font(.system(size: 16, weight: .regular))
-                .foregroundStyle(.white.opacity(sharedWidgetImage == nil ? 0.22 : 0.52))
-                .padding(.top, 14)
+                .animation(.spring(response: 0.42, dampingFraction: 0.72), value: feedback)
+                .padding(.top, 16)
 
-                Spacer(minLength: 20)
-
-                HStack(alignment: .center, spacing: 1) {
-                    Text("automatically updates every")
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.65)
-                        .multilineTextAlignment(.center)
-
-                    InfiniteIntervalWheel(selection: $refreshInterval)
-                        .frame(width: 92, height: InfiniteIntervalWheel.pickerHeight)
-                        .clipped()
-                        .onChange(of: refreshInterval) { _, newValue in
-                            saveRefreshInterval(newValue)
-                            WidgetCenter.shared.reloadTimelines(ofKind: Self.photoWidgetKind)
-                        }
+                HStack(spacing: 8) {
+                    Text("force")
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 16, weight: .medium))
+                        .symbolRenderingMode(.monochrome)
                 }
-                .font(.system(size: 17, weight: .regular))
+                .font(.system(size: 16, weight: .regular))
+                .foregroundStyle(actionForeground(base: 0.52, part: .force))
+                .offset(y: actionBounce(part: .force))
+                .animation(.spring(response: 0.42, dampingFraction: 0.72), value: feedback)
+                .padding(.top, 18)
+                .onTapGesture { forceRefreshWidgetAndSnapshot() }
 
-                Spacer(minLength: 20)
-
-                VStack(spacing: 8) {
-                    HStack(spacing: 8) {
-                        Text("force")
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 16, weight: .medium))
-                            .symbolRenderingMode(.monochrome)
-                    }
-                    .font(.system(size: 16, weight: .regular))
-                    .foregroundStyle(.white.opacity(0.52))
-                    .onTapGesture { forceRefreshWidgetAndSnapshot() }
-
-                    if didRefresh {
-                        Text("updated.")
-                            .font(.system(size: 13))
-                            .foregroundStyle(.white.opacity(0.38))
-                            .transition(.opacity)
-                    }
-
-                    if let actionNotice {
-                        Text(actionNotice)
-                            .font(.system(size: 13))
-                            .foregroundStyle(.white.opacity(0.38))
-                            .transition(.opacity)
-                    }
-                }
-                .padding(.bottom, 8)
+                Spacer(minLength: bottomBias)
             }
             .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
         }
     }
+
+    private func actionForeground(base: Double, part: ActionPart) -> Color {
+        switch (feedback, part) {
+        case (.save(let ok), .save):
+            return ok ? Self.successGreen : Self.warnColor
+        case (.copy(let ok), .copy):
+            return ok ? Self.successGreen : Self.warnColor
+        case (.force(let ok), .force):
+            return ok ? Self.successGreen : Self.warnColor
+        default:
+            return Color.white.opacity(base)
+        }
+    }
+
+    private func actionBounce(part: ActionPart) -> CGFloat {
+        switch (feedback, part) {
+        case (.save(true), .save), (.copy(true), .copy), (.force(true), .force):
+            return -4
+        case (.save(false), .save), (.copy(false), .copy), (.force(false), .force):
+            return -1
+        default:
+            return 0
+        }
+    }
+
+    private enum ActionPart {
+        case save, copy, force
+    }
+
+    private static let successGreen = Color(red: 0.42, green: 0.9, blue: 0.58)
+    private static let warnColor = Color(red: 1.0, green: 0.58, blue: 0.38)
 
     private func onboardingStep(_ index: String, _ text: String) -> some View {
         HStack(spacing: 12) {
