@@ -14,7 +14,6 @@ private struct PhotoHomeView: View {
     @State private var refreshInterval: PhotoRefreshInterval = .oneHour
 
     @State private var showIntro = true
-    @State private var showIntervalPicker = false
 
     private static let photoWidgetKind = "DailyWidgetExtension"
     private static let refreshIntervalKey = "photo.refreshIntervalSeconds"
@@ -40,6 +39,7 @@ private struct PhotoHomeView: View {
 
                     Spacer()
                 }
+                .frame(maxWidth: .infinity)
                 .padding(.horizontal, 28)
                 .transition(.opacity)
             }
@@ -74,67 +74,49 @@ private struct PhotoHomeView: View {
     }
 
     private var installedState: some View {
-        VStack(spacing: 32) {
-
-            // Sentence stays; only the underlined interval swaps for the wheel.
-            HStack(alignment: .center, spacing: 6) {
+        // Intrinsic height only — parent `Spacer()` / `Spacer()` centers this block vertically.
+        // VStack default horizontal alignment is `.center` so rows are centered, not stuck in a corner.
+        VStack(spacing: 36) {
+            HStack(alignment: .center, spacing: 1) {
                 Text("automatically updates every")
-                    .foregroundStyle(.white.opacity(0.6))
+                    .foregroundStyle(.white)
                     .lineLimit(1)
-                    .onTapGesture {
-                        if showIntervalPicker {
-                            withAnimation(.easeInOut(duration: 0.28)) {
-                                showIntervalPicker = false
-                            }
-                        }
-                    }
+                    .minimumScaleFactor(0.65)
+                    .multilineTextAlignment(.center)
 
-                Group {
-                    if showIntervalPicker {
-                        InfiniteIntervalWheel(selection: $refreshInterval)
-                            .frame(width: 130, height: 128)
-                            .onChange(of: refreshInterval) { _, newValue in
-                                saveRefreshInterval(newValue)
-                                WidgetCenter.shared.reloadTimelines(ofKind: Self.photoWidgetKind)
-                            }
-                            .transition(.opacity)
-                    } else {
-                        Text(refreshInterval.display)
-                            .underline()
-                            .foregroundStyle(.white)
-                            .lineLimit(1)
-                            .onTapGesture {
-                                withAnimation(.easeInOut(duration: 0.28)) {
-                                    showIntervalPicker = true
-                                }
-                            }
-                            .transition(.opacity)
+                InfiniteIntervalWheel(selection: $refreshInterval)
+                    .frame(width: 92, height: InfiniteIntervalWheel.pickerHeight)
+                    .clipped()
+                    .onChange(of: refreshInterval) { _, newValue in
+                        saveRefreshInterval(newValue)
+                        WidgetCenter.shared.reloadTimelines(ofKind: Self.photoWidgetKind)
                     }
-                }
-                .frame(width: 130, alignment: .center)
-                .animation(.easeInOut(duration: 0.28), value: showIntervalPicker)
             }
-            .font(.system(size: 22, weight: .regular))
-            .multilineTextAlignment(.leading)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .fixedSize(horizontal: false, vertical: true)
+            .font(.system(size: 17, weight: .regular))
 
-            // Refresh
-            Text("another")
-                .font(.system(size: 16))
-                .foregroundStyle(.white.opacity(0.8))
+            VStack(spacing: 10) {
+                HStack(spacing: 8) {
+                    Text("force")
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 16, weight: .medium))
+                        .symbolRenderingMode(.monochrome)
+                }
+                .font(.system(size: 16, weight: .regular))
+                .foregroundStyle(.white.opacity(0.52))
                 .onTapGesture {
                     WidgetCenter.shared.reloadTimelines(ofKind: Self.photoWidgetKind)
                     showTemporaryConfirmation()
                 }
 
-            if didRefresh {
-                Text("updated.")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.white.opacity(0.5))
-                    .transition(.opacity)
+                if didRefresh {
+                    Text("updated.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.white.opacity(0.38))
+                        .transition(.opacity)
+                }
             }
         }
+        .frame(maxWidth: .infinity)
     }
 
     private func onboardingStep(_ index: String, _ text: String) -> some View {
@@ -183,6 +165,11 @@ private struct PhotoHomeView: View {
 private struct InfiniteIntervalWheel: UIViewRepresentable {
     @Binding var selection: PhotoRefreshInterval
 
+    /// Row height (spacing between options). Clip height slightly under 5× row so a 6th row never peeks in.
+    static let rowHeight: CGFloat = 28
+    private static let visibleRowCount = 5
+    static var pickerHeight: CGFloat { rowHeight * CGFloat(visibleRowCount) - 4 }
+
     private static let items = PhotoRefreshInterval.allCases
     private static let rowCount = 10_000
     private static let anchorRow = rowCount / 2
@@ -196,6 +183,7 @@ private struct InfiniteIntervalWheel: UIViewRepresentable {
         picker.backgroundColor = .black
         picker.delegate = context.coordinator
         picker.dataSource = context.coordinator
+        context.coordinator.attachScrollReloadIfPossible(to: picker)
         return picker
     }
 
@@ -205,6 +193,7 @@ private struct InfiniteIntervalWheel: UIViewRepresentable {
         if !context.coordinator.didPlaceInitial {
             let row = Self.alignedRow(containing: Self.anchorRow, index: idx)
             picker.selectRow(row, inComponent: 0, animated: false)
+            context.coordinator.visualCenterRow = row
             context.coordinator.didPlaceInitial = true
             return
         }
@@ -223,9 +212,59 @@ private struct InfiniteIntervalWheel: UIViewRepresentable {
     final class Coordinator: NSObject, UIPickerViewDelegate, UIPickerViewDataSource {
         var selection: Binding<PhotoRefreshInterval>
         var didPlaceInitial = false
+        /// During scroll, `selectedRow(inComponent:)` can lag; use this for alpha (updated from scroll offset).
+        var visualCenterRow: Int = 0
+        private var scrollForwarder: PickerScrollDelegateForwarder?
+        private var scrollAttachAttempts: Int = 0
 
         init(selection: Binding<PhotoRefreshInterval>) {
             self.selection = selection
+        }
+
+        /// `UIPickerView` doesn’t redraw row titles while scrolling; `selectedRow` can also lag until deceleration ends.
+        /// We hook the embedded scroll view and reload + track approximate center row so the gradient tracks the wheel.
+        fileprivate func attachScrollReloadIfPossible(to picker: UIPickerView) {
+            guard scrollForwarder == nil else { return }
+            scrollAttachAttempts += 1
+            guard scrollAttachAttempts <= 10 else { return }
+            DispatchQueue.main.async { [weak self, weak picker] in
+                guard let self, let picker else { return }
+                guard let scroll = Self.findInnerScrollView(from: picker) else {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                        self.attachScrollReloadIfPossible(to: picker)
+                    }
+                    return
+                }
+                let forward = scroll.delegate
+                let forwarder = PickerScrollDelegateForwarder(
+                    picker: picker,
+                    forward: forward,
+                    onScroll: { [weak self] scrollView, pick in
+                        self?.updateVisualCenterRow(from: scrollView, picker: pick)
+                    }
+                )
+                self.scrollForwarder = forwarder
+                scroll.delegate = forwarder
+                self.visualCenterRow = picker.selectedRow(inComponent: 0)
+            }
+        }
+
+        private static func findInnerScrollView(from root: UIView) -> UIScrollView? {
+            for sub in root.subviews {
+                if let s = sub as? UIScrollView { return s }
+                if let nested = findInnerScrollView(from: sub) { return nested }
+            }
+            return nil
+        }
+
+        fileprivate func updateVisualCenterRow(from scrollView: UIScrollView, picker: UIPickerView) {
+            let rowH = InfiniteIntervalWheel.rowHeight
+            guard rowH > 0 else { return }
+            let y = scrollView.contentOffset.y
+            let h = scrollView.bounds.height
+            let centerY = y + h * 0.5
+            visualCenterRow = Int(round(centerY / rowH))
+            picker.reloadComponent(0)
         }
 
         func numberOfComponents(in pickerView: UIPickerView) -> Int { 1 }
@@ -234,24 +273,73 @@ private struct InfiniteIntervalWheel: UIViewRepresentable {
             InfiniteIntervalWheel.rowCount
         }
 
+        func pickerView(_ pickerView: UIPickerView, rowHeightForComponent component: Int) -> CGFloat {
+            InfiniteIntervalWheel.rowHeight
+        }
+
         func pickerView(_ pickerView: UIPickerView, attributedTitleForRow row: Int, forComponent component: Int) -> NSAttributedString? {
-            let text = InfiniteIntervalWheel.items[row % InfiniteIntervalWheel.items.count].display
+            let text = InfiniteIntervalWheel.items[row % InfiniteIntervalWheel.items.count].wheelLabel
+            let selected = pickerView.selectedRow(inComponent: component)
+            let anchorRow = scrollForwarder != nil ? visualCenterRow : selected
+            let distance = abs(row - anchorRow)
+            let alpha: CGFloat
+            switch distance {
+            case 0: alpha = 1.0
+            case 1: alpha = 0.72
+            case 2: alpha = 0.34
+            default: alpha = 0.18
+            }
             return NSAttributedString(
                 string: text,
                 attributes: [
-                    .foregroundColor: UIColor.white,
-                    .font: UIFont.systemFont(ofSize: 22, weight: .regular),
+                    .foregroundColor: UIColor.white.withAlphaComponent(alpha),
+                    .font: UIFont.systemFont(ofSize: 14, weight: .regular),
                 ]
             )
         }
 
         func pickerView(_ pickerView: UIPickerView, didSelectRow row: Int, inComponent component: Int) {
+            visualCenterRow = row
             let interval = InfiniteIntervalWheel.items[row % InfiniteIntervalWheel.items.count]
             if selection.wrappedValue != interval {
                 selection.wrappedValue = interval
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
             }
         }
+    }
+}
+
+/// Forwards the picker's internal `UIScrollView` delegate so rows reload while scrolling (alpha gradient tracks motion).
+private final class PickerScrollDelegateForwarder: NSObject, UIScrollViewDelegate {
+    weak var picker: UIPickerView?
+    weak var forward: UIScrollViewDelegate?
+    var onScroll: ((UIScrollView, UIPickerView) -> Void)?
+
+    init(picker: UIPickerView, forward: UIScrollViewDelegate?, onScroll: @escaping (UIScrollView, UIPickerView) -> Void) {
+        self.picker = picker
+        self.forward = forward
+        self.onScroll = onScroll
+    }
+
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        forward?.scrollViewDidScroll?(scrollView)
+        guard let picker else { return }
+        onScroll?(scrollView, picker)
+    }
+
+    override func responds(to aSelector: Selector!) -> Bool {
+        if super.responds(to: aSelector) { return true }
+        return forward?.responds(to: aSelector) ?? false
+    }
+
+    override func forwardingTarget(for aSelector: Selector!) -> Any? {
+        if aSelector == #selector(UIScrollViewDelegate.scrollViewDidScroll(_:)) {
+            return nil
+        }
+        if forward?.responds(to: aSelector) == true {
+            return forward
+        }
+        return super.forwardingTarget(for: aSelector)
     }
 }
 
@@ -292,6 +380,17 @@ private enum PhotoRefreshInterval: String, CaseIterable, Identifiable {
         case .twoHours: return "2 hours"
         case .halfDay: return "12 hours"
         case .daily: return "1 day"
+        }
+    }
+
+    /// Short labels for the compact inline wheel only.
+    var wheelLabel: String {
+        switch self {
+        case .thirtyMinutes: return "30m"
+        case .oneHour: return "1h"
+        case .twoHours: return "2h"
+        case .halfDay: return "12h"
+        case .daily: return "1d"
         }
     }
 }
