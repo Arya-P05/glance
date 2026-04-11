@@ -346,7 +346,30 @@ private struct PhotoRefreshSettingsSheet: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 20) {
+            VStack(spacing: 0) {
+                VStack(alignment: .center, spacing: 14) {
+                    Text("new photos on your widget")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .multilineTextAlignment(.center)
+
+                    Text("The small Glance photo on your home screen can change to a different picture from time to time. This setting is how long it usually waits before it may show something new.")
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundStyle(.white.opacity(0.68))
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text("Shorter times mean you’ll see fresh images more often. Longer times keep the same picture on screen for a while. Your iPhone refreshes widgets in the background, so the exact moment can vary a little.")
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundStyle(.white.opacity(0.55))
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.horizontal, 8)
+                .padding(.top, 8)
+
+                Spacer(minLength: 16)
+
                 HStack(alignment: .center, spacing: 1) {
                     Text("automatically updates every")
                         .foregroundStyle(.white)
@@ -358,12 +381,13 @@ private struct PhotoRefreshSettingsSheet: View {
                         .clipped()
                 }
                 .font(.system(size: 17, weight: .regular))
-                .padding(.top, 8)
+                .frame(maxWidth: .infinity)
+                .multilineTextAlignment(.center)
                 .onChange(of: selection) { _, newValue in
                     onCommit(newValue)
                 }
 
-                Spacer(minLength: 0)
+                Spacer(minLength: 16)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.horizontal, 24)
