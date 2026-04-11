@@ -259,11 +259,13 @@ private struct PhotoHomeView: View {
         defaults.set(interval.seconds, forKey: Self.refreshIntervalKey)
     }
 
-    private func showTemporaryConfirmation() {
-        didRefresh = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-            withAnimation {
-                didRefresh = false
+    private func pulseFeedback(_ highlight: ActionHighlight) {
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.72)) {
+            feedback = highlight
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.45) {
+            withAnimation(.easeOut(duration: 0.35)) {
+                feedback = .none
             }
         }
     }
@@ -272,17 +274,24 @@ private struct PhotoHomeView: View {
     private func forceRefreshWidgetAndSnapshot() {
         let before = SharedPhotoSnapshot.lastUpdated
         WidgetCenter.shared.reloadTimelines(ofKind: Self.photoWidgetKind)
-        showTemporaryConfirmation()
         Task {
+            var snapshotUpdated = false
             for _ in 0..<40 {
                 try? await Task.sleep(nanoseconds: 250_000_000)
                 let now = SharedPhotoSnapshot.lastUpdated
                 if now != before {
-                    await MainActor.run { refreshSharedWidgetImage() }
+                    snapshotUpdated = true
+                    await MainActor.run {
+                        refreshSharedWidgetImage()
+                        pulseFeedback(.force(true))
+                    }
                     return
                 }
             }
-            await MainActor.run { refreshSharedWidgetImage() }
+            await MainActor.run {
+                refreshSharedWidgetImage()
+                pulseFeedback(.force(snapshotUpdated))
+            }
         }
     }
 
@@ -290,24 +299,15 @@ private struct PhotoHomeView: View {
         sharedWidgetImage = SharedPhotoSnapshot.loadImage()
     }
 
-    private func flashActionNotice(_ text: String) {
-        actionNotice = text
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-            withAnimation {
-                actionNotice = nil
-            }
-        }
-    }
-
     private func saveSharedImageToPhotos() {
         guard let image = sharedWidgetImage else {
-            flashActionNotice("nothing to save yet.")
+            pulseFeedback(.save(false))
             return
         }
         PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
             DispatchQueue.main.async {
                 guard status == .authorized || status == .limited else {
-                    flashActionNotice("allow photo access in Settings to save.")
+                    pulseFeedback(.save(false))
                     return
                 }
                 PHPhotoLibrary.shared().performChanges {
@@ -315,11 +315,11 @@ private struct PhotoHomeView: View {
                 } completionHandler: { ok, error in
                     DispatchQueue.main.async {
                         if ok {
-                            flashActionNotice("saved.")
-                        } else if let error {
-                            flashActionNotice(error.localizedDescription)
+                            pulseFeedback(.save(true))
+                        } else if error != nil {
+                            pulseFeedback(.save(false))
                         } else {
-                            flashActionNotice("couldn’t save.")
+                            pulseFeedback(.save(false))
                         }
                     }
                 }
@@ -329,11 +329,11 @@ private struct PhotoHomeView: View {
 
     private func copySharedImage() {
         guard let image = sharedWidgetImage else {
-            flashActionNotice("nothing to copy yet.")
+            pulseFeedback(.copy(false))
             return
         }
         UIPasteboard.general.image = image
-        flashActionNotice("copied.")
+        pulseFeedback(.copy(true))
     }
 }
 
