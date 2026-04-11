@@ -25,6 +25,10 @@ private struct PhotoHomeView: View {
     /// Which control just succeeded (or failed); animates that label green / amber.
     @State private var feedback: ActionHighlight = .none
 
+    private enum ActionPart {
+        case save, copy, force
+    }
+
     @State private var showIntro = true
 
     private static let photoWidgetKind = "DailyWidgetExtension"
@@ -55,6 +59,8 @@ private struct PhotoHomeView: View {
                                     .contentShape(Rectangle())
                             }
                             .accessibilityLabel("Settings")
+                            .safeAreaPadding(.trailing, 4)
+                            .safeAreaPadding(.bottom, 2)
                         }
                     } else {
                         VStack {
@@ -220,10 +226,6 @@ private struct PhotoHomeView: View {
         }
     }
 
-    private enum ActionPart {
-        case save, copy, force
-    }
-
     private static let successGreen = Color(red: 0.42, green: 0.9, blue: 0.58)
     private static let warnColor = Color(red: 1.0, green: 0.58, blue: 0.38)
 
@@ -334,6 +336,51 @@ private struct PhotoHomeView: View {
         }
         UIPasteboard.general.image = image
         pulseFeedback(.copy(true))
+    }
+}
+
+private struct PhotoRefreshSettingsSheet: View {
+    @Binding var selection: PhotoRefreshInterval
+    var onCommit: (PhotoRefreshInterval) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 20) {
+                HStack(alignment: .center, spacing: 1) {
+                    Text("automatically updates every")
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.65)
+
+                    InfiniteIntervalWheel(selection: $selection)
+                        .frame(width: 92, height: InfiniteIntervalWheel.pickerHeight)
+                        .clipped()
+                }
+                .font(.system(size: 17, weight: .regular))
+                .padding(.top, 8)
+                .onChange(of: selection) { _, newValue in
+                    onCommit(newValue)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.horizontal, 24)
+            .background(Color.black)
+            .navigationTitle("settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("done") {
+                        dismiss()
+                    }
+                    .foregroundStyle(.white.opacity(0.9))
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+        .presentationDragIndicator(.visible)
     }
 }
 
