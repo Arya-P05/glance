@@ -23,7 +23,7 @@ private struct PhotoHomeView: View {
     @State private var showShareSheet = false
     @State private var showSettings = false
     /// Which control just succeeded (or failed); animates that label green / amber.
-    @State private var feedback: ActionFeedback = .idle
+    @State private var feedback: ActionHighlight = .none
 
     @State private var showIntro = true
 
