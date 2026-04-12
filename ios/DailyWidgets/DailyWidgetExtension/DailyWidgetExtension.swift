@@ -5,10 +5,13 @@
 //  Created by Arya Patel on 2026-03-10.
 //
 
-import WidgetKit
-import SwiftUI
+import OSLog
 import Supabase
+import SwiftUI
 import UIKit
+import WidgetKit
+
+private let widgetTimelineLog = Logger(subsystem: "com.aryapatel.glance1234.widget", category: "Timeline")
 
 /// One row returned by get_random_post() RPC.
 struct RandomPostRow: Decodable {
@@ -37,13 +40,30 @@ struct RandomPostProvider: TimelineProvider {
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<RandomPostEntry>) -> Void) {
         Task {
+            widgetTimelineLog.info("getTimeline started")
             let refreshDate = Date().addingTimeInterval(currentRefreshInterval())
+
+            let useAppSnapshotOnly = SharedPhotoSnapshot.consumeNextWidgetTimelineUsesSharedSnapshotOnlyIfReady()
+                || SharedPhotoSnapshot.widgetShouldReuseSnapshotInsteadOfRandomFetchIncludingFreshFile()
+            if useAppSnapshotOnly {
+                let fileData = SharedPhotoSnapshot.loadSnapshotJPEGData()
+                let caption = SharedPhotoSnapshot.loadCaption()
+                let entry = RandomPostEntry(date: Date(), imageData: fileData, caption: caption)
+                widgetTimelineLog.info(
+                    "getTimeline: using shared JPEG only (no get_random_post here); bytes=\(fileData?.count ?? 0, privacy: .public)"
+                )
+                DispatchQueue.main.async {
+                    completion(Timeline(entries: [entry], policy: .after(refreshDate)))
+                }
+                return
+            }
 
             do {
                 let client = SupabaseClient(supabaseURL: SupabaseConfig.url, supabaseKey: SupabaseConfig.anonKey)
                 let rows: [RandomPostRow] = try await client.rpc("get_random_post").execute().value
 
                 guard let row = rows.first else {
+                    widgetTimelineLog.warning("getTimeline: RPC returned no rows")
                     let entry = RandomPostEntry(date: Date(), imageData: nil, caption: nil)
                     DispatchQueue.main.async {
                         completion(Timeline(entries: [entry], policy: .after(refreshDate)))
@@ -55,6 +75,12 @@ struct RandomPostProvider: TimelineProvider {
 
                 // Load and downscale the image so it fits WidgetKit's archival limits.
                 let rawData = try? Data(contentsOf: imageURL)
+                let rawBytes = rawData?.count ?? 0
+                if rawBytes == 0 {
+                    widgetTimelineLog.error("getTimeline: image download failed or empty")
+                } else {
+                    widgetTimelineLog.info("getTimeline: downloaded \(rawBytes, privacy: .public) bytes")
+                }
                 let resizedData: Data?
                 if let rawData,
                    let uiImage = UIImage(data: rawData) {
@@ -68,12 +94,17 @@ struct RandomPostProvider: TimelineProvider {
 
                 if let data = resizedData {
                     SharedPhotoSnapshot.writeJPEGData(data, caption: row.caption, postId: row.id)
+                    widgetTimelineLog.info("getTimeline: wrote SharedPhotoSnapshot; lastUpdated=\(String(describing: SharedPhotoSnapshot.lastUpdated), privacy: .public)")
+                } else {
+                    widgetTimelineLog.warning("getTimeline: no JPEG to write (nil resizedData)")
                 }
 
                 DispatchQueue.main.async {
+                    widgetTimelineLog.info("getTimeline: completing with entry (hasImage=\(entry.imageData != nil, privacy: .public))")
                     completion(Timeline(entries: [entry], policy: .after(refreshDate)))
                 }
             } catch {
+                widgetTimelineLog.error("getTimeline: error \(error.localizedDescription, privacy: .public)")
                 let entry = RandomPostEntry(date: Date(), imageData: nil, caption: nil)
                 DispatchQueue.main.async {
                     completion(Timeline(entries: [entry], policy: .after(refreshDate)))
@@ -99,20 +130,31 @@ struct RandomPostProvider: TimelineProvider {
 struct DailyWidgetExtensionEntryView: View {
     let entry: RandomPostEntry
 
+    /// Prefer the shared app-group file so the widget matches the main app preview pixel-for-pixel.
+    private var displayUIImage: UIImage? {
+        if let fromDisk = SharedPhotoSnapshot.loadImage() { return fromDisk }
+        if let data = entry.imageData { return UIImage(data: data) }
+        return nil
+    }
+
     var body: some View {
-        Group {
-            if let data = entry.imageData, let uiImage = UIImage(data: data) {
-                Image(uiImage: uiImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .clipped()
-            } else {
-                ZStack {
-                    Color.gray.opacity(0.2)
-                    Image(systemName: "photo")
-                        .font(.title2)
-                        .foregroundStyle(.secondary)
+        // Re-read the app-group file on a schedule: timeline reloads can lag behind when the main app writes the snapshot.
+        TimelineView(.periodic(from: Date(), by: 20)) { _ in
+            Group {
+                if let uiImage = displayUIImage {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .clipped()
+                        .id(SharedPhotoSnapshot.lastUpdated?.timeIntervalSince1970 ?? 0)
+                } else {
+                    ZStack {
+                        Color.gray.opacity(0.2)
+                        Image(systemName: "photo")
+                            .font(.title2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
         }
