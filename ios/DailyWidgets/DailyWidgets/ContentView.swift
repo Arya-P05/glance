@@ -1,4 +1,3 @@
-import OSLog
 import Photos
 import SwiftUI
 import UIKit
@@ -33,12 +32,13 @@ private struct PhotoHomeView: View {
     }
 
     @State private var showIntro = true
-    /// True while waiting for the widget extension to finish reload and write a new snapshot.
+    /// True while the in-app fetch + snapshot write is in progress.
     @State private var isForceRefreshing = false
 
     private static let photoWidgetKind = "DailyWidgetExtension"
     private static let refreshIntervalKey = "photo.refreshIntervalSeconds"
-    private static let forceLog = Logger(subsystem: "com.aryapatel.glance1234", category: "ForceRefresh")
+
+    private var snapshotLoaded: Bool { sharedWidgetImage != nil }
 
     var body: some View {
         ZStack {
@@ -91,9 +91,6 @@ private struct PhotoHomeView: View {
                     showIntro = false
                 }
             }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
-            refreshSharedWidgetImage()
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
@@ -186,21 +183,21 @@ private struct PhotoHomeView: View {
                 HStack(spacing: 0) {
                     Spacer(minLength: 0)
                     Text("save")
-                        .foregroundStyle(actionForeground(base: sharedWidgetImage == nil ? 0.22 : 0.52, part: .save))
+                        .foregroundStyle(actionForeground(base: snapshotLoaded ? 0.52 : 0.22, part: .save))
                         .offset(y: actionBounce(part: .save))
                         .onTapGesture { saveSharedImageToPhotos() }
                     Text(" · ")
                         .foregroundStyle(.white.opacity(0.35))
                     Text("copy")
-                        .foregroundStyle(actionForeground(base: sharedWidgetImage == nil ? 0.22 : 0.52, part: .copy))
+                        .foregroundStyle(actionForeground(base: snapshotLoaded ? 0.52 : 0.22, part: .copy))
                         .offset(y: actionBounce(part: .copy))
                         .onTapGesture { copySharedImage() }
                     Text(" · ")
                         .foregroundStyle(.white.opacity(0.35))
                     Text("share")
-                        .foregroundStyle(.white.opacity(sharedWidgetImage == nil ? 0.22 : 0.52))
+                        .foregroundStyle(.white.opacity(snapshotLoaded ? 0.52 : 0.22))
                         .onTapGesture {
-                            guard sharedWidgetImage != nil else { return }
+                            guard snapshotLoaded else { return }
                             showShareSheet = true
                         }
                     Spacer(minLength: 0)
@@ -305,51 +302,21 @@ private struct PhotoHomeView: View {
         }
     }
 
-    /// One Supabase fetch in the app → write shared JPEG → `reloadTimelines` so the widget **reads that file** (no second `get_random_post` for that reload).
+    /// Fetch once in-app, write app-group JPEG, then reload timelines so the widget reads that file (see `SharedPhotoSnapshot.markNextWidgetTimelineReloadUsesSharedSnapshotOnly`).
     private func forceRefreshWidgetAndSnapshot() {
         guard !isForceRefreshing else { return }
         isForceRefreshing = true
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
 
-        let before = SharedPhotoSnapshot.lastUpdated
-        Self.forceLog.info("Force tapped — lastUpdated before fetch: \(String(describing: before), privacy: .public)")
-
         Task {
-            // IMPORTANT: Reload the widget only *after* the app writes the snapshot + coalesce flag.
-            // If `reloadTimelines` runs first, the extension can call `get_random_post` and overwrite the file with a different image before the app fetch finishes.
             let appSucceeded = await GlancePhotoRefresh.fetchAndWriteSharedSnapshot()
             await MainActor.run {
                 refreshSharedWidgetImage()
                 isForceRefreshing = false
                 pulseFeedback(.force(appSucceeded))
-                Self.forceLog.info(
-                    "App fetch finished — success=\(appSucceeded, privacy: .public); lastUpdated now: \(String(describing: SharedPhotoSnapshot.lastUpdated), privacy: .public)"
-                )
             }
-
             WidgetCenter.shared.reloadTimelines(ofKind: Self.photoWidgetKind)
-            Self.forceLog.info("Called WidgetCenter.reloadTimelines after app fetch (success=\(appSucceeded, privacy: .public))")
-
-            await Self.logWidgetSnapshotTimeline(afterAppWrite: SharedPhotoSnapshot.lastUpdated)
         }
-    }
-
-    /// Logs whether the widget extension later overwrites the snapshot (diagnostic only).
-    private static func logWidgetSnapshotTimeline(afterAppWrite: Date?) async {
-        var lastSeen = afterAppWrite
-        for step in 0..<40 {
-            try? await Task.sleep(nanoseconds: 250_000_000)
-            let now = SharedPhotoSnapshot.lastUpdated
-            if now != lastSeen {
-                forceLog.info(
-                    "Widget timeline diagnostic: lastUpdated changed at poll step \(step, privacy: .public) → \(String(describing: now), privacy: .public) (was \(String(describing: lastSeen), privacy: .public))"
-                )
-                lastSeen = now
-            }
-        }
-        forceLog.info(
-            "Widget timeline diagnostic: done polling (~10s); final lastUpdated=\(String(describing: SharedPhotoSnapshot.lastUpdated), privacy: .public)"
-        )
     }
 
     private func refreshSharedWidgetImage() {
@@ -698,16 +665,6 @@ private enum PhotoRefreshInterval: String, CaseIterable, Identifiable {
         case 43200: self = .halfDay
         case 86400: self = .daily
         default: return nil
-        }
-    }
-
-    var display: String {
-        switch self {
-        case .thirtyMinutes: return "30 min"
-        case .oneHour: return "1 hour"
-        case .twoHours: return "2 hours"
-        case .halfDay: return "12 hours"
-        case .daily: return "1 day"
         }
     }
 
