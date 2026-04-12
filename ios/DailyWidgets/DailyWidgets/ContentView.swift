@@ -383,15 +383,6 @@ private struct PhotoRefreshSettingsSheet: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.horizontal, 24)
             .background(Color.black)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("done") {
-                        dismiss()
-                    }
-                    .foregroundStyle(.white.opacity(0.9))
-                }
-            }
         }
         .preferredColorScheme(.dark)
         .presentationDragIndicator(.visible)
