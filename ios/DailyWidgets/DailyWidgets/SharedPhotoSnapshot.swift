@@ -2,7 +2,7 @@ import Foundation
 import UIKit
 
 /// Mirrors the widget’s current photo into the App Group so the main app can share, save, or copy it.
-/// `appGroupID` must match `SharedSunConfiguration.appGroupID` and the widget extension’s entitlements.
+/// `appGroupID` must match the widget extension’s App Group entitlement.
 enum SharedPhotoSnapshot {
     static let appGroupID = "group.com.aryapatel.glance1234"
 
