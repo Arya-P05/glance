@@ -347,46 +347,38 @@ private struct PhotoRefreshSettingsSheet: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                VStack(alignment: .center, spacing: 14) {
+                VStack(alignment: .center, spacing: 12) {
                     Text("new photos on your widget")
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundStyle(.white)
                         .multilineTextAlignment(.center)
 
-                    Text("The small Glance photo on your home screen can change to a different picture from time to time. This setting is how long it usually waits before it may show something new.")
+                    Text("The Glance photo on your home screen can change from time to time. This setting is how long it waits before it shows something new.")
                         .font(.system(size: 15, weight: .regular))
                         .foregroundStyle(.white.opacity(0.68))
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
 
-                    Text("Shorter times mean you’ll see fresh images more often. Longer times keep the same picture on screen for a while. Your iPhone refreshes widgets in the background, so the exact moment can vary a little.")
+                    HStack {
+                        Spacer(minLength: 0)
+                        InfiniteIntervalWheel(selection: $selection)
+                            .frame(width: InfiniteIntervalWheel.pickerWidth, height: InfiniteIntervalWheel.pickerHeight)
+                            .clipped()
+                            .onChange(of: selection) { _, newValue in
+                                onCommit(newValue)
+                            }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.vertical, 6)
+
+                    Text("Your iPhone refreshes widgets in the background, so the exact moment can vary a little.")
                         .font(.system(size: 15, weight: .regular))
                         .foregroundStyle(.white.opacity(0.55))
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.horizontal, 8)
-                .padding(.top, 8)
-
-                Spacer(minLength: 16)
-
-                HStack(alignment: .center, spacing: 1) {
-                    Text("automatically updates every")
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.65)
-
-                    InfiniteIntervalWheel(selection: $selection)
-                        .frame(width: 92, height: InfiniteIntervalWheel.pickerHeight)
-                        .clipped()
-                }
-                .font(.system(size: 17, weight: .regular))
-                .frame(maxWidth: .infinity)
-                .onChange(of: selection) { _, newValue in
-                    onCommit(newValue)
-                }
-
-                Spacer(minLength: 16)
+                .padding(.top, 0)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.horizontal, 24)
@@ -422,9 +414,10 @@ private struct InfiniteIntervalWheel: UIViewRepresentable {
     @Binding var selection: PhotoRefreshInterval
 
     /// Row height (spacing between options). Clip height slightly under 5× row so a 6th row never peeks in.
-    static let rowHeight: CGFloat = 28
+    static let rowHeight: CGFloat = 38
     private static let visibleRowCount = 5
     static var pickerHeight: CGFloat { rowHeight * CGFloat(visibleRowCount) - 4 }
+    static var pickerWidth: CGFloat { 150 }
 
     private static let items = PhotoRefreshInterval.allCases
     private static let rowCount = 10_000
@@ -440,7 +433,38 @@ private struct InfiniteIntervalWheel: UIViewRepresentable {
         picker.delegate = context.coordinator
         picker.dataSource = context.coordinator
         context.coordinator.attachScrollReloadIfPossible(to: picker)
+        Self.scheduleStripSelectionChrome(on: picker)
         return picker
+    }
+
+    /// Hides the system wheel’s centered rounded “selection” plate (private subviews; safe to clear).
+    private static func stripSelectionChrome(from picker: UIPickerView) {
+        picker.layoutIfNeeded()
+        func visit(_ view: UIView) {
+            let name = NSStringFromClass(type(of: view))
+            let looksLikeSelectionChrome =
+                name.range(of: "Selection", options: .caseInsensitive) != nil
+                || name.range(of: "Indicator", options: .caseInsensitive) != nil
+            let skip =
+                name.range(of: "Wheel", options: .caseInsensitive) != nil
+                || name.range(of: "Table", options: .caseInsensitive) != nil
+                || name.range(of: "Scroll", options: .caseInsensitive) != nil
+                || name.range(of: "Cell", options: .caseInsensitive) != nil
+            if looksLikeSelectionChrome, !skip {
+                view.isHidden = true
+                view.alpha = 0
+            }
+            view.subviews.forEach { visit($0) }
+        }
+        visit(picker)
+    }
+
+    private static func scheduleStripSelectionChrome(on picker: UIPickerView) {
+        let run = {
+            stripSelectionChrome(from: picker)
+        }
+        DispatchQueue.main.async(execute: run)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: run)
     }
 
     func updateUIView(_ picker: UIPickerView, context: Context) {
@@ -451,6 +475,7 @@ private struct InfiniteIntervalWheel: UIViewRepresentable {
             picker.selectRow(row, inComponent: 0, animated: false)
             context.coordinator.visualCenterRow = row
             context.coordinator.didPlaceInitial = true
+            Self.scheduleStripSelectionChrome(on: picker)
             return
         }
 
@@ -459,6 +484,7 @@ private struct InfiniteIntervalWheel: UIViewRepresentable {
 
         let target = Self.alignedRow(containing: current, index: idx)
         picker.selectRow(target, inComponent: 0, animated: false)
+        Self.scheduleStripSelectionChrome(on: picker)
     }
 
     private static func alignedRow(containing base: Int, index: Int) -> Int {
@@ -549,7 +575,7 @@ private struct InfiniteIntervalWheel: UIViewRepresentable {
                 string: text,
                 attributes: [
                     .foregroundColor: UIColor.white.withAlphaComponent(alpha),
-                    .font: UIFont.systemFont(ofSize: 14, weight: .regular),
+                    .font: UIFont.systemFont(ofSize: 18, weight: .regular),
                 ]
             )
         }
