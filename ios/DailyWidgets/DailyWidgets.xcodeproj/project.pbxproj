@@ -578,7 +578,6 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Glance;
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Glance uses your location to calculate sunrise and sunset times for the Sun widget.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Glance saves the current widget photo to your library when you choose Save.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -610,7 +609,6 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Glance;
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Glance uses your location to calculate sunrise and sunset times for the Sun widget.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Glance saves the current widget photo to your library when you choose Save.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
