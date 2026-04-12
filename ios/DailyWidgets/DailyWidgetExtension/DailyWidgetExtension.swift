@@ -52,7 +52,7 @@ struct RandomPostProvider: TimelineProvider {
             }
 
             do {
-                let client = SupabaseClient(supabaseURL: SupabaseConfig.url, supabaseKey: SupabaseConfig.anonKey)
+                let client = SupabaseConfig.makeClient()
                 let rows: [RandomPostRow] = try await client.rpc("get_random_post").execute().value
 
                 guard let row = rows.first else {
