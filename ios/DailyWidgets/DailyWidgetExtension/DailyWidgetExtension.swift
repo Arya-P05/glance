@@ -5,6 +5,7 @@
 //  Created by Arya Patel on 2026-03-10.
 //
 
+import Foundation
 import Supabase
 import SwiftUI
 import UIKit
@@ -25,19 +26,30 @@ struct RandomPostEntry: TimelineEntry {
 
 struct RandomPostProvider: TimelineProvider {
     private let refreshIntervalKey = "photo.refreshIntervalSeconds"
-    private let appGroupID = "group.com.aryapatel.glance1234"
+    private let appGroupID = SharedPhotoSnapshot.appGroupID
+    /// When the timeline has no image yet, reload much sooner than the normal refresh interval.
+    private let retryIntervalNoImage: TimeInterval = 300
 
     func placeholder(in context: Context) -> RandomPostEntry {
-        RandomPostEntry(date: Date(), imageData: nil, caption: nil)
+        RandomPostEntry(
+            date: Date(),
+            imageData: SharedPhotoSnapshot.loadSnapshotJPEGData(),
+            caption: SharedPhotoSnapshot.loadCaption()
+        )
     }
 
     func getSnapshot(in context: Context, completion: @escaping (RandomPostEntry) -> Void) {
-        completion(RandomPostEntry(date: Date(), imageData: nil, caption: nil))
+        let entry = RandomPostEntry(
+            date: Date(),
+            imageData: SharedPhotoSnapshot.loadSnapshotJPEGData(),
+            caption: SharedPhotoSnapshot.loadCaption()
+        )
+        completion(entry)
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<RandomPostEntry>) -> Void) {
         Task {
-            let refreshDate = Date().addingTimeInterval(currentRefreshInterval())
+            let normalRefresh = Date().addingTimeInterval(currentRefreshInterval())
 
             let useSharedFileOnly = SharedPhotoSnapshot.consumeNextWidgetTimelineUsesSharedSnapshotOnlyIfReady()
                 || SharedPhotoSnapshot.widgetShouldReuseSnapshotInsteadOfRandomFetchIncludingFreshFile()
@@ -45,8 +57,9 @@ struct RandomPostProvider: TimelineProvider {
                 let fileData = SharedPhotoSnapshot.loadSnapshotJPEGData()
                 let caption = SharedPhotoSnapshot.loadCaption()
                 let entry = RandomPostEntry(date: Date(), imageData: fileData, caption: caption)
+                let next = nextReloadDate(after: entry, normalRefresh: normalRefresh)
                 DispatchQueue.main.async {
-                    completion(Timeline(entries: [entry], policy: .after(refreshDate)))
+                    completion(Timeline(entries: [entry], policy: .after(next)))
                 }
                 return
             }
@@ -57,16 +70,15 @@ struct RandomPostProvider: TimelineProvider {
 
                 guard let row = rows.first else {
                     let entry = RandomPostEntry(date: Date(), imageData: nil, caption: nil)
+                    let next = nextReloadDate(after: entry, normalRefresh: normalRefresh)
                     DispatchQueue.main.async {
-                        completion(Timeline(entries: [entry], policy: .after(refreshDate)))
+                        completion(Timeline(entries: [entry], policy: .after(next)))
                     }
                     return
                 }
 
                 let imageURL = SupabaseConfig.publicImageURL(storagePath: row.storage_path)
-
-                // Load and downscale the image so it fits WidgetKit's archival limits.
-                let rawData = try? Data(contentsOf: imageURL)
+                let rawData = await loadImageData(from: imageURL)
                 let resizedData: Data?
                 if let rawData,
                    let uiImage = UIImage(data: rawData) {
@@ -82,21 +94,42 @@ struct RandomPostProvider: TimelineProvider {
                     SharedPhotoSnapshot.writeJPEGData(data, caption: row.caption, postId: row.id)
                 }
 
+                let next = nextReloadDate(after: entry, normalRefresh: normalRefresh)
                 DispatchQueue.main.async {
-                    completion(Timeline(entries: [entry], policy: .after(refreshDate)))
+                    completion(Timeline(entries: [entry], policy: .after(next)))
                 }
             } catch {
                 let entry = RandomPostEntry(date: Date(), imageData: nil, caption: nil)
+                let next = nextReloadDate(after: entry, normalRefresh: normalRefresh)
                 DispatchQueue.main.async {
-                    completion(Timeline(entries: [entry], policy: .after(refreshDate)))
+                    completion(Timeline(entries: [entry], policy: .after(next)))
                 }
             }
         }
     }
 
+    private func nextReloadDate(after entry: RandomPostEntry, normalRefresh: Date) -> Date {
+        let hasImage = (entry.imageData?.count ?? 0) > 32
+        if hasImage { return normalRefresh }
+        let retry = Date().addingTimeInterval(retryIntervalNoImage)
+        return min(normalRefresh, retry)
+    }
+
+    private func loadImageData(from url: URL) async -> Data? {
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 25
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return nil }
+            return data
+        } catch {
+            return nil
+        }
+    }
+
     private func currentRefreshInterval() -> TimeInterval {
         guard let defaults = UserDefaults(suiteName: appGroupID) else {
-            return 24 * 60 * 60
+            return 3600
         }
 
         let seconds = defaults.double(forKey: refreshIntervalKey)
@@ -104,7 +137,7 @@ struct RandomPostProvider: TimelineProvider {
         if allowed.contains(Int(seconds)) {
             return seconds
         }
-        return 24 * 60 * 60
+        return 3600
     }
 }
 
@@ -150,14 +183,26 @@ struct PhotoWidget: Widget {
         StaticConfiguration(kind: Self.kind, provider: RandomPostProvider()) { entry in
             DailyWidgetExtensionEntryView(entry: entry)
         }
-        .configurationDisplayName("Daily Photo")
-        .description("Shows a new photo from Glance.")
-        .supportedFamilies([.systemSmall])
+        .configurationDisplayName("Glance")
+        .description("A photo from Glance on your Home Screen.")
+        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
         .contentMarginsDisabled()
     }
 }
 
 #Preview(as: .systemSmall) {
+    PhotoWidget()
+} timeline: {
+    RandomPostEntry(date: Date(), imageData: nil, caption: nil)
+}
+
+#Preview(as: .systemMedium) {
+    PhotoWidget()
+} timeline: {
+    RandomPostEntry(date: Date(), imageData: nil, caption: nil)
+}
+
+#Preview(as: .systemLarge) {
     PhotoWidget()
 } timeline: {
     RandomPostEntry(date: Date(), imageData: nil, caption: nil)
