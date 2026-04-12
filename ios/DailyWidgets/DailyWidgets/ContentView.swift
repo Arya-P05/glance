@@ -1,3 +1,4 @@
+import OSLog
 import Photos
 import SwiftUI
 import UIKit
@@ -17,6 +18,8 @@ private enum ActionHighlight: Equatable {
 }
 
 private struct PhotoHomeView: View {
+    @Environment(\.scenePhase) private var scenePhase
+
     @State private var hasPhotoWidget = false
     @State private var refreshInterval: PhotoRefreshInterval = .oneHour
     @State private var sharedWidgetImage: UIImage?
@@ -30,9 +33,12 @@ private struct PhotoHomeView: View {
     }
 
     @State private var showIntro = true
+    /// True while waiting for the widget extension to finish reload and write a new snapshot.
+    @State private var isForceRefreshing = false
 
     private static let photoWidgetKind = "DailyWidgetExtension"
     private static let refreshIntervalKey = "photo.refreshIntervalSeconds"
+    private static let forceLog = Logger(subsystem: "com.aryapatel.glance1234", category: "ForceRefresh")
 
     var body: some View {
         ZStack {
@@ -89,6 +95,25 @@ private struct PhotoHomeView: View {
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
             refreshSharedWidgetImage()
         }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                refreshSharedWidgetImage()
+            }
+        }
+        .task(id: hasPhotoWidget) {
+            guard hasPhotoWidget else { return }
+            var previous = SharedPhotoSnapshot.lastUpdated
+            while !Task.isCancelled {
+                let latest = SharedPhotoSnapshot.lastUpdated
+                if latest != previous {
+                    previous = latest
+                    await MainActor.run {
+                        refreshSharedWidgetImage()
+                    }
+                }
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+            }
+        }
         .sheet(isPresented: $showShareSheet) {
             if let sharedWidgetImage {
                 ActivityView(activityItems: [sharedWidgetImage])
@@ -140,6 +165,7 @@ private struct PhotoHomeView: View {
                                 .frame(width: imageSide, height: imageSide)
                                 .clipped()
                                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                                .id(SharedPhotoSnapshot.lastUpdated?.timeIntervalSince1970 ?? 0)
                         } else {
                             ZStack {
                                 RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -188,12 +214,16 @@ private struct PhotoHomeView: View {
                     Image(systemName: "arrow.clockwise")
                         .font(.system(size: 16, weight: .medium))
                         .symbolRenderingMode(.monochrome)
+                        .symbolEffect(.rotate, options: .repeating, isActive: isForceRefreshing)
                 }
                 .font(.system(size: 16, weight: .regular))
                 .foregroundStyle(actionForeground(base: 0.52, part: .force))
                 .offset(y: actionBounce(part: .force))
                 .animation(.spring(response: 0.42, dampingFraction: 0.72), value: feedback)
                 .padding(.top, 18)
+                .contentShape(Rectangle())
+                .allowsHitTesting(!isForceRefreshing)
+                .accessibilityAddTraits(isForceRefreshing ? [.updatesFrequently] : [])
                 .onTapGesture { forceRefreshWidgetAndSnapshot() }
 
                 Spacer(minLength: bottomBias)
@@ -203,6 +233,9 @@ private struct PhotoHomeView: View {
     }
 
     private func actionForeground(base: Double, part: ActionPart) -> Color {
+        if part == .force, isForceRefreshing {
+            return Color.white.opacity(0.38)
+        }
         switch (feedback, part) {
         case (.save(let ok), .save):
             return ok ? Self.successGreen : Self.warnColor
@@ -272,29 +305,51 @@ private struct PhotoHomeView: View {
         }
     }
 
-    /// Reloads the widget timeline and waits for the extension to write a new snapshot so the large preview updates too.
+    /// One Supabase fetch in the app → write shared JPEG → `reloadTimelines` so the widget **reads that file** (no second `get_random_post` for that reload).
     private func forceRefreshWidgetAndSnapshot() {
+        guard !isForceRefreshing else { return }
+        isForceRefreshing = true
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+
         let before = SharedPhotoSnapshot.lastUpdated
-        WidgetCenter.shared.reloadTimelines(ofKind: Self.photoWidgetKind)
+        Self.forceLog.info("Force tapped — lastUpdated before fetch: \(String(describing: before), privacy: .public)")
+
         Task {
-            var snapshotUpdated = false
-            for _ in 0..<40 {
-                try? await Task.sleep(nanoseconds: 250_000_000)
-                let now = SharedPhotoSnapshot.lastUpdated
-                if now != before {
-                    snapshotUpdated = true
-                    await MainActor.run {
-                        refreshSharedWidgetImage()
-                        pulseFeedback(.force(true))
-                    }
-                    return
-                }
-            }
+            // IMPORTANT: Reload the widget only *after* the app writes the snapshot + coalesce flag.
+            // If `reloadTimelines` runs first, the extension can call `get_random_post` and overwrite the file with a different image before the app fetch finishes.
+            let appSucceeded = await GlancePhotoRefresh.fetchAndWriteSharedSnapshot()
             await MainActor.run {
                 refreshSharedWidgetImage()
-                pulseFeedback(.force(snapshotUpdated))
+                isForceRefreshing = false
+                pulseFeedback(.force(appSucceeded))
+                Self.forceLog.info(
+                    "App fetch finished — success=\(appSucceeded, privacy: .public); lastUpdated now: \(String(describing: SharedPhotoSnapshot.lastUpdated), privacy: .public)"
+                )
+            }
+
+            WidgetCenter.shared.reloadTimelines(ofKind: Self.photoWidgetKind)
+            Self.forceLog.info("Called WidgetCenter.reloadTimelines after app fetch (success=\(appSucceeded, privacy: .public))")
+
+            await Self.logWidgetSnapshotTimeline(afterAppWrite: SharedPhotoSnapshot.lastUpdated)
+        }
+    }
+
+    /// Logs whether the widget extension later overwrites the snapshot (diagnostic only).
+    private static func logWidgetSnapshotTimeline(afterAppWrite: Date?) async {
+        var lastSeen = afterAppWrite
+        for step in 0..<40 {
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            let now = SharedPhotoSnapshot.lastUpdated
+            if now != lastSeen {
+                forceLog.info(
+                    "Widget timeline diagnostic: lastUpdated changed at poll step \(step, privacy: .public) → \(String(describing: now), privacy: .public) (was \(String(describing: lastSeen), privacy: .public))"
+                )
+                lastSeen = now
             }
         }
+        forceLog.info(
+            "Widget timeline diagnostic: done polling (~10s); final lastUpdated=\(String(describing: SharedPhotoSnapshot.lastUpdated), privacy: .public)"
+        )
     }
 
     private func refreshSharedWidgetImage() {
