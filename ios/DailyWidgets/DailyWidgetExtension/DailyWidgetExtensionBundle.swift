@@ -12,6 +12,5 @@ import SwiftUI
 struct DailyWidgetExtensionBundle: WidgetBundle {
     var body: some Widget {
         PhotoWidget()
-        SunWidget()
     }
 }
