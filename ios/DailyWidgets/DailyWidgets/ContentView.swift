@@ -281,13 +281,13 @@ private struct PhotoHomeView: View {
     }
 
     private func loadRefreshInterval() {
-        guard let defaults = UserDefaults(suiteName: SharedSunConfiguration.appGroupID) else { return }
+        guard let defaults = UserDefaults(suiteName: SharedPhotoSnapshot.appGroupID) else { return }
         let stored = defaults.double(forKey: Self.refreshIntervalKey)
         refreshInterval = PhotoRefreshInterval(seconds: stored) ?? .oneHour
     }
 
     private func saveRefreshInterval(_ interval: PhotoRefreshInterval) {
-        guard let defaults = UserDefaults(suiteName: SharedSunConfiguration.appGroupID) else { return }
+        guard let defaults = UserDefaults(suiteName: SharedPhotoSnapshot.appGroupID) else { return }
         defaults.set(interval.seconds, forKey: Self.refreshIntervalKey)
     }
 
