@@ -4,12 +4,26 @@ import UIKit
 /// Mirrors the widget’s current photo into the App Group so the main app can share, save, or copy it.
 /// `appGroupID` must match the widget extension’s App Group entitlement.
 enum SharedPhotoSnapshot {
+    struct RecentItem: Codable, Identifiable, Equatable {
+        let id: String
+        let fileName: String
+        let caption: String?
+        let updatedAt: TimeInterval
+
+        var date: Date {
+            Date(timeIntervalSince1970: updatedAt)
+        }
+    }
+
     static let appGroupID = "group.com.aryapatel.glance1234"
 
     private static let jpegFileName = "glance-widget-current.jpg"
+    private static let recentsDirectoryName = "recent-glances"
     private static let updatedAtKey = "photo.shared.updatedAt"
     private static let captionKey = "photo.shared.caption"
     private static let postIdKey = "photo.shared.postId"
+    private static let recentsKey = "photo.shared.recents"
+    private static let maxRecentItems = 12
     /// When set (epoch seconds), widget `getTimeline` should reuse the on-disk JPEG instead of `get_random_post` so it matches the main app.
     private static let widgetSkipRandomUntilKey = "photo.shared.widgetSkipRandomUntil"
     /// Main app sets this before `reloadTimelines` so the *next* `getTimeline` uses the JPEG already on disk (one network fetch in the app only).
@@ -21,6 +35,10 @@ enum SharedPhotoSnapshot {
 
     static func imageFileURL() -> URL? {
         containerURL?.appendingPathComponent(jpegFileName)
+    }
+
+    private static func recentsDirectoryURL() -> URL? {
+        containerURL?.appendingPathComponent(recentsDirectoryName, isDirectory: true)
     }
 
     /// Called from the widget timeline when a new image is ready.
@@ -40,6 +58,7 @@ enum SharedPhotoSnapshot {
             } else {
                 defaults.removeObject(forKey: postIdKey)
             }
+            recordRecentJPEGData(data, caption: caption, postId: postId, defaults: defaults)
         } catch {}
     }
 
@@ -105,8 +124,59 @@ enum SharedPhotoSnapshot {
         UserDefaults(suiteName: appGroupID)?.string(forKey: captionKey)
     }
 
+    static func loadRecentItems() -> [RecentItem] {
+        guard let defaults = UserDefaults(suiteName: appGroupID),
+              let data = defaults.data(forKey: recentsKey),
+              let items = try? JSONDecoder().decode([RecentItem].self, from: data) else {
+            return []
+        }
+        return items.filter { imageData(forRecent: $0) != nil }
+    }
+
+    static func imageData(forRecent item: RecentItem) -> Data? {
+        guard let directory = recentsDirectoryURL() else { return nil }
+        let url = directory.appendingPathComponent(item.fileName)
+        guard let data = try? Data(contentsOf: url), data.count > 32 else { return nil }
+        return data
+    }
+
+    static func image(forRecent item: RecentItem) -> UIImage? {
+        guard let data = imageData(forRecent: item) else { return nil }
+        return UIImage(data: data)
+    }
+
     static var lastUpdated: Date? {
         let t = UserDefaults(suiteName: appGroupID)?.double(forKey: updatedAtKey) ?? 0
         return t > 0 ? Date(timeIntervalSince1970: t) : nil
+    }
+
+    private static func recordRecentJPEGData(_ data: Data, caption: String?, postId: UUID?, defaults: UserDefaults) {
+        guard let directory = recentsDirectoryURL() else { return }
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+            let now = Date().timeIntervalSince1970
+            let stableID = postId?.uuidString ?? String(Int(now * 1000))
+            let fileName = "\(stableID).jpg"
+            let fileURL = directory.appendingPathComponent(fileName)
+            try data.write(to: fileURL, options: [.atomic])
+
+            let newItem = RecentItem(id: stableID, fileName: fileName, caption: caption, updatedAt: now)
+            var items = loadRecentItems()
+            items.removeAll { $0.id == stableID }
+            items.insert(newItem, at: 0)
+
+            let kept = Array(items.prefix(maxRecentItems))
+            let keepFileNames = Set(kept.map(\.fileName))
+            if let existing = try? FileManager.default.contentsOfDirectory(atPath: directory.path) {
+                for file in existing where !keepFileNames.contains(file) {
+                    try? FileManager.default.removeItem(at: directory.appendingPathComponent(file))
+                }
+            }
+
+            if let encoded = try? JSONEncoder().encode(kept) {
+                defaults.set(encoded, forKey: recentsKey)
+            }
+        } catch {}
     }
 }
