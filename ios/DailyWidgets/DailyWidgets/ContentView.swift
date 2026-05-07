@@ -16,20 +16,23 @@ private enum ActionHighlight: Equatable {
     case force(Bool)
 }
 
+private enum ActionPart {
+    case save, copy, force
+}
+
 private struct PhotoHomeView: View {
     @Environment(\.scenePhase) private var scenePhase
 
     @State private var hasPhotoWidget = false
     @State private var refreshInterval: PhotoRefreshInterval = .oneHour
     @State private var sharedWidgetImage: UIImage?
+    @State private var sharedLastUpdated: Date?
+    @State private var recentItems: [SharedPhotoSnapshot.RecentItem] = []
     @State private var showShareSheet = false
     @State private var showSettings = false
+    @State private var showRecents = false
     /// Which control just succeeded (or failed); animates that label green / amber.
     @State private var feedback: ActionHighlight = .none
-
-    private enum ActionPart {
-        case save, copy, force
-    }
 
     @State private var showIntro = true
     /// True while the in-app fetch + snapshot write is in progress.
@@ -42,7 +45,7 @@ private struct PhotoHomeView: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            GlanceDesign.ColorToken.background.ignoresSafeArea()
 
             if showIntro {
                 Text("something to glance at.")
@@ -77,7 +80,7 @@ private struct PhotoHomeView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(.horizontal, 28)
+                .padding(.horizontal, GlanceDesign.Spacing.screenHorizontal)
                 .transition(.opacity)
             }
         }
@@ -94,7 +97,16 @@ private struct PhotoHomeView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
+                checkWidgetPresence()
+                scheduleWidgetPresenceRechecks()
                 refreshSharedWidgetImage()
+            }
+        }
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            while !Task.isCancelled {
+                checkWidgetPresence()
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
             }
         }
         .task(id: hasPhotoWidget) {
@@ -120,6 +132,11 @@ private struct PhotoHomeView: View {
             PhotoRefreshSettingsSheet(selection: $refreshInterval) { newValue in
                 saveRefreshInterval(newValue)
                 WidgetCenter.shared.reloadTimelines(ofKind: Self.photoWidgetKind)
+            }
+        }
+        .sheet(isPresented: $showRecents) {
+            RecentGlancesSheet(items: recentItems) {
+                refreshSharedWidgetImage()
             }
         }
     }
@@ -180,29 +197,47 @@ private struct PhotoHomeView: View {
                     Spacer(minLength: 0)
                 }
 
+                if let contextLine {
+                    Text(contextLine)
+                        .font(GlanceDesign.FontToken.meta)
+                        .foregroundStyle(.white.opacity(GlanceDesign.Opacity.quiet))
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .padding(.horizontal, 24)
+                        .padding(.top, 14)
+                }
+
                 HStack(spacing: 0) {
                     Spacer(minLength: 0)
                     Text("save")
-                        .foregroundStyle(actionForeground(base: snapshotLoaded ? 0.52 : 0.22, part: .save))
+                        .foregroundStyle(actionForeground(base: snapshotLoaded ? GlanceDesign.Opacity.action : GlanceDesign.Opacity.disabled, part: .save))
                         .offset(y: actionBounce(part: .save))
                         .onTapGesture { saveSharedImageToPhotos() }
                     Text(" · ")
-                        .foregroundStyle(.white.opacity(0.35))
+                        .foregroundStyle(.white.opacity(GlanceDesign.Opacity.separator))
                     Text("copy")
-                        .foregroundStyle(actionForeground(base: snapshotLoaded ? 0.52 : 0.22, part: .copy))
+                        .foregroundStyle(actionForeground(base: snapshotLoaded ? GlanceDesign.Opacity.action : GlanceDesign.Opacity.disabled, part: .copy))
                         .offset(y: actionBounce(part: .copy))
                         .onTapGesture { copySharedImage() }
                     Text(" · ")
-                        .foregroundStyle(.white.opacity(0.35))
+                        .foregroundStyle(.white.opacity(GlanceDesign.Opacity.separator))
                     Text("share")
-                        .foregroundStyle(.white.opacity(snapshotLoaded ? 0.52 : 0.22))
+                        .foregroundStyle(.white.opacity(snapshotLoaded ? GlanceDesign.Opacity.action : GlanceDesign.Opacity.disabled))
                         .onTapGesture {
                             guard snapshotLoaded else { return }
                             showShareSheet = true
                         }
+                    Text(" · ")
+                        .foregroundStyle(.white.opacity(GlanceDesign.Opacity.separator))
+                    Text("recents")
+                        .foregroundStyle(.white.opacity(recentItems.isEmpty ? GlanceDesign.Opacity.disabled : GlanceDesign.Opacity.action))
+                        .onTapGesture {
+                            guard !recentItems.isEmpty else { return }
+                            showRecents = true
+                        }
                     Spacer(minLength: 0)
                 }
-                .font(.system(size: 16, weight: .regular))
+                .font(GlanceDesign.FontToken.action)
                 .animation(.spring(response: 0.42, dampingFraction: 0.72), value: feedback)
                 .padding(.top, 16)
 
@@ -213,8 +248,8 @@ private struct PhotoHomeView: View {
                         .symbolRenderingMode(.monochrome)
                         .symbolEffect(.rotate, options: .repeating, isActive: isForceRefreshing)
                 }
-                .font(.system(size: 16, weight: .regular))
-                .foregroundStyle(actionForeground(base: 0.52, part: .force))
+                .font(GlanceDesign.FontToken.action)
+                .foregroundStyle(actionForeground(base: GlanceDesign.Opacity.action, part: .force))
                 .offset(y: actionBounce(part: .force))
                 .animation(.spring(response: 0.42, dampingFraction: 0.72), value: feedback)
                 .padding(.top, 18)
@@ -256,8 +291,15 @@ private struct PhotoHomeView: View {
         }
     }
 
-    private static let successGreen = Color(red: 0.42, green: 0.9, blue: 0.58)
-    private static let warnColor = Color(red: 1.0, green: 0.58, blue: 0.38)
+    private static let successGreen = GlanceDesign.ColorToken.success
+    private static let warnColor = GlanceDesign.ColorToken.warning
+
+    private var contextLine: String? {
+        if let sharedLastUpdated {
+            return "refreshed \(sharedLastUpdated.formatted(date: .omitted, time: .shortened))"
+        }
+        return nil
+    }
 
     private func onboardingStep(_ index: String, _ text: String) -> some View {
         HStack(spacing: 12) {
@@ -275,7 +317,19 @@ private struct PhotoHomeView: View {
         WidgetCenter.shared.getCurrentConfigurations { result in
             guard case let .success(configs) = result else { return }
             DispatchQueue.main.async {
-                hasPhotoWidget = configs.contains { $0.kind == Self.photoWidgetKind }
+                let installed = configs.contains { $0.kind == Self.photoWidgetKind }
+                guard hasPhotoWidget != installed else { return }
+                withAnimation(.easeOut(duration: 0.28)) {
+                    hasPhotoWidget = installed
+                }
+            }
+        }
+    }
+
+    private func scheduleWidgetPresenceRechecks() {
+        for delay in [0.8, 2.0, 4.0] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                checkWidgetPresence()
             }
         }
     }
@@ -321,6 +375,8 @@ private struct PhotoHomeView: View {
 
     private func refreshSharedWidgetImage() {
         sharedWidgetImage = SharedPhotoSnapshot.loadImage()
+        sharedLastUpdated = SharedPhotoSnapshot.lastUpdated
+        recentItems = SharedPhotoSnapshot.loadRecentItems()
     }
 
     private func saveSharedImageToPhotos() {
@@ -408,6 +464,231 @@ private struct PhotoRefreshSettingsSheet: View {
         }
         .preferredColorScheme(.dark)
         .presentationDragIndicator(.visible)
+    }
+}
+
+private struct RecentGlancesSheet: View {
+    let items: [SharedPhotoSnapshot.RecentItem]
+    var onChange: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedItem: SharedPhotoSnapshot.RecentItem?
+    @State private var shareImage: ShareImage?
+    @State private var feedback: ActionHighlight = .none
+
+    private let columns = [
+        GridItem(.flexible(), spacing: 10),
+        GridItem(.flexible(), spacing: 10),
+        GridItem(.flexible(), spacing: 10),
+    ]
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                if let selectedItem {
+                    recentDetail(selectedItem)
+                } else {
+                    recentGrid
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.horizontal, GlanceDesign.Spacing.sheetHorizontal)
+            .padding(.top, 18)
+            .padding(.bottom, 10)
+            .background(GlanceDesign.ColorToken.background)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    if selectedItem != nil {
+                        Button {
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                self.selectedItem = nil
+                            }
+                        } label: {
+                            Image(systemName: "chevron.left")
+                                .foregroundStyle(.white.opacity(GlanceDesign.Opacity.secondary))
+                        }
+                        .accessibilityLabel("Back")
+                    }
+                }
+
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .foregroundStyle(.white.opacity(GlanceDesign.Opacity.secondary))
+                    }
+                    .accessibilityLabel("Close")
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+        .presentationDragIndicator(.visible)
+        .sheet(item: $shareImage) { payload in
+            ActivityView(activityItems: [payload.image])
+        }
+    }
+
+    private var recentGrid: some View {
+        VStack(spacing: 18) {
+            VStack(spacing: 8) {
+                Text("recent glances")
+                    .font(GlanceDesign.FontToken.sheetTitle)
+                    .foregroundStyle(.white)
+
+                Text("the last few photos your widget has shown.")
+                    .font(GlanceDesign.FontToken.body)
+                    .foregroundStyle(.white.opacity(GlanceDesign.Opacity.secondary))
+                    .multilineTextAlignment(.center)
+            }
+
+            ScrollView(showsIndicators: false) {
+                LazyVGrid(columns: columns, spacing: 10) {
+                    ForEach(items) { item in
+                        Button {
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                selectedItem = item
+                            }
+                        } label: {
+                            RecentGlanceThumbnail(item: item)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.top, 4)
+            }
+        }
+    }
+
+    private func recentDetail(_ item: SharedPhotoSnapshot.RecentItem) -> some View {
+        VStack(spacing: 16) {
+            Spacer(minLength: 12)
+
+            if let image = SharedPhotoSnapshot.image(forRecent: item) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .aspectRatio(1, contentMode: .fit)
+                    .clipShape(RoundedRectangle(cornerRadius: GlanceDesign.Radius.photo, style: .continuous))
+                    .padding(.horizontal, 8)
+
+                Text("shown \(item.date.formatted(date: .abbreviated, time: .shortened))")
+                    .font(GlanceDesign.FontToken.meta)
+                    .foregroundStyle(.white.opacity(GlanceDesign.Opacity.quiet))
+
+                recentActions(for: image)
+            }
+
+            Spacer(minLength: 12)
+        }
+        .transition(.opacity)
+    }
+
+    private func recentActions(for image: UIImage) -> some View {
+        HStack(spacing: 0) {
+            Text("save")
+                .foregroundStyle(actionForeground(base: GlanceDesign.Opacity.action, part: .save))
+                .offset(y: actionBounce(part: .save))
+                .onTapGesture { save(image) }
+            Text(" · ")
+                .foregroundStyle(.white.opacity(GlanceDesign.Opacity.separator))
+            Text("copy")
+                .foregroundStyle(actionForeground(base: GlanceDesign.Opacity.action, part: .copy))
+                .offset(y: actionBounce(part: .copy))
+                .onTapGesture { copy(image) }
+            Text(" · ")
+                .foregroundStyle(.white.opacity(GlanceDesign.Opacity.separator))
+            Text("share")
+                .foregroundStyle(.white.opacity(GlanceDesign.Opacity.action))
+                .onTapGesture { shareImage = ShareImage(image: image) }
+        }
+        .font(GlanceDesign.FontToken.action)
+        .animation(.spring(response: 0.42, dampingFraction: 0.72), value: feedback)
+        .padding(.top, 2)
+    }
+
+    private func save(_ image: UIImage) {
+        PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
+            DispatchQueue.main.async {
+                guard status == .authorized || status == .limited else {
+                    pulseFeedback(.save(false))
+                    return
+                }
+                PHPhotoLibrary.shared().performChanges {
+                    PHAssetChangeRequest.creationRequestForAsset(from: image)
+                } completionHandler: { ok, _ in
+                    DispatchQueue.main.async {
+                        pulseFeedback(.save(ok))
+                        onChange()
+                    }
+                }
+            }
+        }
+    }
+
+    private func copy(_ image: UIImage) {
+        UIPasteboard.general.image = image
+        pulseFeedback(.copy(true))
+    }
+
+    private func actionForeground(base: Double, part: ActionPart) -> Color {
+        switch (feedback, part) {
+        case (.save(let ok), .save):
+            return ok ? GlanceDesign.ColorToken.success : GlanceDesign.ColorToken.warning
+        case (.copy(let ok), .copy):
+            return ok ? GlanceDesign.ColorToken.success : GlanceDesign.ColorToken.warning
+        default:
+            return Color.white.opacity(base)
+        }
+    }
+
+    private func actionBounce(part: ActionPart) -> CGFloat {
+        switch (feedback, part) {
+        case (.save(true), .save), (.copy(true), .copy):
+            return -4
+        case (.save(false), .save), (.copy(false), .copy):
+            return -1
+        default:
+            return 0
+        }
+    }
+
+    private func pulseFeedback(_ highlight: ActionHighlight) {
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.72)) {
+            feedback = highlight
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.45) {
+            withAnimation(.easeOut(duration: 0.35)) {
+                feedback = .none
+            }
+        }
+    }
+}
+
+private struct ShareImage: Identifiable {
+    let id = UUID()
+    let image: UIImage
+}
+
+private struct RecentGlanceThumbnail: View {
+    let item: SharedPhotoSnapshot.RecentItem
+
+    var body: some View {
+        GeometryReader { proxy in
+            Group {
+                if let image = SharedPhotoSnapshot.image(forRecent: item) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    Color.white.opacity(0.06)
+                }
+            }
+            .frame(width: proxy.size.width, height: proxy.size.width)
+            .clipShape(RoundedRectangle(cornerRadius: GlanceDesign.Radius.thumb, style: .continuous))
+        }
+        .aspectRatio(1, contentMode: .fit)
+        .accessibilityLabel("Recent glance")
     }
 }
 
