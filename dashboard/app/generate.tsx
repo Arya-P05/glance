@@ -162,7 +162,14 @@ export default function GenerateScreen() {
       {/* Run */}
       <View style={{ marginTop: 24 }}>
         <Btn
-          label={dryRun ? `Preview ${count} Scene${parseInt(count) !== 1 ? "s" : ""}` : `Generate ${count} Poster${parseInt(count) !== 1 ? "s" : ""}`}
+          label={(() => {
+            const n = parseInt(count) || 0;
+            const s = n !== 1 ? "s" : "";
+            if (dryRun) return `Preview ${n} Scene${s}`;
+            if (mode === "prompts") return `Generate ${n} Prompt${s}`;
+            if (mode === "images") return `Generate ${n} Image${s}`;
+            return `Generate ${n} Poster${s}`;
+          })()}
           onPress={run}
           loading={loading}
         />
