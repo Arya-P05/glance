@@ -326,24 +326,23 @@ function ActionKey({
 
 const akStyles = StyleSheet.create({
   btn: {
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-    paddingBottom: 10,
+    paddingHorizontal: 28,
+    paddingVertical: 16,
     borderRadius: 12,
     borderWidth: 1.5,
     alignItems: "center",
     justifyContent: "center",
-    minWidth: 110,
-    gap: 6,
+    flexDirection: "row",
+    gap: 10,
   },
   label: { fontWeight: "700", letterSpacing: 0.3 },
   hint: {
     backgroundColor: "rgba(255,255,255,0.18)",
     borderRadius: 5,
-    paddingHorizontal: 7,
+    paddingHorizontal: 6,
     paddingVertical: 2,
   },
-  hintText: { color: "rgba(255,255,255,0.75)", fontSize: 11, fontWeight: "700", fontFamily: "monospace" },
+  hintText: { color: "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: "700", fontFamily: "monospace" },
 });
 
 const styles = StyleSheet.create({
