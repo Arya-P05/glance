@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View, Text, ScrollView, StyleSheet, Image, Pressable, ActivityIndicator,
 } from "react-native";
@@ -82,6 +82,20 @@ export default function DraftsScreen() {
   function skipCurrent() {
     advance(drafts);
   }
+
+  // Keyboard shortcuts for review mode (i=inactive, p=publish, s=skip, d=delete)
+  useEffect(() => {
+    if (screen !== "review" || typeof document === "undefined") return;
+    function onKey(e: KeyboardEvent) {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === "i") saveInactiveCurrent();
+      else if (e.key === "p") publishCurrent();
+      else if (e.key === "s") skipCurrent();
+      else if (e.key === "d") discardCurrent();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [screen, reviewIdx, drafts, busy]);
 
   // ── Review mode ────────────────────────────────────────────────────────────
   if (screen === "review") {
@@ -189,23 +203,17 @@ export default function DraftsScreen() {
                 </Text>
               </View>
             )}
-
-            <View style={{ flex: 1 }} />
-
-            <View style={styles.thumbSmall}>
-              <Image source={{ uri: imgUri }} style={styles.thumbImg} resizeMode="cover" />
-            </View>
           </View>
         </View>
 
-        {/* Action bar */}
+        {/* Action bar — keyboard: i=inactive p=publish s=skip d=delete */}
         <View style={styles.actionBar}>
-          <Btn label="← Grid" onPress={() => setScreen("grid")} small variant="ghost" />
           <View style={{ flex: 1 }} />
-          <Btn label="Skip →" onPress={skipCurrent} small variant="ghost" />
-          <Btn label="Save Inactive" onPress={saveInactiveCurrent} loading={busy} small variant="outline" />
-          <Btn label="Publish" onPress={publishCurrent} loading={busy} small />
-          <Btn label="Delete" onPress={discardCurrent} loading={busy} small variant="danger" />
+          <ActionKey label="Inactive" keyHint="I" onPress={saveInactiveCurrent} loading={busy} variant="outline" />
+          <ActionKey label="Publish" keyHint="P" onPress={publishCurrent} loading={busy} variant="primary" />
+          <ActionKey label="Skip" keyHint="S" onPress={skipCurrent} variant="ghost" />
+          <ActionKey label="🗑" keyHint="D" onPress={discardCurrent} loading={busy} variant="danger" iconOnly />
+          <View style={{ flex: 1 }} />
         </View>
       </View>
     );
@@ -278,6 +286,55 @@ export default function DraftsScreen() {
     </View>
   );
 }
+
+// Large action button with a keyboard hint badge
+function ActionKey({
+  label, keyHint, onPress, loading, variant = "ghost", iconOnly = false,
+}: {
+  label: string; keyHint: string; onPress: () => void;
+  loading?: boolean; variant?: "primary" | "outline" | "ghost" | "danger"; iconOnly?: boolean;
+}) {
+  const bg = variant === "primary" ? C.accent : variant === "danger" ? C.danger : variant === "outline" ? "transparent" : "transparent";
+  const textColor = variant === "primary" ? C.bg : variant === "danger" ? "#fff" : C.textSecondary;
+  const borderColor = variant === "outline" ? C.border : variant === "primary" ? C.accent : variant === "danger" ? C.danger : "transparent";
+
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={loading}
+      style={[akStyles.btn, { backgroundColor: bg, borderColor, opacity: loading ? 0.5 : 1 }]}
+    >
+      <Text style={[akStyles.label, { color: textColor, fontSize: iconOnly ? 22 : 16 }]}>{label}</Text>
+      <View style={akStyles.hint}>
+        <Text style={akStyles.hintText}>{keyHint}</Text>
+      </View>
+    </Pressable>
+  );
+}
+
+const akStyles = StyleSheet.create({
+  btn: {
+    paddingHorizontal: 28,
+    paddingVertical: 16,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 90,
+    position: "relative",
+  },
+  label: { fontWeight: "700", letterSpacing: 0.3 },
+  hint: {
+    position: "absolute",
+    top: 4,
+    right: 6,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  hintText: { color: "rgba(255,255,255,0.5)", fontSize: 9, fontWeight: "700", fontFamily: "monospace" },
+});
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
@@ -374,12 +431,11 @@ const styles = StyleSheet.create({
   },
   previewRow: {
     flexDirection: "row",
-    gap: 20,
+    gap: 24,
     alignItems: "center",
-    transform: [{ scale: 0.72 }],
-    // Compensate for layout space that scale() doesn't collapse:
-    // WidgetLarge is 329px tall → visual 237px → excess 92px → -46 each side
-    marginVertical: -46,
+    transform: [{ scale: 0.88 }],
+    // WidgetLarge is 329px tall → visual 289px → excess 40px → -20 each side
+    marginVertical: -20,
   },
   previewBlock: {
     gap: 8,
@@ -427,22 +483,13 @@ const styles = StyleSheet.create({
   metaValueMuted: { color: C.textSecondary, fontSize: 11, lineHeight: 16 },
   metaMissing: { color: C.textMuted, fontSize: 12, fontStyle: "italic", marginBottom: 16 },
 
-  thumbSmall: {
-    width: "100%",
-    aspectRatio: 1,
-    borderRadius: 8,
-    overflow: "hidden",
-    marginTop: 12,
-  },
-  thumbImg: { width: "100%", height: "100%" },
-
   // Action bar
   actionBar: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    gap: 16,
+    paddingHorizontal: 32,
+    paddingVertical: 20,
     borderTopWidth: 1,
     borderTopColor: C.border,
     backgroundColor: C.surface,
