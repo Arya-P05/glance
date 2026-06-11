@@ -5,10 +5,18 @@
   "type": "module",
   "main": "sync.js",
   "scripts": {
+    "gen": "node generate.js",
+    "gen:prompts": "node generate.js --mode prompts",
+    "gen:images": "node generate.js --mode images",
+    "publish": "node publish.js",
+    "discard": "node discard.js",
+    "migrate": "node migrate.js",
     "sync": "node sync.js",
     "bulk": "node sync.js --bulk",
     "collect-links": "node collect-links.js",
     "import-links": "node import-from-links.js",
+    "generate-posters": "node generate-posters.js",
+    "render-caption": "node render-caption.js",
     "clear-posts": "node clear-posts-and-storage.js",
     "prune-orphans": "node prune-orphan-posts.js",
     "admin": "node admin-server.js",
@@ -17,6 +25,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
     "dotenv": "^16.4.5",
+    "openai": "^6.10.0",
     "playwright": "^1.49.0",
     "sharp": "^0.33.5"
   }
