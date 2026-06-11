@@ -392,6 +392,8 @@ async function main() {
       if (payload.captionModel) args.push("--caption-model", payload.captionModel);
       if (payload.size) args.push("--size", payload.size);
       if (payload.dryRun) args.push("--dry-run");
+      if (Array.isArray(payload.promptIds) && payload.promptIds.length)
+        args.push("--prompt-ids", payload.promptIds.join(","));
 
       const jobId = spawnJob("generate", "generate.js", args);
       json(res, 200, { jobId });

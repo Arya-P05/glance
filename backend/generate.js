@@ -45,6 +45,7 @@ function parseArgs(argv) {
     mode: "full",
     fromPrompts: false,
     fromPromptsDir: PROMPTS_DIR,
+    promptIds: null, // comma-separated list of prompt IDs to use
     outDir: null,
     model: process.env.OPENAI_IMAGE_MODEL || DEFAULT_IMAGE_MODEL,
     promptModel: process.env.OPENAI_PROMPT_MODEL || DEFAULT_PROMPT_MODEL,
@@ -61,6 +62,9 @@ function parseArgs(argv) {
     else if (arg === "--from-prompts") {
       out.fromPrompts = true;
       if (argv[i + 1] && !argv[i + 1].startsWith("--")) out.fromPromptsDir = next();
+    } else if (arg === "--prompt-ids") {
+      out.fromPrompts = true;
+      out.promptIds = next().split(",").map(s => s.trim()).filter(Boolean);
     } else if (arg === "--out") out.outDir = next();
     else if (arg === "--model") out.model = next();
     else if (arg === "--prompt-model") out.promptModel = next();
@@ -215,7 +219,7 @@ async function generateCaption({ client, model, scene, imageBytes }) {
   };
 }
 
-async function loadFromPromptsDir(dir, count) {
+async function loadFromPromptsDir(dir, count, filterIds = null) {
   let files;
   try {
     files = await readdir(dir);
@@ -223,7 +227,12 @@ async function loadFromPromptsDir(dir, count) {
     throw new Error(`Prompts directory not found: ${dir}\nRun: npm run gen -- --mode prompts`);
   }
 
-  const jsonFiles = files.filter((f) => f.endsWith(".json")).sort().slice(0, count);
+  let jsonFiles = files.filter((f) => f.endsWith(".json")).sort();
+  if (filterIds) {
+    jsonFiles = jsonFiles.filter(f => filterIds.includes(f.replace(/\.json$/, "")));
+  } else {
+    jsonFiles = jsonFiles.slice(0, count);
+  }
   if (jsonFiles.length === 0) {
     throw new Error(`No prompt JSON files found in ${dir}\nRun: npm run gen -- --mode prompts`);
   }
@@ -270,7 +279,7 @@ async function main() {
 
   let promptSources = null;
   if (args.fromPrompts) {
-    promptSources = await loadFromPromptsDir(args.fromPromptsDir, args.count);
+    promptSources = await loadFromPromptsDir(args.fromPromptsDir, args.count, args.promptIds);
     console.log(`Loaded ${promptSources.length} prompts from ${args.fromPromptsDir}/\n`);
   }
 

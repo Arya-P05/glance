@@ -118,6 +118,7 @@ export interface GenerateOptions {
   captionModel?: string;
   size?: string;
   dryRun?: boolean;
+  promptIds?: string[];
 }
 
 export interface SyncOptions {
