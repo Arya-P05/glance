@@ -10,6 +10,7 @@ import { createClient } from "@supabase/supabase-js";
 import { readFile } from "node:fs/promises";
 import { chromium } from "playwright";
 import { BUCKET, downloadImage, getPostImageAndCaption, resizeForWidget } from "./instagram-helper.js";
+import { supabaseServiceRoleKey, supabaseUrl } from "./supabase-env.js";
 
 function env(name) {
   const v = process.env[name];
@@ -18,12 +19,12 @@ function env(name) {
 }
 
 async function main() {
-  const supabaseUrl = env("SUPABASE_URL");
-  const supabaseKey = env("SUPABASE_SERVICE_ROLE_KEY");
+  const projectUrl = supabaseUrl();
+  const supabaseKey = supabaseServiceRoleKey();
   const filePath = process.env.LINKS_IN || "./post-links.json";
   const refreshExisting = (process.env.REFRESH_EXISTING || "").toLowerCase() === "true" || process.env.REFRESH_EXISTING === "1";
 
-  const supabase = createClient(supabaseUrl, supabaseKey);
+  const supabase = createClient(projectUrl, supabaseKey);
   const raw = await readFile(filePath, "utf8");
   const shortcodes = JSON.parse(raw);
   if (!Array.isArray(shortcodes)) throw new Error("LINKS_IN must be a JSON array of shortcodes.");
