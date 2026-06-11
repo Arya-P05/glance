@@ -310,6 +310,10 @@ function ActionKey({
     variant === "danger"  ? C.danger :
     C.border;
 
+  // On light backgrounds (primary/lime), use dark hint; on dark/colored, use light
+  const hintBg = variant === "primary" ? "rgba(0,0,0,0.18)" : "rgba(255,255,255,0.18)";
+  const hintColor = variant === "primary" ? "rgba(0,0,0,0.65)" : "rgba(255,255,255,0.8)";
+
   return (
     <Pressable
       onPress={onPress}
@@ -317,8 +321,8 @@ function ActionKey({
       style={[akStyles.btn, { backgroundColor: bg, borderColor, opacity: loading ? 0.5 : 1 }]}
     >
       {icon ?? <Text style={[akStyles.label, { color: textColor }]}>{label}</Text>}
-      <View style={akStyles.hint}>
-        <Text style={akStyles.hintText}>{keyHint}</Text>
+      <View style={[akStyles.hint, { backgroundColor: hintBg }]}>
+        <Text style={[akStyles.hintText, { color: hintColor }]}>{keyHint}</Text>
       </View>
     </Pressable>
   );
