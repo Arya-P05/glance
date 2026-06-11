@@ -9,7 +9,7 @@ import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
 import { spawn } from "node:child_process";
 import { createReadStream, readFileSync } from "node:fs";
-import { readdir, readFile, rename, mkdir, stat } from "node:fs/promises";
+import { readdir, readFile, stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import { dirname, join, basename, extname } from "node:path";
 import { randomUUID } from "node:crypto";
