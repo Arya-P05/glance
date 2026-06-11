@@ -48,32 +48,35 @@ export default function DraftsScreen() {
     }
   }
 
-  async function publishCurrent() {
-    const draft = drafts[reviewIdx];
-    if (!draft || busy) return;
+  async function removeCurrent(action: () => Promise<void>) {
     setBusy(true);
     try {
-      await api.publishDraft({ id: draft.id });
-      const next = drafts.filter(d => d.id !== draft.id);
+      await action();
+      const id = drafts[reviewIdx].id;
+      const next = drafts.filter(d => d.id !== id);
       setDrafts(next);
       if (next.length === 0) { setScreen("grid"); load(); }
-      else if (reviewIdx >= next.length) setReviewIdx(next.length - 1);
+      else setReviewIdx(i => Math.min(i, next.length - 1));
     } catch (e: any) { alert(e.message); }
     setBusy(false);
   }
 
-  async function discardCurrent() {
+  function publishCurrent() {
     const draft = drafts[reviewIdx];
     if (!draft || busy) return;
-    setBusy(true);
-    try {
-      await api.discardDraft({ id: draft.id });
-      const next = drafts.filter(d => d.id !== draft.id);
-      setDrafts(next);
-      if (next.length === 0) { setScreen("grid"); load(); }
-      else if (reviewIdx >= next.length) setReviewIdx(next.length - 1);
-    } catch (e: any) { alert(e.message); }
-    setBusy(false);
+    return removeCurrent(() => api.publishDraft({ id: draft.id }).then(() => {}));
+  }
+
+  function saveInactiveCurrent() {
+    const draft = drafts[reviewIdx];
+    if (!draft || busy) return;
+    return removeCurrent(() => api.publishDraft({ id: draft.id, status: "inactive" }).then(() => {}));
+  }
+
+  function discardCurrent() {
+    const draft = drafts[reviewIdx];
+    if (!draft || busy) return;
+    return removeCurrent(() => api.discardDraft({ id: draft.id }).then(() => {}));
   }
 
   function skipCurrent() {
@@ -129,31 +132,23 @@ export default function DraftsScreen() {
 
         {/* Main review area */}
         <View style={styles.reviewBody}>
-          {/* Widget previews */}
-          <ScrollView
-            contentContainerStyle={styles.previewArea}
-            showsVerticalScrollIndicator={false}
-          >
+          {/* Widget previews — all three in a single centered row */}
+          <View style={styles.previewArea}>
             <View style={styles.previewRow}>
-              {/* Large widget */}
               <View style={styles.previewBlock}>
                 <Text style={styles.previewLabel}>Large</Text>
                 <WidgetLarge imageUri={imgUri} />
               </View>
-
-              {/* Small + Medium stacked */}
-              <View style={styles.previewStack}>
-                <View style={styles.previewBlock}>
-                  <Text style={styles.previewLabel}>Small</Text>
-                  <WidgetSmall imageUri={imgUri} />
-                </View>
-                <View style={styles.previewBlock}>
-                  <Text style={styles.previewLabel}>Medium</Text>
-                  <WidgetMedium imageUri={imgUri} />
-                </View>
+              <View style={styles.previewBlock}>
+                <Text style={styles.previewLabel}>Small</Text>
+                <WidgetSmall imageUri={imgUri} />
+              </View>
+              <View style={styles.previewBlock}>
+                <Text style={styles.previewLabel}>Medium</Text>
+                <WidgetMedium imageUri={imgUri} />
               </View>
             </View>
-          </ScrollView>
+          </View>
 
           {/* Metadata panel */}
           <View style={styles.metaPanel}>
@@ -207,7 +202,8 @@ export default function DraftsScreen() {
         <View style={styles.actionBar}>
           <Btn label="← Grid" onPress={() => setScreen("grid")} small variant="ghost" />
           <View style={{ flex: 1 }} />
-          <Btn label="Skip →" onPress={skipCurrent} small variant="outline" />
+          <Btn label="Skip →" onPress={skipCurrent} small variant="ghost" />
+          <Btn label="Save Inactive" onPress={saveInactiveCurrent} loading={busy} small variant="outline" />
           <Btn label="Publish" onPress={publishCurrent} loading={busy} small />
           <Btn label="Delete" onPress={discardCurrent} loading={busy} small variant="danger" />
         </View>
@@ -371,19 +367,23 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   previewArea: {
-    padding: 24,
-    alignItems: "flex-start",
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
   },
   previewRow: {
     flexDirection: "row",
     gap: 20,
-    alignItems: "flex-start",
+    alignItems: "center",
+    transform: [{ scale: 0.72 }],
+    // Compensate for layout space that scale() doesn't collapse:
+    // WidgetLarge is 329px tall → visual 237px → excess 92px → -46 each side
+    marginVertical: -46,
   },
   previewBlock: {
     gap: 8,
-  },
-  previewStack: {
-    gap: 20,
+    alignItems: "center",
   },
   previewLabel: {
     color: C.textMuted,

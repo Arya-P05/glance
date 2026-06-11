@@ -29,6 +29,7 @@ function parseArgs(argv) {
     draftsDir: DRAFTS_DIR,
     metaDir: META_DIR,
     dryRun: false,
+    status: "active",
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -40,6 +41,7 @@ function parseArgs(argv) {
     else if (arg === "--drafts-dir") out.draftsDir = next();
     else if (arg === "--meta-dir") out.metaDir = next();
     else if (arg === "--dry-run") out.dryRun = true;
+    else if (arg === "--status") out.status = next();
     else if (arg === "--help" || arg === "-h") out.help = true;
     else throw new Error(`Unknown argument: ${arg}`);
   }
@@ -139,7 +141,7 @@ async function getUnpublishedDrafts(draftsDir, metaDir) {
   return drafts;
 }
 
-async function publishDraft({ supabase, draft, dryRun }) {
+async function publishDraft({ supabase, draft, dryRun, status = "active" }) {
   const { name, imagePath, jsonPath, data } = draft;
   const storagePath = `${POST_PREFIX}/${name}.jpg`;
 
@@ -162,7 +164,7 @@ async function publishDraft({ supabase, draft, dryRun }) {
         storage_path: storagePath,
         caption,
         posted_at: null,
-        status: "active",
+        status,
       },
       { onConflict: "instagram_id" }
     );
@@ -257,7 +259,7 @@ async function main() {
     try {
       const storagePath = await withProgress(
         `${prefix} ${draft.name} ${captionStr}`,
-        () => publishDraft({ supabase, draft, dryRun: false })
+        () => publishDraft({ supabase, draft, dryRun: false, status: args.status })
       );
       console.log(`${prefix} → ${storagePath}\n`);
       published++;

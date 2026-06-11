@@ -28,7 +28,7 @@ export const api = {
     }),
 
   drafts: () => request<{ drafts: Draft[] }>("/api/drafts"),
-  publishDraft: (opts: { id?: string; all?: boolean; count?: number }) =>
+  publishDraft: (opts: { id?: string; all?: boolean; count?: number; status?: "active" | "inactive" }) =>
     request<{ jobId: string }>("/api/drafts/publish", { method: "POST", body: JSON.stringify(opts) }),
   discardDraft: (opts: { id?: string; all?: boolean; count?: number }) =>
     request<{ jobId: string }>("/api/drafts/discard", { method: "POST", body: JSON.stringify(opts) }),

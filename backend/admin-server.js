@@ -345,6 +345,7 @@ async function main() {
       else if (payload.count) args = ["--count", String(payload.count)];
       else if (payload.id) args = ["--id", payload.id];
       else { json(res, 400, { error: "Provide all, count, or id" }); return; }
+      if (payload.status === "inactive") args = [...args, "--status", "inactive"];
 
       const jobId = spawnJob("publish", "publish.js", args);
       json(res, 200, { jobId });
