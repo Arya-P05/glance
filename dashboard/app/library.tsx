@@ -1,20 +1,22 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View, Text, ScrollView, StyleSheet, Image, Pressable,
-  TextInput, ActivityIndicator, Modal,
+  ActivityIndicator, Modal,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { api, StorageImage } from "../lib/api";
 import { Btn } from "../components/Btn";
 import { C, S } from "../lib/theme";
 
+type Filter = "all" | "active" | "inactive";
+
 export default function LibraryScreen() {
   const router = useRouter();
   const [images, setImages] = useState<StorageImage[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [deleting, setDeleting] = useState(false);
-  const [search, setSearch] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [filter, setFilter] = useState<Filter>("all");
   const [detail, setDetail] = useState<StorageImage | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -23,7 +25,7 @@ export default function LibraryScreen() {
       setLoading(true);
       setError(null);
       const { items } = await api.images();
-      setImages(items);
+      setImages(items); // already sorted newest-first from the API
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -43,60 +45,97 @@ export default function LibraryScreen() {
 
   async function deleteSelected() {
     if (!selected.size) return;
-    if (!confirm(`Delete ${selected.size} image(s)? This cannot be undone.`)) return;
+    if (!confirm(`Permanently delete ${selected.size} image(s) from Supabase? This cannot be undone.`)) return;
+    setBusy(true);
     try {
-      setDeleting(true);
       await api.deleteImages([...selected]);
       setSelected(new Set());
       await load();
     } catch (e: any) {
       alert(e.message);
     } finally {
-      setDeleting(false);
+      setBusy(false);
     }
   }
 
-  const filtered = search
-    ? images.filter(i => i.storagePath.toLowerCase().includes(search.toLowerCase()))
-    : images;
+  async function setStatusSelected(status: "active" | "inactive") {
+    if (!selected.size) return;
+    setBusy(true);
+    try {
+      await api.setImageStatus([...selected], status);
+      setSelected(new Set());
+      await load();
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function setStatusOne(img: StorageImage, status: "active" | "inactive") {
+    setBusy(true);
+    try {
+      await api.setImageStatus([img.storagePath], status);
+      setDetail(null);
+      await load();
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const filtered = images.filter(i =>
+    filter === "all" ? true : i.status === filter
+  );
+
+  const activeCount = images.filter(i => i.status === "active").length;
+  const inactiveCount = images.filter(i => i.status === "inactive").length;
+
+  const selectionHasActive = [...selected].some(p => images.find(i => i.storagePath === p)?.status === "active");
+  const selectionHasInactive = [...selected].some(p => images.find(i => i.storagePath === p)?.status === "inactive");
 
   return (
     <View style={styles.root}>
       {/* Toolbar */}
       <View style={styles.toolbar}>
         <Text style={S.h1}>Library</Text>
-        <Text style={[S.body, { marginLeft: 8 }]}>{images.length} images</Text>
+        <Text style={[S.body, { marginLeft: 6 }]}>{images.length} images</Text>
         <View style={{ flex: 1 }} />
         {selected.size > 0 && (
-          <Btn label={`Delete ${selected.size}`} onPress={deleteSelected} loading={deleting} variant="danger" small />
+          <>
+            {selectionHasActive && (
+              <Btn label={`Deactivate ${selected.size}`} onPress={() => setStatusSelected("inactive")} loading={busy} small variant="outline" />
+            )}
+            {selectionHasInactive && (
+              <Btn label={`Reactivate ${selected.size}`} onPress={() => setStatusSelected("active")} loading={busy} small />
+            )}
+            <Btn label={`Delete ${selected.size}`} onPress={deleteSelected} loading={busy} small variant="danger" />
+            <Btn label="Clear" onPress={() => setSelected(new Set())} small variant="ghost" />
+          </>
         )}
-        {selected.size > 0 && (
-          <Btn label="Preview" onPress={() => {
-            const first = images.find(i => selected.has(i.storagePath));
-            if (first) {
-              // Store in sessionStorage and navigate to preview
-              if (typeof window !== "undefined") {
-                sessionStorage.setItem("previewUri", first.publicUrl);
-              }
-              router.push("/preview");
-            }
-          }} small variant="outline" />
+        {selected.size === 0 && (
+          <Btn label="Refresh" onPress={load} loading={loading} small variant="ghost" />
         )}
-        <Btn label="Refresh" onPress={load} loading={loading} variant="ghost" small />
       </View>
 
-      {/* Search */}
-      <View style={styles.searchRow}>
-        <TextInput
-          style={styles.search}
-          placeholder="Filter by filename…"
-          placeholderTextColor={C.textMuted}
-          value={search}
-          onChangeText={setSearch}
-        />
-        {selected.size > 0 && (
-          <Btn label="Clear" onPress={() => setSelected(new Set())} small variant="ghost" />
-        )}
+      {/* Filter tabs */}
+      <View style={styles.filterRow}>
+        {([
+          { id: "all" as Filter, label: `All (${images.length})` },
+          { id: "active" as Filter, label: `Active (${activeCount})` },
+          { id: "inactive" as Filter, label: `Inactive (${inactiveCount})` },
+        ]).map(tab => (
+          <Pressable
+            key={tab.id}
+            onPress={() => { setFilter(tab.id); setSelected(new Set()); }}
+            style={[styles.filterTab, filter === tab.id && styles.filterTabActive]}
+          >
+            <Text style={[styles.filterLabel, filter === tab.id && styles.filterLabelActive]}>
+              {tab.label}
+            </Text>
+          </Pressable>
+        ))}
       </View>
 
       {error && <Text style={styles.error}>{error}</Text>}
@@ -110,23 +149,33 @@ export default function LibraryScreen() {
         <ScrollView contentContainerStyle={styles.grid}>
           {filtered.map(img => {
             const sel = selected.has(img.storagePath);
+            const inactive = img.status === "inactive";
             return (
               <Pressable
                 key={img.storagePath}
                 onPress={() => toggle(img.storagePath)}
                 onLongPress={() => setDetail(img)}
-                style={[styles.cell, sel && styles.cellSelected]}
+                style={[styles.cell, sel && styles.cellSelected, inactive && styles.cellInactive]}
               >
                 <Image source={{ uri: img.publicUrl }} style={styles.thumb} resizeMode="cover" />
+                {inactive && (
+                  <View style={styles.inactiveBadge}>
+                    <Text style={styles.inactiveBadgeText}>off</Text>
+                  </View>
+                )}
                 {sel && <View style={styles.checkOverlay}><Text style={styles.check}>✓</Text></View>}
-                <Text style={styles.name} numberOfLines={1}>
-                  {img.storagePath.replace("posts/", "")}
-                </Text>
+                {img.createdAt && (
+                  <Text style={styles.date}>
+                    {new Date(img.createdAt).toLocaleDateString()}
+                  </Text>
+                )}
               </Pressable>
             );
           })}
           {filtered.length === 0 && !loading && (
-            <Text style={[S.body, { margin: 24 }]}>No images found.</Text>
+            <Text style={[S.body, { margin: 24 }]}>
+              {filter === "inactive" ? "No inactive images." : "No images found."}
+            </Text>
           )}
         </ScrollView>
       )}
@@ -134,20 +183,37 @@ export default function LibraryScreen() {
       {/* Detail modal */}
       <Modal visible={!!detail} transparent animationType="fade" onRequestClose={() => setDetail(null)}>
         <Pressable style={styles.modalBg} onPress={() => setDetail(null)}>
-          <View style={styles.modalCard}>
+          <Pressable style={styles.modalCard} onPress={e => e.stopPropagation?.()}>
             {detail && (
               <>
                 <Image source={{ uri: detail.publicUrl }} style={styles.modalImg} resizeMode="contain" />
-                <Text style={styles.modalPath}>{detail.storagePath}</Text>
+                <View style={styles.modalMeta}>
+                  <View style={[styles.statusPill, detail.status === "active" ? styles.pillActive : styles.pillInactive]}>
+                    <Text style={styles.pillText}>{detail.status}</Text>
+                  </View>
+                  {detail.caption && (
+                    <Text style={styles.modalCaption} numberOfLines={3}>{detail.caption}</Text>
+                  )}
+                  {detail.createdAt && (
+                    <Text style={styles.modalDate}>Added {new Date(detail.createdAt).toLocaleString()}</Text>
+                  )}
+                </View>
                 <View style={styles.modalActions}>
-                  <Btn label="Preview in iPhone" onPress={() => {
+                  {detail.status === "active" ? (
+                    <Btn label="Deactivate" onPress={() => setStatusOne(detail, "inactive")} loading={busy} small variant="outline" />
+                  ) : (
+                    <Btn label="Reactivate" onPress={() => setStatusOne(detail, "active")} loading={busy} small />
+                  )}
+                  <Btn label="Preview" onPress={() => {
                     if (typeof window !== "undefined") sessionStorage.setItem("previewUri", detail.publicUrl);
                     setDetail(null);
                     router.push("/preview");
-                  }} small />
+                  }} small variant="outline" />
                   <Btn label="Delete" onPress={async () => {
-                    if (!confirm("Delete this image?")) return;
-                    await api.deleteImages([detail.storagePath]);
+                    if (!confirm("Permanently delete this image?")) return;
+                    setBusy(true);
+                    await api.deleteImages([detail.storagePath]).catch(e => alert(e.message));
+                    setBusy(false);
                     setDetail(null);
                     load();
                   }} small variant="danger" />
@@ -155,7 +221,7 @@ export default function LibraryScreen() {
                 </View>
               </>
             )}
-          </View>
+          </Pressable>
         </Pressable>
       </Modal>
     </View>
@@ -170,31 +236,31 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    paddingHorizontal: 24,
-    paddingVertical: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
     borderBottomWidth: 1,
     borderBottomColor: C.border,
+    flexWrap: "wrap",
   },
-  searchRow: {
+  filterRow: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     paddingVertical: 10,
+    gap: 6,
     borderBottomWidth: 1,
     borderBottomColor: C.border,
   },
-  search: {
-    flex: 1,
-    backgroundColor: C.surface,
-    color: C.textPrimary,
-    fontSize: 13,
-    borderRadius: 8,
+  filterTab: {
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: C.surface,
     borderWidth: 1,
     borderColor: C.border,
   },
+  filterTabActive: { backgroundColor: C.accent, borderColor: C.accent },
+  filterLabel: { color: C.textSecondary, fontSize: 12, fontWeight: "600" },
+  filterLabelActive: { color: C.bg },
   error: { color: C.danger, padding: 16 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 8 },
   grid: {
@@ -212,7 +278,18 @@ const styles = StyleSheet.create({
     borderColor: "transparent",
   },
   cellSelected: { borderColor: C.accent },
+  cellInactive: { opacity: 0.45 },
   thumb: { width: CELL, height: CELL },
+  inactiveBadge: {
+    position: "absolute",
+    top: 6,
+    left: 6,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  inactiveBadgeText: { color: C.textMuted, fontSize: 9, fontWeight: "700", textTransform: "uppercase" },
   checkOverlay: {
     position: "absolute",
     top: 6,
@@ -225,12 +302,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   check: { color: C.bg, fontSize: 12, fontWeight: "700" },
-  name: {
+  date: {
     color: C.textMuted,
-    fontSize: 10,
-    padding: 5,
+    fontSize: 9,
+    padding: 4,
     backgroundColor: C.surface,
+    textAlign: "center",
   },
+
+  // Modal
   modalBg: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.85)",
@@ -248,6 +328,17 @@ const styles = StyleSheet.create({
     borderColor: C.border,
   },
   modalImg: { width: "100%", height: 300, borderRadius: 10 },
-  modalPath: { color: C.textSecondary, fontSize: 12 },
+  modalMeta: { gap: 6 },
+  statusPill: {
+    alignSelf: "flex-start",
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+  },
+  pillActive: { backgroundColor: C.successDim },
+  pillInactive: { backgroundColor: C.surfaceHigh },
+  pillText: { color: C.textSecondary, fontSize: 11, fontWeight: "700", textTransform: "uppercase" },
+  modalCaption: { color: C.textSecondary, fontSize: 13, lineHeight: 18 },
+  modalDate: { color: C.textMuted, fontSize: 11 },
   modalActions: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
 });
