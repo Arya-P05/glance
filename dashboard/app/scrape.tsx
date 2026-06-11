@@ -1,9 +1,11 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, Text, ScrollView, StyleSheet, TextInput, Switch } from "react-native";
 import { api, SyncOptions } from "../lib/api";
 import { JobLog } from "../components/JobLog";
 import { Btn } from "../components/Btn";
 import { C, S } from "../lib/theme";
+
+const SESSION_KEY = "scrape_jobId";
 
 export default function ScrapeScreen() {
   const [username, setUsername] = useState("");
@@ -14,10 +16,18 @@ export default function ScrapeScreen() {
   const [loading, setLoading] = useState(false);
   const [lastResult, setLastResult] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const saved = sessionStorage.getItem(SESSION_KEY);
+      if (saved) setJobId(saved);
+    }
+  }, []);
+
   async function runSync() {
     setLoading(true);
     setLastResult(null);
     setJobId(null);
+    if (typeof window !== "undefined") sessionStorage.removeItem(SESSION_KEY);
     try {
       const opts: SyncOptions = {
         bulk,
@@ -27,6 +37,7 @@ export default function ScrapeScreen() {
       if (sessionId.trim()) opts.sessionId = sessionId.trim();
       const { jobId: id } = await api.sync(opts);
       setJobId(id);
+      if (typeof window !== "undefined") sessionStorage.setItem(SESSION_KEY, id);
     } catch (e: any) {
       alert(e.message);
     } finally {
@@ -120,9 +131,10 @@ export default function ScrapeScreen() {
 
       <JobLog
         jobId={jobId}
-        onDone={code => setLastResult(
-          code === 0 ? "✓ Sync complete. Check the Library for new posts." : "✗ Sync failed — check log above."
-        )}
+        onDone={code => {
+          if (typeof window !== "undefined") sessionStorage.removeItem(SESSION_KEY);
+          setLastResult(code === 0 ? "✓ Sync complete. Check the Library for new posts." : "✗ Sync failed — check log above.");
+        }}
       />
 
       <View style={styles.infoBox}>

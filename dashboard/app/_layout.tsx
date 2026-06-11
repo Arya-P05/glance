@@ -23,7 +23,6 @@ function Sidebar() {
   return (
     <View style={styles.sidebar}>
       <View style={styles.brand}>
-        <Text style={styles.brandMark}>⬡</Text>
         <Text style={styles.brandName}>glance</Text>
       </View>
 
@@ -105,7 +104,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 28,
   },
-  brandMark: { color: C.accent, fontSize: 20 },
   brandName: { color: C.textPrimary, fontSize: 16, fontWeight: "700", letterSpacing: 0.5 },
 
   nav: { gap: 2, paddingHorizontal: 8 },

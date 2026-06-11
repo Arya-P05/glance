@@ -252,7 +252,7 @@ async function main() {
       try {
         const [
           { count: totalPosts },
-          { count: activePosts },
+          activeResult,
           storagePaths,
           draftsCount,
           promptsCount,
@@ -265,11 +265,13 @@ async function main() {
           safeDirCount(join(CONTENT_DIR, "prompts")),
           safeDirCount(join(CONTENT_DIR, "discarded")),
         ]);
+        // If status column doesn't exist yet, activeResult.error is set — fall back to total
+        const activePosts = activeResult.error ? (totalPosts ?? 0) : (activeResult.count ?? 0);
         json(res, 200, {
           totalPosts: totalPosts ?? 0,
-          activePosts: activePosts ?? 0,
+          activePosts,
           storageFiles: storagePaths.length,
-          drafts: Math.floor(draftsCount / 3), // each draft = .png + .json + .txt
+          drafts: Math.floor(draftsCount / 3),
           prompts: Math.floor(promptsCount / 2),
           discarded: Math.floor(discardedCount / 2),
         });
@@ -283,10 +285,17 @@ async function main() {
 
     if (req.method === "GET" && url.pathname === "/api/images") {
       try {
-        const { data, error } = await supabase
+        let { data, error } = await supabase
           .from("posts")
           .select("id, instagram_id, storage_path, caption, created_at, status")
           .order("created_at", { ascending: false });
+        // If status column doesn't exist yet, retry without it and treat all as active
+        if (error) {
+          ({ data, error } = await supabase
+            .from("posts")
+            .select("id, instagram_id, storage_path, caption, created_at")
+            .order("created_at", { ascending: false }));
+        }
         if (error) throw error;
         const items = (data ?? []).map(row => ({
           id: row.id,

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, Text, ScrollView, StyleSheet, TextInput, Pressable, Switch } from "react-native";
 import { api, GenerateOptions } from "../lib/api";
 import { JobLog } from "../components/JobLog";
@@ -16,6 +16,8 @@ const MODES: { id: Mode; label: string; desc: string }[] = [
 
 const SIZES: Size[] = ["1024x1024", "1536x1024", "1024x1536"];
 
+const SESSION_KEY = "generate_jobId";
+
 export default function GenerateScreen() {
   const [count, setCount] = useState("5");
   const [mode, setMode] = useState<Mode>("full");
@@ -28,10 +30,19 @@ export default function GenerateScreen() {
   const [loading, setLoading] = useState(false);
   const [lastResult, setLastResult] = useState<string | null>(null);
 
+  // Restore in-progress job on mount so navigating away doesn't lose the log
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const saved = sessionStorage.getItem(SESSION_KEY);
+      if (saved) setJobId(saved);
+    }
+  }, []);
+
   async function run() {
     setLoading(true);
     setLastResult(null);
     setJobId(null);
+    if (typeof window !== "undefined") sessionStorage.removeItem(SESSION_KEY);
     try {
       const opts: GenerateOptions = {
         count: parseInt(count, 10) || 5,
@@ -44,6 +55,7 @@ export default function GenerateScreen() {
       };
       const { jobId: id } = await api.generate(opts);
       setJobId(id);
+      if (typeof window !== "undefined") sessionStorage.setItem(SESSION_KEY, id);
     } catch (e: any) {
       alert(e.message);
     } finally {
@@ -163,6 +175,7 @@ export default function GenerateScreen() {
       )}
 
       <JobLog jobId={jobId} onDone={(code) => {
+        if (typeof window !== "undefined") sessionStorage.removeItem(SESSION_KEY);
         setLastResult(code === 0 ? "✓ Done! Check Drafts to publish." : "✗ Job failed — check log above.");
       }} />
     </ScrollView>
