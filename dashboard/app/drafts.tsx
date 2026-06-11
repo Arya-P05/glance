@@ -138,18 +138,18 @@ export default function DraftsScreen() {
               {/* Large widget */}
               <View style={styles.previewBlock}>
                 <Text style={styles.previewLabel}>Large</Text>
-                <WidgetLarge imageUri={imgUri} caption={caption} />
+                <WidgetLarge imageUri={imgUri} />
               </View>
 
               {/* Small + Medium stacked */}
               <View style={styles.previewStack}>
                 <View style={styles.previewBlock}>
                   <Text style={styles.previewLabel}>Small</Text>
-                  <WidgetSmall imageUri={imgUri} caption={caption} />
+                  <WidgetSmall imageUri={imgUri} />
                 </View>
                 <View style={styles.previewBlock}>
                   <Text style={styles.previewLabel}>Medium</Text>
-                  <WidgetMedium imageUri={imgUri} caption={caption} />
+                  <WidgetMedium imageUri={imgUri} />
                 </View>
               </View>
             </View>
