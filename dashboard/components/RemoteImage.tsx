@@ -5,6 +5,8 @@ type Props = {
   uri: string;
   style: StyleProp<ImageStyle>;
   resizeMode?: "cover" | "contain" | "stretch" | "repeat" | "center";
+  /** Skip Supabase render transform — use the URL as-is (matches Library thumbnails). */
+  raw?: boolean;
   webStyle?: React.CSSProperties;
 };
 
@@ -15,8 +17,8 @@ export function previewImageUrl(uri: string, width = 640) {
     + `?width=${width}&quality=85`;
 }
 
-export function RemoteImage({ uri, style, resizeMode = "cover", webStyle }: Props) {
-  const src = previewImageUrl(uri);
+export function RemoteImage({ uri, style, resizeMode = "cover", raw = false, webStyle }: Props) {
+  const src = raw ? uri : previewImageUrl(uri);
 
   if (Platform.OS === "web") {
     const flattened = StyleSheet.flatten(style) ?? {};

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import {
-  View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator,
+  View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Image,
 } from "react-native";
 import { NavArrowLeft, NavArrowRight, RefreshDouble, Trash } from "iconoir-react-native";
 import { API_BASE, api, Draft } from "../lib/api";
@@ -17,6 +17,11 @@ const CELL = 240;
 
 function draftImageUri(draft: Draft, width: number) {
   if (draft.imageUrl) return previewImageUrl(draft.imageUrl, width);
+  return `${API_BASE}/content/drafts/${draft.filename}`;
+}
+
+function draftGridImageUri(draft: Draft) {
+  if (draft.imageUrl) return draft.imageUrl;
   return `${API_BASE}/content/drafts/${draft.filename}`;
 }
 
@@ -276,14 +281,14 @@ export default function DraftsScreen() {
           </View>
         ) : (
           drafts.map((draft, idx) => {
-            const imgUri = draftImageUri(draft, CELL * 2);
+            const imgUri = draftGridImageUri(draft);
             return (
               <Pressable
                 key={draft.id}
                 onPress={() => openReview(idx)}
                 style={styles.cell}
               >
-                <RemoteImage uri={imgUri} style={styles.thumb} resizeMode="cover" />
+                <Image source={{ uri: imgUri }} style={styles.thumb} resizeMode="contain" />
               </Pressable>
             );
           })
@@ -390,9 +395,10 @@ const styles = StyleSheet.create({
   emptyTitle: { color: C.textSecondary, fontSize: 18, fontWeight: "700" },
   cell: {
     width: CELL,
+    height: CELL,
     borderRadius: 10,
     overflow: "hidden",
-    backgroundColor: C.surface,
+    backgroundColor: C.bg,
     borderWidth: 1,
     borderColor: C.border,
   },
