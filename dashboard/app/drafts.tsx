@@ -3,15 +3,19 @@ import {
   View, Text, ScrollView, StyleSheet, Image, Pressable, ActivityIndicator,
 } from "react-native";
 import { API_BASE, api, Draft } from "../lib/api";
-import { JobLog } from "../components/JobLog";
 import { Btn } from "../components/Btn";
 import { C, S } from "../lib/theme";
+import { WidgetSmall } from "../components/iPhoneMockup/WidgetSmall";
+import { WidgetMedium } from "../components/iPhoneMockup/WidgetMedium";
+import { WidgetLarge } from "../components/iPhoneMockup/WidgetLarge";
+
+type Screen = "grid" | "review";
 
 export default function DraftsScreen() {
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [jobId, setJobId] = useState<string | null>(null);
+  const [screen, setScreen] = useState<Screen>("grid");
+  const [reviewIdx, setReviewIdx] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,84 +34,205 @@ export default function DraftsScreen() {
 
   useEffect(() => { load(); }, []);
 
-  function toggle(id: string) {
-    setSelected(s => {
-      const n = new Set(s);
-      n.has(id) ? n.delete(id) : n.add(id);
-      return n;
-    });
+  function openReview(startIdx = 0) {
+    setReviewIdx(startIdx);
+    setScreen("review");
   }
 
-  async function publishAll() {
-    setBusy(true);
-    try {
-      const { jobId: id } = await api.publishDraft({ all: true });
-      setJobId(id);
-    } catch (e: any) { alert(e.message); setBusy(false); }
+  function advance(fromDrafts: Draft[]) {
+    if (reviewIdx < fromDrafts.length - 1) {
+      setReviewIdx(i => i + 1);
+    } else {
+      setScreen("grid");
+      load();
+    }
   }
 
-  async function publishSelected() {
-    if (!selected.size) return;
+  async function publishCurrent() {
+    const draft = drafts[reviewIdx];
+    if (!draft || busy) return;
     setBusy(true);
-    const ids = [...selected];
-    // Publish each selected draft sequentially by count approach or --all
-    // For individual IDs, just use count = 1 per id
     try {
-      // Use the first id approach: publish one at a time
-      for (const id of ids) {
-        const { jobId: jid } = await api.publishDraft({ id });
-        setJobId(jid);
-        // Wait a bit between jobs
-        await new Promise(r => setTimeout(r, 300));
-      }
+      await api.publishDraft({ id: draft.id });
+      const next = drafts.filter(d => d.id !== draft.id);
+      setDrafts(next);
+      if (next.length === 0) { setScreen("grid"); load(); }
+      else if (reviewIdx >= next.length) setReviewIdx(next.length - 1);
     } catch (e: any) { alert(e.message); }
     setBusy(false);
   }
 
-  async function discardSelected() {
-    if (!selected.size) return;
-    if (!confirm(`Discard ${selected.size} draft(s)?`)) return;
+  async function discardCurrent() {
+    const draft = drafts[reviewIdx];
+    if (!draft || busy) return;
     setBusy(true);
     try {
-      for (const id of [...selected]) {
-        const { jobId: jid } = await api.discardDraft({ id });
-        setJobId(jid);
-        await new Promise(r => setTimeout(r, 300));
-      }
-      setSelected(new Set());
+      await api.discardDraft({ id: draft.id });
+      const next = drafts.filter(d => d.id !== draft.id);
+      setDrafts(next);
+      if (next.length === 0) { setScreen("grid"); load(); }
+      else if (reviewIdx >= next.length) setReviewIdx(next.length - 1);
     } catch (e: any) { alert(e.message); }
     setBusy(false);
   }
 
-  async function discardAll() {
-    if (!confirm("Discard ALL drafts?")) return;
-    setBusy(true);
-    try {
-      const { jobId: id } = await api.discardDraft({ all: true });
-      setJobId(id);
-      setSelected(new Set());
-    } catch (e: any) { alert(e.message); setBusy(false); }
+  function skipCurrent() {
+    advance(drafts);
   }
 
+  // ── Review mode ────────────────────────────────────────────────────────────
+  if (screen === "review") {
+    const draft = drafts[reviewIdx];
+    if (!draft) {
+      return (
+        <View style={styles.root}>
+          <View style={styles.reviewHeader}>
+            <Pressable onPress={() => setScreen("grid")} style={styles.backBtn}>
+              <Text style={styles.backBtnText}>← Back</Text>
+            </Pressable>
+            <Text style={S.body}>No drafts to review</Text>
+          </View>
+        </View>
+      );
+    }
+
+    const imgUri = `${API_BASE}/content/drafts/${draft.filename}`;
+    const caption = draft.meta?.caption ?? null;
+    const scene = draft.meta?.scene;
+
+    return (
+      <View style={styles.root}>
+        {/* Review header */}
+        <View style={styles.reviewHeader}>
+          <Pressable onPress={() => setScreen("grid")} style={styles.backBtn}>
+            <Text style={styles.backBtnText}>← Drafts</Text>
+          </Pressable>
+          <Text style={styles.reviewCounter}>
+            {reviewIdx + 1} <Text style={{ color: C.textMuted }}>/ {drafts.length}</Text>
+          </Text>
+          <View style={{ flex: 1 }} />
+          <Pressable
+            onPress={() => setReviewIdx(i => Math.max(0, i - 1))}
+            style={[styles.navArrow, reviewIdx === 0 && styles.navArrowDisabled]}
+            disabled={reviewIdx === 0}
+          >
+            <Text style={styles.navArrowText}>‹</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setReviewIdx(i => Math.min(drafts.length - 1, i + 1))}
+            style={[styles.navArrow, reviewIdx === drafts.length - 1 && styles.navArrowDisabled]}
+            disabled={reviewIdx === drafts.length - 1}
+          >
+            <Text style={styles.navArrowText}>›</Text>
+          </Pressable>
+        </View>
+
+        {/* Main review area */}
+        <View style={styles.reviewBody}>
+          {/* Widget previews */}
+          <ScrollView
+            contentContainerStyle={styles.previewArea}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.previewRow}>
+              {/* Large widget */}
+              <View style={styles.previewBlock}>
+                <Text style={styles.previewLabel}>Large</Text>
+                <WidgetLarge imageUri={imgUri} caption={caption} />
+              </View>
+
+              {/* Small + Medium stacked */}
+              <View style={styles.previewStack}>
+                <View style={styles.previewBlock}>
+                  <Text style={styles.previewLabel}>Small</Text>
+                  <WidgetSmall imageUri={imgUri} caption={caption} />
+                </View>
+                <View style={styles.previewBlock}>
+                  <Text style={styles.previewLabel}>Medium</Text>
+                  <WidgetMedium imageUri={imgUri} caption={caption} />
+                </View>
+              </View>
+            </View>
+          </ScrollView>
+
+          {/* Metadata panel */}
+          <View style={styles.metaPanel}>
+            <Text style={styles.metaTitle}>Metadata</Text>
+
+            {caption ? (
+              <View style={styles.metaSection}>
+                <Text style={styles.metaLabel}>Caption</Text>
+                <Text style={styles.captionSmall}>{caption.smallText}</Text>
+                <Text style={styles.captionBig}>{caption.bigText}</Text>
+              </View>
+            ) : (
+              <Text style={styles.metaMissing}>No caption</Text>
+            )}
+
+            {scene && (
+              <View style={styles.metaSection}>
+                <Text style={styles.metaLabel}>Scene</Text>
+                {scene.subject && <Text style={styles.metaValue}>{scene.subject}</Text>}
+                {scene.setting && <Text style={styles.metaValueMuted}>{scene.setting}</Text>}
+                {scene.mood && <Text style={styles.metaValueMuted}>{scene.mood}</Text>}
+                {scene.style && <Text style={styles.metaValueMuted}>{scene.style}</Text>}
+              </View>
+            )}
+
+            {draft.meta?.imageModel && (
+              <View style={styles.metaSection}>
+                <Text style={styles.metaLabel}>Model</Text>
+                <Text style={styles.metaValue}>{draft.meta.imageModel}</Text>
+              </View>
+            )}
+
+            {draft.meta?.generatedAt && (
+              <View style={styles.metaSection}>
+                <Text style={styles.metaLabel}>Generated</Text>
+                <Text style={styles.metaValue}>
+                  {new Date(draft.meta.generatedAt).toLocaleString()}
+                </Text>
+              </View>
+            )}
+
+            <View style={{ flex: 1 }} />
+
+            <View style={styles.thumbSmall}>
+              <Image source={{ uri: imgUri }} style={styles.thumbImg} resizeMode="cover" />
+            </View>
+          </View>
+        </View>
+
+        {/* Action bar */}
+        <View style={styles.actionBar}>
+          <Btn label="← Grid" onPress={() => setScreen("grid")} small variant="ghost" />
+          <View style={{ flex: 1 }} />
+          <Btn label="Skip →" onPress={skipCurrent} small variant="outline" />
+          <Btn label="Publish" onPress={publishCurrent} loading={busy} small />
+          <Btn label="Delete" onPress={discardCurrent} loading={busy} small variant="danger" />
+        </View>
+      </View>
+    );
+  }
+
+  // ── Grid mode ──────────────────────────────────────────────────────────────
   return (
     <View style={styles.root}>
       <View style={styles.toolbar}>
         <Text style={S.h1}>Drafts</Text>
-        <Text style={[S.body, { marginLeft: 6 }]}>{drafts.length} ready</Text>
+        {!loading && drafts.length > 0 && (
+          <Text style={[S.body, { marginLeft: 6 }]}>{drafts.length} ready</Text>
+        )}
         <View style={{ flex: 1 }} />
-        {selected.size > 0 && (
-          <>
-            <Btn label={`Publish ${selected.size}`} onPress={publishSelected} loading={busy} small />
-            <Btn label={`Discard ${selected.size}`} onPress={discardSelected} loading={busy} small variant="ghost" />
-          </>
-        )}
         {drafts.length > 0 && (
-          <>
-            <Btn label="Publish All" onPress={publishAll} loading={busy} small />
-            <Btn label="Discard All" onPress={discardAll} loading={busy} small variant="danger" />
-          </>
+          <Btn label="Review" onPress={() => openReview(0)} small />
         )}
-        <Btn label="Refresh" onPress={load} loading={loading} small variant="ghost" />
+        <Pressable onPress={load} style={styles.refreshBtn} disabled={loading}>
+          {loading
+            ? <ActivityIndicator size="small" color={C.textMuted} />
+            : <Text style={styles.refreshIcon}>↺</Text>
+          }
+        </Pressable>
       </View>
 
       {error && <Text style={styles.error}>{error}</Text>}
@@ -119,31 +244,25 @@ export default function DraftsScreen() {
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>No drafts</Text>
             <Text style={[S.body, { textAlign: "center" }]}>
-              Run Generate to create posters, or check the Generate screen.
+              Run Generate to create posters.
             </Text>
           </View>
         ) : (
-          drafts.map(draft => {
-            const sel = selected.has(draft.id);
+          drafts.map((draft, idx) => {
             const caption = draft.meta?.caption;
             const imgUri = `${API_BASE}/content/drafts/${draft.filename}`;
             return (
               <Pressable
                 key={draft.id}
-                onPress={() => toggle(draft.id)}
-                style={[styles.card, sel && styles.cardSelected]}
+                onPress={() => openReview(idx)}
+                style={styles.card}
               >
                 <Image source={{ uri: imgUri }} style={styles.img} resizeMode="cover" />
-                {sel && (
-                  <View style={styles.checkOverlay}>
-                    <Text style={styles.check}>✓</Text>
-                  </View>
-                )}
                 <View style={styles.cardInfo}>
                   {caption ? (
                     <>
                       <Text style={styles.captionSmall}>{caption.smallText}</Text>
-                      <Text style={styles.captionBig}>{caption.bigText}</Text>
+                      <Text style={styles.captionBig} numberOfLines={2}>{caption.bigText}</Text>
                     </>
                   ) : (
                     <Text style={styles.captionSmall}>No caption</Text>
@@ -154,49 +273,20 @@ export default function DraftsScreen() {
                       {draft.meta.scene.setting ? ` · ${draft.meta.scene.setting}` : ""}
                     </Text>
                   )}
-                  <Text style={styles.dateText}>
-                    {draft.meta?.generatedAt
-                      ? new Date(draft.meta.generatedAt).toLocaleString()
-                      : draft.id}
-                  </Text>
-                  <View style={styles.cardActions}>
-                    <Btn label="Publish" small onPress={async () => {
-                      setBusy(true);
-                      try {
-                        const { jobId: id } = await api.publishDraft({ id: draft.id });
-                        setJobId(id);
-                      } catch (e: any) { alert(e.message); }
-                      setBusy(false);
-                    }} />
-                    <Btn label="Discard" small variant="ghost" onPress={async () => {
-                      if (!confirm("Discard this draft?")) return;
-                      setBusy(true);
-                      try {
-                        const { jobId: id } = await api.discardDraft({ id: draft.id });
-                        setJobId(id);
-                      } catch (e: any) { alert(e.message); }
-                      setBusy(false);
-                      load();
-                    }} />
-                  </View>
                 </View>
               </Pressable>
             );
           })
         )}
       </ScrollView>
-
-      {jobId && (
-        <View style={styles.logArea}>
-          <JobLog jobId={jobId} onDone={() => { load(); setBusy(false); }} />
-        </View>
-      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
+
+  // Grid toolbar
   toolbar: {
     flexDirection: "row",
     alignItems: "center",
@@ -205,44 +295,156 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderBottomWidth: 1,
     borderBottomColor: C.border,
-    flexWrap: "wrap",
   },
+  refreshBtn: {
+    width: 34,
+    height: 34,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+    backgroundColor: C.surface,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  refreshIcon: { color: C.textSecondary, fontSize: 16 },
   error: { color: C.danger, padding: 16 },
+
+  // Grid
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",
     padding: 16,
     gap: 14,
   },
-  empty: { padding: 40, alignItems: "center", gap: 10, flex: 1 },
-  emptyTitle: { ...S.h2, color: C.textSecondary },
+  empty: { padding: 40, alignItems: "center", gap: 10 },
+  emptyTitle: { color: C.textSecondary, fontSize: 18, fontWeight: "700" },
   card: {
-    width: 220,
+    width: 200,
     backgroundColor: C.surface,
     borderRadius: 12,
     overflow: "hidden",
-    borderWidth: 2,
-    borderColor: "transparent",
+    borderWidth: 1,
+    borderColor: C.border,
   },
-  cardSelected: { borderColor: C.accent },
-  img: { width: "100%", height: 220 },
-  checkOverlay: {
-    position: "absolute",
-    top: 8,
-    right: 8,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: C.accent,
+  img: { width: "100%", height: 200 },
+  cardInfo: { padding: 10, gap: 2 },
+  captionSmall: { color: C.textSecondary, fontSize: 11, fontWeight: "300" },
+  captionBig: { color: C.textPrimary, fontSize: 14, fontWeight: "700" },
+  scene: { color: C.textMuted, fontSize: 10, marginTop: 2 },
+
+  // Review header
+  reviewHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+    backgroundColor: C.surface,
+  },
+  backBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: C.surfaceHigh,
+  },
+  backBtnText: { color: C.textSecondary, fontSize: 13, fontWeight: "500" },
+  reviewCounter: { color: C.textPrimary, fontSize: 15, fontWeight: "600" },
+  navArrow: {
+    width: 32,
+    height: 32,
     alignItems: "center",
     justifyContent: "center",
+    borderRadius: 6,
+    backgroundColor: C.surface,
+    borderWidth: 1,
+    borderColor: C.border,
   },
-  check: { color: C.bg, fontSize: 13, fontWeight: "700" },
-  cardInfo: { padding: 12, gap: 3 },
-  captionSmall: { color: C.textSecondary, fontSize: 11, fontWeight: "300" },
-  captionBig: { color: C.textPrimary, fontSize: 15, fontWeight: "700" },
-  scene: { color: C.textMuted, fontSize: 11, marginTop: 2 },
-  dateText: { color: C.textMuted, fontSize: 10, marginTop: 4 },
-  cardActions: { flexDirection: "row", gap: 6, marginTop: 8 },
-  logArea: { paddingHorizontal: 20, paddingBottom: 20 },
+  navArrowDisabled: { opacity: 0.3 },
+  navArrowText: { color: C.textPrimary, fontSize: 20, lineHeight: 24 },
+
+  // Review body
+  reviewBody: {
+    flex: 1,
+    flexDirection: "row",
+    overflow: "hidden",
+  },
+  previewArea: {
+    padding: 24,
+    alignItems: "flex-start",
+  },
+  previewRow: {
+    flexDirection: "row",
+    gap: 20,
+    alignItems: "flex-start",
+  },
+  previewBlock: {
+    gap: 8,
+  },
+  previewStack: {
+    gap: 20,
+  },
+  previewLabel: {
+    color: C.textMuted,
+    fontSize: 10,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
+
+  // Metadata panel
+  metaPanel: {
+    width: 220,
+    borderLeftWidth: 1,
+    borderLeftColor: C.border,
+    backgroundColor: C.surface,
+    padding: 18,
+    gap: 0,
+    flexShrink: 0,
+  },
+  metaTitle: {
+    color: C.textSecondary,
+    fontSize: 11,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    marginBottom: 16,
+  },
+  metaSection: {
+    marginBottom: 16,
+    gap: 3,
+  },
+  metaLabel: {
+    color: C.textMuted,
+    fontSize: 10,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+    marginBottom: 3,
+  },
+  metaValue: { color: C.textPrimary, fontSize: 12, lineHeight: 17 },
+  metaValueMuted: { color: C.textSecondary, fontSize: 11, lineHeight: 16 },
+  metaMissing: { color: C.textMuted, fontSize: 12, fontStyle: "italic", marginBottom: 16 },
+
+  thumbSmall: {
+    width: "100%",
+    aspectRatio: 1,
+    borderRadius: 8,
+    overflow: "hidden",
+    marginTop: 12,
+  },
+  thumbImg: { width: "100%", height: "100%" },
+
+  // Action bar
+  actionBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    borderTopColor: C.border,
+    backgroundColor: C.surface,
+  },
 });
