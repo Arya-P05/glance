@@ -26,8 +26,46 @@ Single Instagram username (set in env). Run once as bulk to import all posts, th
   `npm run bulk`
 - **Incremental (new posts only, up to 20 by default or `MAX_POSTS`):**  
   `npm run sync`
+- **Generate motivational posters locally:**  
+  `npm run generate-posters -- --count 25`
+- **Generate and add posters to Glance:**  
+  `npm run generate-posters -- --count 10 --upload`
 
 Schedule `npm run sync` weekly (e.g. cron or GitHub Actions).
+
+## Motivational poster generator
+
+The generator builds a high-variety creative brief from broad subject, age, animal, setting, action, light, weather, camera, color, and composition banks. It then asks a prompt model to write a fresh detailed image prompt for that exact brief, generates a text-free nostalgic image with `gpt-image-2`, then optionally asks a caption model to choose a two-line message. The final caption is composited locally so each output feels less like a repeated template.
+
+Each run saves a final PNG plus matching `.txt` prompt and `.json` metadata under `backend/motivational_assets/`. The metadata includes the scene ingredients, raw image prompt, caption prompt, and selected caption.
+
+Set `OPENAI_API_KEY` in `.env`, then run:
+
+```bash
+npm run generate-posters -- --count 25
+```
+
+Useful options:
+
+```bash
+npm run generate-posters -- --count 5 --dry-run
+npm run generate-posters -- --count 10 --prompt-only
+npm run generate-posters -- --count 5 --image-only
+npm run generate-posters -- --count 10 --out motivational_assets
+npm run generate-posters -- --count 10 --prompt-model gpt-5-mini
+npm run generate-posters -- --count 10 --caption-model gpt-5-mini
+npm run generate-posters -- --count 10 --upload
+```
+
+`--upload` also requires `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`; it resizes the poster for the widget, uploads to `instagram-posts/posts/`, and upserts a matching row in `public.posts`.
+
+During real generation, the CLI shows per-poster progress for prompt writing, image creation, caption writing, text placement, local saves, and optional upload. Use `--prompt-only` to inspect bespoke image prompts before spending image calls. Use `--image-only` while tuning the raw photo style; it skips caption/text rendering and saves clean textless candidates.
+
+To test typography without generating a new image:
+
+```bash
+npm run render-caption -- motivational_assets/example.background.png /tmp/poster-text-test.png "take it slow," "no rush."
+```
 
 ## Getting `INSTAGRAM_SESSIONID`
 
