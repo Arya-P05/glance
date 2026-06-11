@@ -8,6 +8,15 @@ backend/node_modules/
 backend/.env
 backend/www.instagram.com_cookies.json
 backend/post-links.json
+backend/motivational_assets/
+backend/content/
+backend/output.png
+backend/reference/
+
+# Dashboard
+dashboard/node_modules/
+dashboard/.expo/
+dashboard/dist/
 
 # iOS / Xcode
 ios/DailyWidgets.xcodeproj/project.xcworkspace/
@@ -18,3 +27,5 @@ ios/DailyWidgets/Build/
 ios/DailyWidgets/DailyWidgets.xcodeproj/project.xcworkspace/xcuserdata/
 ios/DailyWidgets/DailyWidgets.xcodeproj/xcuserdata/
 **/UserInterfaceState.xcuserstate
+
+.claude/
