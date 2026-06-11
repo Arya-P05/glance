@@ -326,26 +326,24 @@ function ActionKey({
 
 const akStyles = StyleSheet.create({
   btn: {
-    paddingHorizontal: 28,
-    paddingVertical: 16,
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    paddingBottom: 10,
     borderRadius: 12,
     borderWidth: 1.5,
     alignItems: "center",
     justifyContent: "center",
-    minWidth: 90,
-    position: "relative",
+    minWidth: 110,
+    gap: 6,
   },
   label: { fontWeight: "700", letterSpacing: 0.3 },
   hint: {
-    position: "absolute",
-    top: 4,
-    right: 6,
-    backgroundColor: "rgba(255,255,255,0.12)",
-    borderRadius: 4,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    borderRadius: 5,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
   },
-  hintText: { color: "rgba(255,255,255,0.5)", fontSize: 9, fontWeight: "700", fontFamily: "monospace" },
+  hintText: { color: "rgba(255,255,255,0.75)", fontSize: 11, fontWeight: "700", fontFamily: "monospace" },
 });
 
 const styles = StyleSheet.create({
@@ -444,9 +442,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 24,
     alignItems: "center",
-    transform: [{ scale: 0.88 }],
-    // WidgetLarge is 329px tall → visual 289px → excess 40px → -20 each side
-    marginVertical: -20,
+    transform: [{ scale: 0.95 }],
+    // WidgetLarge is 329px tall → visual 312px → excess 17px → -8 each side
+    marginVertical: -8,
   },
   previewBlock: {
     gap: 8,
@@ -498,8 +496,8 @@ const styles = StyleSheet.create({
   actionBar: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 16,
-    paddingHorizontal: 32,
+    gap: 32,
+    paddingHorizontal: 40,
     paddingVertical: 20,
     borderTopWidth: 1,
     borderTopColor: C.border,
