@@ -47,19 +47,35 @@ const ANIMAL_IDEAS = [
   "pony",
 ];
 
+// Explicit ethnicity descriptors so the model varies race, not just defaulting to white
+const PERSON_ETHNICITIES = [
+  "Black",
+  "South Asian",
+  "East Asian",
+  "Latino",
+  "Middle Eastern",
+  "Southeast Asian",
+  "Pacific Islander",
+  "white",
+  "mixed-race",
+];
+
 const PERSON_AGES = [
   "a little kid",
   "a teenage girl",
   "a teenage boy",
-  "a college student",
-  "a woman in her 20s",
-  "a man in his 20s",
+  "a young woman",
+  "a young man",
+  "a woman in her 30s",
+  "a man in his 30s",
+  "a middle-aged woman",
+  "a middle-aged man",
   "a dad",
   "a mom",
   "a grandma",
   "a grandpa",
-  "an old man",
-  "an old woman",
+  "an elderly man",
+  "an elderly woman",
 ];
 
 const PERSON_ROLES = [
@@ -251,10 +267,12 @@ export const SUBJECTS = [
   "a donkey",
   "a highland cow",
   "a capybara",
-  "an old man",
+  "an elderly man",
+  "an elderly woman",
   "a little kid",
   "a grandma",
-  "a fisherman",
+  "a grandpa",
+  "an angler",
   "a surfer",
   "a construction worker",
   "a student",
@@ -262,14 +280,18 @@ export const SUBJECTS = [
   "a hiker",
   "a farmer",
   "a skateboarder",
-  "a mailman",
+  "a mail carrier",
+  "a nurse",
+  "a chef",
 ];
 
 const PEOPLE_SUBJECTS = new Set([
-  "an old man",
+  "an elderly man",
+  "an elderly woman",
   "a little kid",
   "a grandma",
-  "a fisherman",
+  "a grandpa",
+  "an angler",
   "a surfer",
   "a construction worker",
   "a student",
@@ -277,7 +299,9 @@ const PEOPLE_SUBJECTS = new Set([
   "a hiker",
   "a farmer",
   "a skateboarder",
-  "a mailman",
+  "a mail carrier",
+  "a nurse",
+  "a chef",
 ]);
 
 const CAT_SUBJECTS = new Set(["an orange cat", "a black cat"]);
@@ -365,14 +389,14 @@ const PEOPLE_SETTINGS = [
 ];
 
 const SPECIAL_SETTINGS = {
-  "a fisherman": ["a lake shore", "a boat dock", "a boat ramp", "an empty beach"],
+  "an angler": ["a lake shore", "a boat dock", "a boat ramp", "an empty beach"],
   "a surfer": ["an empty beach", "a lake shore", "a boat dock"],
   "a construction worker": ["a parking lot", "a gas station", "a highway rest stop", "a driveway", "a suburban street"],
   "a cyclist": ["a mountain overlook", "a forest trail", "a highway rest stop", "a parking lot", "a lake shore"],
   "a hiker": ["a mountain overlook", "a forest trail", "a campground", "a grassy hill", "a wooden bench overlook"],
   "a farmer": ["a farm field", "a grassy hill", "a backyard", "a sunflower field"],
   "a skateboarder": ["a parking lot", "an empty basketball court", "a highway rest stop", "a driveway"],
-  "a mailman": ["a suburban street", "a driveway", "a front porch", "a parking lot"],
+  "a mail carrier": ["a suburban street", "a driveway", "a front porch", "a parking lot"],
 };
 
 const CAT_SETTINGS = [
@@ -473,10 +497,10 @@ const SPECIAL_ACTIONS = {
   "a cyclist": ["riding a bicycle", "standing with a bicycle", "looking confused", "watching the sunset", "wearing sunglasses"],
   "a skateboarder": ["skateboarding", "balancing on a skateboard", "standing with a skateboard", "wearing sunglasses"],
   "a surfer": ["holding a surfboard", "sitting quietly", "watching the sunset", "looking off into the distance"],
-  "a fisherman": ["holding a fishing rod", "sitting quietly", "watching the sunset", "looking confused"],
+  "an angler": ["holding a fishing rod", "sitting quietly", "watching the sunset", "looking confused"],
   "a hiker": ["standing slightly too close to the camera", "watching the sunset", "resting in the open space", "looking off into the distance"],
   "a farmer": ["standing slightly too close to the camera", "holding a flower", "smiling", "looking confused"],
-  "a mailman": ["standing slightly too close to the camera", "holding a flower", "smiling", "looking confused"],
+  "a mail carrier": ["standing slightly too close to the camera", "holding a flower", "smiling", "looking confused"],
 };
 
 export const CAMERA_STYLES = [
@@ -721,7 +745,7 @@ export function buildCreativeBrief(rng = Math.random) {
   const subject =
     subjectKind === "animal"
       ? `a ${pick(ANIMAL_IDEAS, rng)}`
-      : `${pick(PERSON_AGES, rng)} ${pick(PERSON_ROLES, rng)}`;
+      : `${pick(PERSON_AGES, rng)} ${pick(PERSON_ROLES, rng)} (${pick(PERSON_ETHNICITIES, rng)})`;
   const action = pick(WILD_ACTIONS, rng);
   const setting = pick(MOODBOARD_SETTINGS, rng);
   const weather = pick(POSITIVE_WEATHER, rng);
