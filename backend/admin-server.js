@@ -283,15 +283,36 @@ async function main() {
 
     if (req.method === "GET" && url.pathname === "/api/images") {
       try {
-        const paths = await listAllStoragePaths(supabase);
-        const items = paths.map(storagePath => ({
-          storagePath,
-          publicUrl: publicObjectUrl(projectUrl, storagePath),
+        const { data, error } = await supabase
+          .from("posts")
+          .select("id, instagram_id, storage_path, caption, created_at, status")
+          .order("created_at", { ascending: false });
+        if (error) throw error;
+        const items = (data ?? []).map(row => ({
+          id: row.id,
+          instagramId: row.instagram_id,
+          storagePath: row.storage_path,
+          caption: row.caption,
+          createdAt: row.created_at,
+          status: row.status ?? "active",
+          publicUrl: publicObjectUrl(projectUrl, row.storage_path),
         }));
         json(res, 200, { items });
       } catch (e) {
         json(res, 500, { error: e.message });
       }
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/images/set-status") {
+      const payload = await readBody(req);
+      if (!payload) { json(res, 400, { error: "Invalid JSON" }); return; }
+      const paths = Array.isArray(payload.paths) ? payload.paths.filter(p => typeof p === "string") : [];
+      const status = typeof payload.status === "string" && ["active", "inactive"].includes(payload.status) ? payload.status : null;
+      if (!paths.length || !status) { json(res, 400, { error: "paths[] and status ('active'|'inactive') required" }); return; }
+      const { error } = await supabase.from("posts").update({ status }).in("storage_path", paths);
+      if (error) { json(res, 500, { error: error.message }); return; }
+      json(res, 200, { updated: paths.length, status });
       return;
     }
 
