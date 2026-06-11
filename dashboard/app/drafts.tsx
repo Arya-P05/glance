@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import {
-  View, Text, ScrollView, StyleSheet, Image, Pressable, ActivityIndicator,
+  View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator,
 } from "react-native";
 import { NavArrowLeft, NavArrowRight, RefreshDouble, Trash } from "iconoir-react-native";
 import { API_BASE, api, Draft } from "../lib/api";
@@ -9,8 +9,16 @@ import { C, S } from "../lib/theme";
 import { WidgetSmall } from "../components/iPhoneMockup/WidgetSmall";
 import { WidgetMedium } from "../components/iPhoneMockup/WidgetMedium";
 import { WidgetLarge } from "../components/iPhoneMockup/WidgetLarge";
+import { RemoteImage, previewImageUrl } from "../components/RemoteImage";
 
 type Screen = "grid" | "review";
+
+const CELL = 240;
+
+function draftImageUri(draft: Draft, width: number) {
+  if (draft.imageUrl) return previewImageUrl(draft.imageUrl, width);
+  return `${API_BASE}/content/drafts/${draft.filename}`;
+}
 
 export default function DraftsScreen() {
   const [drafts, setDrafts] = useState<Draft[]>([]);
@@ -50,16 +58,27 @@ export default function DraftsScreen() {
   }
 
   async function removeCurrent(action: () => Promise<void>) {
+    const draft = drafts[reviewIdx];
+    if (!draft || busy) return;
+
+    const id = draft.id;
+    const next = drafts.filter(d => d.id !== id);
+
+    setDrafts(next);
+    if (next.length === 0) setScreen("grid");
+    else setReviewIdx(i => Math.min(i, next.length - 1));
+
     setBusy(true);
     try {
       await action();
-      const id = drafts[reviewIdx].id;
-      const next = drafts.filter(d => d.id !== id);
-      setDrafts(next);
-      if (next.length === 0) { setScreen("grid"); load(); }
-      else setReviewIdx(i => Math.min(i, next.length - 1));
-    } catch (e: any) { alert(e.message); }
-    setBusy(false);
+      if (next.length === 0) load();
+    } catch (e: any) {
+      await load();
+      setScreen("grid");
+      alert(e.message);
+    } finally {
+      setBusy(false);
+    }
   }
 
   function publishCurrent() {
@@ -71,7 +90,9 @@ export default function DraftsScreen() {
   function saveInactiveCurrent() {
     const draft = drafts[reviewIdx];
     if (!draft || busy) return;
-    return removeCurrent(() => api.publishDraft({ id: draft.id, status: "inactive" }).then(() => {}));
+    return removeCurrent(() =>
+      api.publishDraft({ id: draft.id, status: "inactive" }).then(() => {})
+    );
   }
 
   function discardCurrent() {
@@ -114,7 +135,7 @@ export default function DraftsScreen() {
       );
     }
 
-    const imgUri = `${API_BASE}/content/drafts/${draft.filename}`;
+    const imgUri = draftImageUri(draft, 1024);
     const caption = draft.meta?.caption ?? null;
     const scene = draft.meta?.scene;
 
@@ -255,31 +276,14 @@ export default function DraftsScreen() {
           </View>
         ) : (
           drafts.map((draft, idx) => {
-            const caption = draft.meta?.caption;
-            const imgUri = `${API_BASE}/content/drafts/${draft.filename}`;
+            const imgUri = draftImageUri(draft, CELL * 2);
             return (
               <Pressable
                 key={draft.id}
                 onPress={() => openReview(idx)}
-                style={styles.card}
+                style={styles.cell}
               >
-                <Image source={{ uri: imgUri }} style={styles.img} resizeMode="cover" />
-                <View style={styles.cardInfo}>
-                  {caption ? (
-                    <>
-                      <Text style={styles.gridCaption}>{caption.smallText}</Text>
-                      <Text style={[styles.gridCaption, { fontWeight: "600" }]} numberOfLines={2}>{caption.bigText}</Text>
-                    </>
-                  ) : (
-                    <Text style={styles.gridCaption}>No caption</Text>
-                  )}
-                  {draft.meta?.scene?.subject && (
-                    <Text style={styles.scene} numberOfLines={1}>
-                      {draft.meta.scene.subject}
-                      {draft.meta.scene.setting ? ` · ${draft.meta.scene.setting}` : ""}
-                    </Text>
-                  )}
-                </View>
+                <RemoteImage uri={imgUri} style={styles.thumb} resizeMode="cover" />
               </Pressable>
             );
           })
@@ -380,23 +384,20 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     padding: 16,
-    gap: 14,
+    gap: 10,
   },
   empty: { padding: 40, alignItems: "center", gap: 10 },
   emptyTitle: { color: C.textSecondary, fontSize: 18, fontWeight: "700" },
-  card: {
-    width: 200,
-    backgroundColor: C.surface,
-    borderRadius: 12,
+  cell: {
+    width: CELL,
+    borderRadius: 10,
     overflow: "hidden",
+    backgroundColor: C.surface,
     borderWidth: 1,
     borderColor: C.border,
   },
-  img: { width: "100%", height: 200 },
-  cardInfo: { padding: 10, gap: 2 },
+  thumb: { width: CELL, height: CELL, backgroundColor: C.bg },
   captionLine: { color: C.textPrimary, fontSize: 13, fontWeight: "500", lineHeight: 19 },
-  gridCaption: { color: C.textSecondary, fontSize: 12, lineHeight: 17 },
-  scene: { color: C.textMuted, fontSize: 10, marginTop: 2 },
 
   // Review header
   reviewHeader: {

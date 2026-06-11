@@ -8,7 +8,7 @@ import { api, StorageImage } from "../lib/api";
 import { Btn } from "../components/Btn";
 import { C, S } from "../lib/theme";
 
-type Filter = "all" | "active" | "inactive";
+type Filter = "active" | "inactive";
 
 export default function LibraryScreen() {
   const router = useRouter();
@@ -16,7 +16,7 @@ export default function LibraryScreen() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
-  const [filter, setFilter] = useState<Filter>("all");
+  const [filter, setFilter] = useState<Filter>("active");
   const [detail, setDetail] = useState<StorageImage | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -58,36 +58,43 @@ export default function LibraryScreen() {
     }
   }
 
+  function applyStatus(paths: string[], status: "active" | "inactive") {
+    const pathSet = new Set(paths);
+    setImages(prev => prev.map(i => pathSet.has(i.storagePath) ? { ...i, status } : i));
+    setDetail(d => d && pathSet.has(d.storagePath) ? { ...d, status } : d);
+  }
+
   async function setStatusSelected(status: "active" | "inactive") {
     if (!selected.size) return;
+    const paths = [...selected];
+    applyStatus(paths, status);
+    setSelected(new Set());
     setBusy(true);
     try {
-      await api.setImageStatus([...selected], status);
-      setSelected(new Set());
-      await load();
+      await api.setImageStatus(paths, status);
     } catch (e: any) {
       alert(e.message);
+      await load();
     } finally {
       setBusy(false);
     }
   }
 
   async function setStatusOne(img: StorageImage, status: "active" | "inactive") {
+    applyStatus([img.storagePath], status);
+    setDetail(null);
     setBusy(true);
     try {
       await api.setImageStatus([img.storagePath], status);
-      setDetail(null);
-      await load();
     } catch (e: any) {
       alert(e.message);
+      await load();
     } finally {
       setBusy(false);
     }
   }
 
-  const filtered = images.filter(i =>
-    filter === "all" ? true : i.status === filter
-  );
+  const filtered = images.filter(i => i.status === filter);
 
   const activeCount = images.filter(i => i.status === "active").length;
   const inactiveCount = images.filter(i => i.status === "inactive").length;
@@ -100,7 +107,9 @@ export default function LibraryScreen() {
       {/* Toolbar */}
       <View style={styles.toolbar}>
         <Text style={S.h1}>Library</Text>
-        <Text style={[S.body, { marginLeft: 6 }]}>{images.length} images</Text>
+        <Text style={[S.body, { marginLeft: 6 }]}>
+          {filter === "active" ? activeCount : inactiveCount} {filter}
+        </Text>
         <View style={{ flex: 1 }} />
         {selected.size > 0 && (
           <>
@@ -122,7 +131,6 @@ export default function LibraryScreen() {
       {/* Filter tabs */}
       <View style={styles.filterRow}>
         {([
-          { id: "all" as Filter, label: `All (${images.length})` },
           { id: "active" as Filter, label: `Active (${activeCount})` },
           { id: "inactive" as Filter, label: `Inactive (${inactiveCount})` },
         ]).map(tab => (
@@ -174,7 +182,7 @@ export default function LibraryScreen() {
           })}
           {filtered.length === 0 && !loading && (
             <Text style={[S.body, { margin: 24 }]}>
-              {filter === "inactive" ? "No inactive images." : "No images found."}
+              {filter === "inactive" ? "No inactive images." : "No active images."}
             </Text>
           )}
         </ScrollView>

@@ -23,8 +23,8 @@ export default function GenerateScreen() {
   const [mode, setMode] = useState<Mode>("full");
   const [size, setSize] = useState<Size>("1024x1024");
   const [model, setModel] = useState("gpt-image-2");
-  const [promptModel, setPromptModel] = useState("gpt-4o-mini");
-  const [captionModel, setCaptionModel] = useState("gpt-4o-mini");
+  const [promptModel, setPromptModel] = useState("gpt-4.1-mini");
+  const [captionModel, setCaptionModel] = useState("gpt-4.1-mini");
   const [dryRun, setDryRun] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);

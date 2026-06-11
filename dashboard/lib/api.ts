@@ -29,11 +29,16 @@ export const api = {
 
   drafts: () => request<{ drafts: Draft[] }>("/api/drafts"),
   publishDraft: (opts: { id?: string; all?: boolean; count?: number; status?: "active" | "inactive" }) =>
-    request<{ jobId: string }>("/api/drafts/publish", { method: "POST", body: JSON.stringify(opts) }),
-  discardDraft: (opts: { id?: string; all?: boolean; count?: number }) =>
-    request<{ jobId: string }>("/api/drafts/discard", { method: "POST", body: JSON.stringify(opts) }),
+    request<PublishDraftResult>("/api/drafts/publish", { method: "POST", body: JSON.stringify(opts) }),
+  discardDraft: (opts: { id?: string; all?: boolean }) =>
+    request<{ success: boolean; updated: number; ids: string[] }>("/api/drafts/discard", { method: "POST", body: JSON.stringify(opts) }),
 
   prompts: () => request<{ prompts: Prompt[] }>("/api/prompts"),
+  deletePrompts: (ids: string[]) =>
+    request<{ success: boolean; deleted: number; ids: string[] }>("/api/prompts/delete", {
+      method: "POST",
+      body: JSON.stringify({ ids }),
+    }),
 
   generate: (opts: GenerateOptions) =>
     request<{ jobId: string }>("/api/generate", { method: "POST", body: JSON.stringify(opts) }),
@@ -96,8 +101,13 @@ export interface DraftMeta {
 export interface Draft {
   id: string;
   filename: string;
+  imageUrl: string;
   meta: DraftMeta | null;
 }
+
+export type PublishDraftResult =
+  | { success: true; id: string; storagePath: string; status: "active" | "inactive" }
+  | { jobId: string };
 
 export interface Prompt {
   id: string;

@@ -1,5 +1,6 @@
 import React from "react";
-import { View, Image, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet } from "react-native";
+import { RemoteImage } from "../RemoteImage";
 
 interface Props {
   imageUri?: string;
@@ -11,7 +12,7 @@ export function WidgetMedium({ imageUri, caption }: Props) {
     <View style={styles.container}>
       {imageUri ? (
         <>
-          <Image source={{ uri: imageUri }} style={styles.image} resizeMode="cover" />
+          <RemoteImage uri={imageUri} style={styles.image} resizeMode="cover" />
           {caption && (
             <View style={styles.overlay}>
               <Text style={styles.small}>{caption.smallText}</Text>

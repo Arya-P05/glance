@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Modal } from "react-native";
-import { RefreshDouble, MoreHoriz } from "iconoir-react-native";
+import { RefreshDouble, MoreHoriz, Trash } from "iconoir-react-native";
 import { useRouter } from "expo-router";
 import { api, Prompt } from "../lib/api";
 import { Btn } from "../components/Btn";
@@ -40,6 +40,15 @@ export default function PromptsScreen() {
     });
   }
 
+  async function waitForJob(jobId: string) {
+    for (;;) {
+      const job = await api.job(jobId);
+      if (job.status === "done") return;
+      if (job.status === "failed") throw new Error(`Job failed: ${job.lines.at(-1) ?? "unknown error"}`);
+      await new Promise(resolve => setTimeout(resolve, 700));
+    }
+  }
+
   async function generateSelected() {
     if (!selected.size || busy) return;
     setBusy(true);
@@ -50,6 +59,9 @@ export default function PromptsScreen() {
         count: selected.size,
       });
       setJobId(id);
+      await waitForJob(id);
+      setSelected(new Set());
+      await load();
     } catch (e: any) { alert(e.message); }
     setBusy(false);
   }
@@ -63,6 +75,33 @@ export default function PromptsScreen() {
         count: 1,
       });
       setJobId(id);
+      await waitForJob(id);
+      setSelected(s => {
+        const n = new Set(s);
+        n.delete(promptId);
+        return n;
+      });
+      await load();
+    } catch (e: any) { alert(e.message); }
+    setBusy(false);
+  }
+
+  async function deletePromptIds(ids: string[]) {
+    if (!ids.length || busy) return;
+    const label = ids.length === 1 ? "this prompt" : `${ids.length} prompts`;
+    if (typeof window !== "undefined" && !window.confirm(`Delete ${label}?`)) return;
+
+    setBusy(true);
+    try {
+      const result = await api.deletePrompts(ids);
+      const removed = new Set(result.ids);
+      setPrompts(p => p.filter(prompt => !removed.has(prompt.id)));
+      setSelected(s => {
+        const n = new Set(s);
+        for (const id of removed) n.delete(id);
+        return n;
+      });
+      if (expanded && removed.has(expanded)) setExpanded(null);
     } catch (e: any) { alert(e.message); }
     setBusy(false);
   }
@@ -84,6 +123,13 @@ export default function PromptsScreen() {
               onPress={generateSelected}
               loading={busy}
               small
+            />
+            <Btn
+              label={`Delete ${selected.size}`}
+              onPress={() => deletePromptIds([...selected])}
+              loading={busy}
+              small
+              variant="danger"
             />
             <Btn label="Clear" onPress={() => setSelected(new Set())} small variant="ghost" />
           </>
@@ -154,6 +200,12 @@ export default function PromptsScreen() {
                 >
                   <MoreHoriz color={C.textSecondary} width={18} height={18} />
                 </Pressable>
+                <Pressable
+                  onPress={e => { e.stopPropagation?.(); deletePromptIds([p.id]); }}
+                  style={styles.detailBtn}
+                >
+                  <Trash color={C.danger} width={17} height={17} />
+                </Pressable>
               </Pressable>
             </View>
           );
@@ -165,6 +217,7 @@ export default function PromptsScreen() {
           <JobLog jobId={jobId} onDone={() => {
             setBusy(false);
             setJobId(null);
+            load();
           }} />
         </View>
       )}
@@ -210,6 +263,7 @@ export default function PromptsScreen() {
                       setExpanded(null);
                       generateOne(detail.id);
                     }} loading={busy} small />
+                    <Btn label="Delete" onPress={() => deletePromptIds([detail.id])} loading={busy} small variant="danger" />
                     <Btn label="Close" onPress={() => setExpanded(null)} small variant="ghost" />
                   </View>
                 </>
