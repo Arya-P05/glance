@@ -5,6 +5,7 @@
  */
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
+import { supabaseServiceRoleKey, supabaseUrl } from "./supabase-env.js";
 
 const BUCKET = "instagram-posts";
 
@@ -15,9 +16,7 @@ function env(name) {
 }
 
 async function main() {
-  const supabaseUrl = env("SUPABASE_URL");
-  const supabaseKey = env("SUPABASE_SERVICE_ROLE_KEY");
-  const supabase = createClient(supabaseUrl, supabaseKey);
+  const supabase = createClient(supabaseUrl(), supabaseServiceRoleKey());
 
   // 1. List all objects in bucket posts/
   const existingPaths = new Set();
