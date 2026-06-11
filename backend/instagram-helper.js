@@ -7,6 +7,7 @@ import sharp from "sharp";
 
 export const BUCKET = "instagram-posts";
 export const POST_PREFIX = "posts";
+export const DRAFT_PREFIX = "drafts";
 
 /** Public post or reel URL (reels must use /reel/ or you often get the wrong/stale view). */
 export function instagramPostUrl(shortcode, kind = "p") {

@@ -1,5 +1,5 @@
 /**
- * Move drafts to content/discarded/ so they're out of the publish queue.
+ * Discard drafts from the Supabase drafts table (sets status to 'discarded').
  *
  * Examples:
  *   npm run discard                    list current drafts
@@ -7,12 +7,9 @@
  *   npm run discard -- --count 5       discard first 5
  *   npm run discard -- --all           discard everything
  */
-import { readdir, readFile, rename, mkdir } from "node:fs/promises";
-import { join } from "node:path";
-
-const DRAFTS_DIR = "content/drafts";
-const META_DIR = "content/meta";
-const DISCARDED_DIR = "content/discarded";
+import "dotenv/config";
+import { createClient } from "@supabase/supabase-js";
+import { supabaseServiceRoleKey, supabaseUrl } from "./supabase-env.js";
 
 function parseArgs(argv) {
   const out = { all: false, count: null, id: null };
@@ -30,44 +27,27 @@ function parseArgs(argv) {
   return out;
 }
 
-async function getDrafts() {
-  let files;
-  try {
-    files = await readdir(META_DIR);
-  } catch {
-    return [];
-  }
+async function getDrafts(supabase, { id = null, count = null } = {}) {
+  let query = supabase
+    .from("drafts")
+    .select("id, name, caption, scene")
+    .eq("status", "draft")
+    .order("created_at", { ascending: true });
 
-  const drafts = [];
-  for (const file of files.filter((f) => f.endsWith(".json") && /^poster_/.test(f)).sort()) {
-    let data;
-    try {
-      data = JSON.parse(await readFile(join(META_DIR, file), "utf8"));
-    } catch {
-      continue;
-    }
-    if (data.publishedAt || data.discardedAt) continue;
-    const name = file.replace(/\.json$/, "");
-    drafts.push({ name, data });
-  }
+  if (id) query = query.eq("name", id);
+  else if (count !== null) query = query.limit(count);
 
-  return drafts;
+  const { data, error } = await query;
+  if (error) throw error;
+  return data ?? [];
 }
 
-async function moveFile(src, dst) {
-  try {
-    await rename(src, dst);
-  } catch {
-    // file may not exist (e.g. no background for this draft) — skip silently
-  }
-}
-
-async function discardDraft(name) {
-  await mkdir(DISCARDED_DIR, { recursive: true });
-
-  await moveFile(join(DRAFTS_DIR, `${name}.png`), join(DISCARDED_DIR, `${name}.png`));
-  await moveFile(join(META_DIR, `${name}.json`), join(DISCARDED_DIR, `${name}.json`));
-  await moveFile(join(META_DIR, `${name}.txt`), join(DISCARDED_DIR, `${name}.txt`));
+async function discardDraft(supabase, draft) {
+  const { error } = await supabase
+    .from("drafts")
+    .update({ status: "discarded" })
+    .eq("id", draft.id);
+  if (error) throw error;
 }
 
 async function main() {
@@ -82,7 +62,8 @@ async function main() {
     return;
   }
 
-  const drafts = await getDrafts();
+  const supabase = createClient(supabaseUrl(), supabaseServiceRoleKey());
+  const drafts = await getDrafts(supabase, { id: args.id, count: args.count });
 
   if (!args.all && args.count === null && !args.id) {
     if (drafts.length === 0) {
@@ -91,10 +72,10 @@ async function main() {
     }
     console.log(`${drafts.length} draft${drafts.length === 1 ? "" : "s"}:\n`);
     for (const d of drafts) {
-      const caption = d.data.caption
-        ? `  "${d.data.caption.smallText} ${d.data.caption.bigText}"`
+      const caption = d.caption
+        ? `  "${d.caption.smallText} ${d.caption.bigText}"`
         : "  (no caption)";
-      console.log(`  ${d.name}  ${d.data.scene?.subject} / ${d.data.scene?.setting}${caption}`);
+      console.log(`  ${d.name}  ${d.scene?.subject} / ${d.scene?.setting}${caption}`);
     }
     console.log(`\nDiscard one:  npm run discard -- --id <name>`);
     console.log(`Discard some: npm run discard -- --count 5`);
@@ -102,27 +83,19 @@ async function main() {
     return;
   }
 
-  let toDiscard;
-  if (args.id) {
-    toDiscard = drafts.filter((d) => d.name === args.id);
-    if (toDiscard.length === 0) throw new Error(`Draft not found: ${args.id}`);
-  } else if (args.count !== null) {
-    toDiscard = drafts.slice(0, args.count);
-  } else {
-    toDiscard = drafts;
-  }
+  if (args.id && drafts.length === 0) throw new Error(`Draft not found: ${args.id}`);
 
-  if (toDiscard.length === 0) {
+  if (drafts.length === 0) {
     console.log("Nothing to discard.");
     return;
   }
 
-  for (const d of toDiscard) {
-    await discardDraft(d.name);
+  for (const d of drafts) {
+    await discardDraft(supabase, d);
     console.log(`discarded  ${d.name}`);
   }
 
-  console.log(`\n${toDiscard.length} moved to content/discarded/`);
+  console.log(`\n${drafts.length} draft${drafts.length === 1 ? "" : "s"} discarded.`);
 }
 
 main().catch((err) => {

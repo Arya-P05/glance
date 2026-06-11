@@ -4,8 +4,10 @@ import sharp from "sharp";
 
 export const DEFAULT_OUTPUT_DIR = "motivational_assets";
 export const DEFAULT_IMAGE_MODEL = "gpt-image-2";
-export const DEFAULT_PROMPT_MODEL = "gpt-5-mini";
-export const DEFAULT_CAPTION_MODEL = "gpt-5-mini";
+/** Fast + strong instruction following for detailed image prompts */
+export const DEFAULT_PROMPT_MODEL = "gpt-4.1-mini";
+/** Vision-capable, good at short scene-specific copy; faster than gpt-5-mini */
+export const DEFAULT_CAPTION_MODEL = "gpt-4.1-mini";
 
 const ANIMAL_IDEAS = [
   "golden retriever",
@@ -590,16 +592,28 @@ export const REFERENCE_COPY_PAIRS = [
   ["keep moving,", "it adds up."],
   ["take it slow,", "no rush."],
   ["breathe deep,", "reset slowly."],
-  ["cold air,", "clear mind."],
   ["stay calm,", "you're learning."],
   ["stay goofy twin,", "it's iconic."],
   ["stay weird,", "it's gangsta."],
-  ["quick reminder:", "enjoy christmas bro."],
-  ["remember to", "f* their opinion."],
   ["stay real,", "stay true twin."],
   ["smile today,", "it helps."],
-  ["look around,", "life is here."],
+  ["hey twin,", "proud of you."],
+  ["you're enough,", "always were."],
+  ["still here,", "that's everything."],
+  ["small wins,", "count them."],
+  ["you're loved,", "remember that."],
+  ["rough day,", "still worthy."],
+  ["keep showing up,", "it matters."],
+  ["soft heart,", "strong soul."],
+  ["head up,", "heart open."],
+  ["you made it,", "through today."],
+  ["breathe twin,", "you're okay."],
+  ["good days,", "bad days."],
+  ["still growing,", "still going."],
+  ["you got this,", "lowkey twin."],
 ];
+
+export const QUOTE_BANK = REFERENCE_COPY_PAIRS;
 
 const SCENE_PRESETS = [
   {
@@ -740,12 +754,108 @@ function pick(items, rng = Math.random) {
   return items[Math.floor(rng() * items.length)];
 }
 
+function sceneContext(brief) {
+  return `${brief.subject} ${brief.setting} ${brief.action} ${brief.weather} ${brief.prop}`.toLowerCase();
+}
+
+function splitPersonSubject(subject) {
+  const ethnicityMatch = String(subject).match(/\(([^)]+)\)\s*$/);
+  const ethnicity = ethnicityMatch ? ethnicityMatch[1] : null;
+  let base = String(subject).replace(/\s*\([^)]+\)\s*$/, "").trim();
+  for (const role of PERSON_ROLES) {
+    if (base.toLowerCase().includes(role)) {
+      base = base.replace(new RegExp(role.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"), "");
+    }
+  }
+  return { base: base.replace(/\s+/g, " ").trim(), ethnicity };
+}
+
+function assignCoherentWardrobe(brief, rng = Math.random) {
+  if (brief.subjectKind !== "person") return brief;
+  const out = { ...brief };
+  const { base, ethnicity } = splitPersonSubject(out.subject);
+  const ctx = sceneContext(out);
+  let wardrobe = null;
+
+  if (/cockpit|fighter jet|flight suit/.test(ctx)) {
+    wardrobe = "in a flight suit";
+  } else if (/fireworks|sparkler|clear night/.test(ctx) && /basketball/.test(ctx)) {
+    wardrobe = pick(
+      [
+        "wrapped in a colorful blanket over their shoulders, wearing a casual crop top and sweatpants",
+        "in a cropped tank top and light sweatpants with a blanket draped over their shoulders",
+      ],
+      rng
+    );
+  } else if (/fireworks|sparkler|clear night/.test(ctx)) {
+    wardrobe = pick(
+      ["wrapped in a cozy blanket over their shoulders", "in an oversized hoodie", "in casual night-out clothes"],
+      rng
+    );
+  } else if (/basketball/.test(ctx)) {
+    wardrobe = pick(["in a cropped tank top and sweatpants", "in vintage athletic wear", "in a loose jersey and shorts"], rng);
+  } else if (/beach|ocean|lake|dock|ferry|canoe/.test(ctx)) {
+    wardrobe = pick(["in a linen shirt and rolled-up jeans", "in a swimsuit cover-up", "barefoot in casual summer clothes"], rng);
+  } else if (/snow|winter|snowfall/.test(ctx)) {
+    wardrobe = pick(["in a puffy winter coat", "in a wool scarf and warm jacket"], rng);
+  } else if (/rain/.test(ctx)) {
+    wardrobe = "in a rain jacket";
+  } else if (/bike|cycl/.test(ctx)) {
+    wardrobe = "wearing a bike helmet and casual riding clothes";
+  } else if (/skateboard|skating|roller skates|ramp/.test(ctx)) {
+    wardrobe = pick(["in casual streetwear", "wearing a helmet and knee pads"], rng);
+  } else if (/soccer/.test(ctx)) {
+    wardrobe = "in a soccer jersey";
+  } else if (/rest stop|grocery|road/.test(ctx)) {
+    wardrobe = pick(["holding a grocery bag", "in a simple travel hoodie", "in everyday road-trip clothes"], rng);
+  } else if (/bedroom|gaming|headphones|desk/.test(ctx)) {
+    wardrobe = pick(["wearing oversized headphones", "in a cozy hoodie at a messy desk"], rng);
+  } else if (/laundromat|kitchen|porch/.test(ctx)) {
+    wardrobe = pick(["in everyday casual clothes", "in a simple oversized tee"], rng);
+  } else {
+    wardrobe = pick(
+      ["in everyday casual clothes", "in a simple vintage tee", "in relaxed weekend clothes", null],
+      rng
+    );
+  }
+
+  const person = wardrobe ? `${base} ${wardrobe}` : base;
+  out.subject = ethnicity ? `${person} (${ethnicity})` : person;
+  return out;
+}
+
+function reconcileProps(brief, rng = Math.random) {
+  const out = { ...brief };
+  const ctx = sceneContext(out);
+
+  if (/blanket/.test(out.subject) && out.prop === "a blanket") out.prop = "nothing";
+  if (/sunglasses/.test(out.subject) && out.prop === "sunglasses") out.prop = "nothing";
+  if (/grocery bag/.test(out.subject)) out.prop = "nothing";
+  if (/skateboard/.test(out.subject)) out.prop = "nothing";
+  if (/headphones/.test(out.subject)) out.prop = "nothing";
+
+  if (out.prop === "sunglasses" && /night|fireworks|snow|rain|indoor|bedroom|laundromat/.test(ctx)) {
+    out.prop = "nothing";
+  }
+  if (out.prop === "a birthday hat" && !/party|fireworks|celebration/.test(ctx)) {
+    out.prop = "nothing";
+  }
+  if (out.prop === "a soccer ball" && !/soccer|field|school/.test(ctx)) {
+    out.prop = "nothing";
+  }
+  if (out.prop !== "nothing" && rng() < 0.55) {
+    out.prop = "nothing";
+  }
+
+  return out;
+}
+
 export function buildCreativeBrief(rng = Math.random) {
   const subjectKind = rng() < 0.52 ? "animal" : "person";
   const subject =
     subjectKind === "animal"
       ? `a ${pick(ANIMAL_IDEAS, rng)}`
-      : `${pick(PERSON_AGES, rng)} ${pick(PERSON_ROLES, rng)} (${pick(PERSON_ETHNICITIES, rng)})`;
+      : `${pick(PERSON_AGES, rng)} (${pick(PERSON_ETHNICITIES, rng)})`;
   const action = pick(WILD_ACTIONS, rng);
   const setting = pick(MOODBOARD_SETTINGS, rng);
   const weather = pick(POSITIVE_WEATHER, rng);
@@ -833,6 +943,13 @@ function harmonizeCreativeBrief(brief, rng = Math.random) {
     out.colorDirection = "pastel sunset colors";
   }
 
+  if (out.subjectKind === "person" && /paw|soda bottle/.test(out.action)) {
+    out.action = pick(
+      ["smiling into the camera", "standing way too close to the camera", "looking proud at a rest stop", "walking through warm rain and smiling"],
+      rng
+    );
+  }
+
   if (out.subjectKind === "animal" && /riding through/.test(out.action)) {
     out.action = pick(["running through the light", "walking through the sunset", "standing proudly in the sunset glow"], rng);
   }
@@ -855,7 +972,14 @@ function harmonizeCreativeBrief(brief, rng = Math.random) {
   }
 
   if (/fireworks|sparklers/.test(action)) {
-    out.setting = "a field under fireworks far in the background";
+    out.setting = pick(
+      [
+        "an empty outdoor basketball court at night with fireworks in the distance",
+        "a field under fireworks far in the background",
+        "a rooftop with open sky and distant fireworks",
+      ],
+      rng
+    );
     out.weather = "clear night with distant fireworks";
     out.timeOfDay = out.weather;
     out.colorDirection = "flash-lit subject against dark simple background";
@@ -885,7 +1009,8 @@ function harmonizeCreativeBrief(brief, rng = Math.random) {
     out.colorDirection = pick(["saturated blue sky and green grass", "golden sunlight and soft shadows", "clean early-digital blue and green color"], rng);
   }
 
-  return out;
+  const harmonized = assignCoherentWardrobe(out, rng);
+  return reconcileProps(harmonized, rng);
 }
 
 export function buildPromptWriterPrompt(brief) {
@@ -900,9 +1025,9 @@ You are not generating the image. You are writing the final prompt that will be 
 The final image must feel like:
 - a forgotten photo from someone's camera roll
 - dreamy internet nostalgia
-- wholesome absurdism
-- happy, positive, and emotionally warm
-- the situation may be unrealistic, staged, edited, or absurd, but the final image must look like a real viral camera-roll photo or meme artifact
+- aesthetically cool, cinematic, and emotionally warm
+- happy, positive, and slightly goofy in a believable way
+- the situation may be surreal or staged, but every clothing item, prop, and setting detail must make visual sense together
 - high-quality grainy early-2000s digital photography, not low-resolution
 
 Core ingredients for this one unique image:
@@ -927,9 +1052,10 @@ Hard requirements:
 - avoid corporate motivation, fantasy painting, 3D render, studio portrait, glossy ad, cinematic movie still, or editorial fashion shoot
 - avoid clutter and avoid multiple competing subjects
 - avoid sickly green/yellow/cyan color casts; prefer natural early-digital blues, greens, warm sunlight, clean whites, or pastel sunset
-- absurd animal behavior is allowed: headphones, soda bottle, rude little paw pose, sunglasses, gaming desk, weird costume, or prop comedy can be great
+- for people: clothing and accessories must fit the setting (no bike helmets unless cycling/skating, no life jackets away from water, no random safety gear)
+- absurd animal behavior is allowed: headphones, soda bottle, rude little paw pose, sunglasses, gaming desk, or prop comedy can be great
 - if an animal uses a human-like prop or pose, make it look like a real internet meme photo, cheap edit, costume, forced perspective, or lucky candid snapshot, not glossy CGI
-- unrealistic scenes are allowed; the key is photographic believability, cheap-camera texture, imperfect framing, and meme-account authenticity
+- prioritize aesthetic coherence over random joke props; the image should feel like something someone would actually post because it looks cool
 - if any ingredients feel contradictory, reinterpret them into one coherent happy scene while preserving the core subject, action, and vibe
 
 Use a fresh, specific, non-template description. Add concrete visual details that make this exact image feel unique: pose, lens distortion, background shapes, color, texture, accidental framing, and why the subject feels happy.
@@ -943,6 +1069,7 @@ Great outcome examples in spirit:
 - an old man skateboarding in a sunlit parking lot
 - a grandma on roller skates jumping a tiny ramp
 - a girl in a fighter jet cockpit with sunset sky outside
+- a young woman on an outdoor basketball court at night, blanket over her shoulders, fireworks in the distance
 - a dog joyfully running under distant fireworks in an open field
 
 Return only the final image prompt as plain text.`;
@@ -1103,53 +1230,110 @@ FINAL LOOK:
 Calm, hopeful, playful, gentle.
 Life is weird but things are okay.
 Dreamy internet nostalgia.
-Wholesome absurdism.
+Aesthetically cool and photographically believable.
+Every outfit and prop should make sense in the scene.
 Soft emotional impact.
 Highly shareable Instagram moodboard aesthetic.
 `;
 }
 
-export function buildCaptionPrompt(scene) {
-  const options = REFERENCE_COPY_PAIRS.map(([smallText, bigText]) => `{"smallText":"${smallText}","bigText":"${bigText}"}`).join("\n");
+export function captionSignature(caption) {
+  return `${normalizeCaptionLine(caption?.smallText || "", 34)}|${normalizeCaptionLine(caption?.bigText || "", 28)}`;
+}
 
-  return `Look at this image and write one motivational poster message that feels tailored to the scene.
+export function buildCaptionPrompt(scene, { recentCaptions = [], attempt = 0 } = {}) {
+  const toneExamples = QUOTE_BANK.slice(0, 10)
+    .map(([smallText, bigText]) => `- "${smallText} ${bigText}"`)
+    .join("\n");
 
-Scene ingredients:
-SUBJECT: ${scene.subject}
-SETTING: ${scene.setting}
-ACTION: ${scene.action}
-PROP: ${scene.prop}
-TIME: ${scene.timeOfDay}
-CAMERA: ${scene.camera}
-WEATHER: ${scene.weather}
-EMOTIONAL ARCHETYPE: ${scene.emotion}
-COPY FORMULA HINT: ${scene.copyFormula}
+  const avoidBlock =
+    recentCaptions.length > 0
+      ? `\nAlready used — do NOT repeat or closely imitate:\n${recentCaptions
+          .map((c) => `- "${c.smallText} ${c.bigText}"`)
+          .join("\n")}\n`
+      : "";
 
-Requirements:
+  const retryNote =
+    attempt > 0
+      ? "\nLast attempt was repeated or off-tone. Write a fresh original quote.\n"
+      : "";
+
+  return `Write one short positive poster quote for a motivational moodboard.
+
+Voice:
 - supportive internet friend
 - lowercase
-- exactly 2 lines
-- slightly funny
-- emotionally sincere
-- not self-help
-- not productivity
-- no hustle culture
-- sounds like a text from a friend
-- line 1 must be 2-4 words and usually end with a comma or colon
-- line 2 must be 2-5 words
-- avoid long sentences
-- avoid em dashes
-- avoid explaining the scene
-- do not use "even like that"
-- do not use generic therapy language
-- do not invent slang
-- choose one exact option from the allowed caption list below unless none fit
+- warm, uplifting, slightly funny but sincere
+- sounds like a text from someone who believes in you
 
-Return only JSON with this shape:
-{"smallText":"first line","bigText":"second line"}
+Structure (${scene.copyFormula}):
+- smallText: 2-4 words, usually ends with a comma or colon
+- bigText: 2-6 words, the uplifting punchline
 
-Allowed caption list:
-${options}`;
+Important:
+- does NOT need to describe any image, animal, place, outfit, or weather
+- should work as a universal feel-good line anyone would want on their lock screen
+- original wording — not a famous quote, not corporate, not therapy-speak, not hustle culture
+- no em dashes, no long sentences, no explaining a scene
+
+Mood hint: ${scene.emotion}
+${avoidBlock}${retryNote}
+Tone examples (style only, do not copy):
+${toneExamples}
+
+Return only JSON:
+{"smallText":"first line","bigText":"second line"}`;
+}
+
+const BANNED_CAPTION_PHRASES = [
+  /even like that/i,
+  /believe in yourself/i,
+  /one day at a time/i,
+  /main character/i,
+  /wrong animal/i,
+  /wrong place/i,
+  /this is absurd/i,
+  /salt air/i,
+  /night court/i,
+  /shoreline/i,
+  /goofy king/i,
+];
+
+export function finalizeCaption(caption, recentCaptions = []) {
+  const normalized = {
+    smallText: normalizeCaptionLine(caption?.smallText || "", 34),
+    bigText: normalizeCaptionLine(caption?.bigText || "", 28),
+  };
+
+  if (!normalized.smallText || !normalized.bigText) return null;
+  if (normalized.smallText.length < 2 || normalized.bigText.length < 2) return null;
+
+  const text = `${normalized.smallText} ${normalized.bigText}`;
+  if (BANNED_CAPTION_PHRASES.some((pattern) => pattern.test(text))) return null;
+
+  const sig = captionSignature(normalized);
+  const recentSigs = new Set(recentCaptions.map((c) => captionSignature(c)));
+  if (recentSigs.has(sig)) return null;
+
+  return normalized;
+}
+
+export function variedFallbackCaption(scene, recentCaptions = [], rng = Math.random) {
+  const recentSigs = new Set(recentCaptions.map((c) => captionSignature(c)));
+  const emotionPool = {
+    gentle: [["take it slow,", "no rush."], ["soft day,", "stay gentle."], ["breathe twin,", "you're okay."]],
+    funny: [["stay goofy twin,", "it's iconic."], ["stay weird,", "it's gangsta."], ["smile bro,", "u are on fire."]],
+    momentum: [["keep moving,", "it adds up."], ["keep showing up,", "it matters."], ["still growing,", "still going."]],
+    "self-worth": [["you're enough,", "always were."], ["remember,", "you've come far."], ["you're loved,", "remember that."]],
+    perspective: [["head up,", "heart open."], ["look around,", "life is here."], ["good days,", "bad days."]],
+  };
+
+  const pool = [...(emotionPool[scene.emotion] || []), ...QUOTE_BANK].filter(
+    ([smallText, bigText]) => !recentSigs.has(captionSignature({ smallText, bigText }))
+  );
+
+  if (pool.length === 0) return captionFromPair(pick(QUOTE_BANK, rng));
+  return captionFromPair(pick(pool, rng));
 }
 
 export function referenceCaptionForScene(scene) {
@@ -1174,16 +1358,9 @@ export function referenceCaptionForScene(scene) {
   return captionFromPair(["stay weird,", "it's gangsta."]);
 }
 
-export function coerceReferenceCaption(caption, scene) {
-  const normalized = {
-    smallText: normalizeCaptionLine(caption?.smallText || "", 34),
-    bigText: normalizeCaptionLine(caption?.bigText || "", 28),
-  };
-  const exact = REFERENCE_COPY_PAIRS.find(
-    ([smallText, bigText]) => normalizeCaptionLine(smallText, 34) === normalized.smallText && normalizeCaptionLine(bigText, 28) === normalized.bigText
-  );
-  if (exact) return captionFromPair(exact);
-  return referenceCaptionForScene(scene);
+/** @deprecated Use finalizeCaption instead — kept for older scripts */
+export function coerceReferenceCaption(caption, scene, recentCaptions = []) {
+  return finalizeCaption(caption, recentCaptions) ?? variedFallbackCaption(scene, recentCaptions);
 }
 
 function captionFromPair([smallText, bigText]) {

@@ -16,6 +16,7 @@
     "collect-links": "node collect-links.js",
     "import-links": "node import-from-links.js",
     "generate-posters": "node generate-posters.js",
+    "backfill-content": "node backfill-content.js",
     "render-caption": "node render-caption.js",
     "clear-posts": "node clear-posts-and-storage.js",
     "prune-orphans": "node prune-orphan-posts.js",

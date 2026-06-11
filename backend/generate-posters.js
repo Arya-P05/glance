@@ -20,7 +20,8 @@ import {
   buildPromptWriterPrompt,
   buildScene,
   cleanGeneratedPrompt,
-  coerceReferenceCaption,
+  finalizeCaption,
+  variedFallbackCaption,
   makeAssetName,
   overlayCaption,
   parseCaption,
@@ -207,25 +208,22 @@ function responseText(response) {
   return chunks.join("\n");
 }
 
-async function generateCaption({ client, model, scene, imageBytes }) {
-  const prompt = buildCaptionPrompt(scene);
-  const imageUrl = `data:image/png;base64,${imageBytes.toString("base64")}`;
-  const response = await client.responses.create({
-    model,
-    input: [
-      {
-        role: "user",
-        content: [
-          { type: "input_text", text: prompt },
-          { type: "input_image", image_url: imageUrl },
-        ],
-      },
-    ],
-  });
+async function generateCaption({ client, model, scene, recentCaptions = [] }) {
+  let lastPrompt = buildCaptionPrompt(scene, { recentCaptions });
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    lastPrompt = buildCaptionPrompt(scene, { recentCaptions, attempt });
+    const response = await client.responses.create({
+      model,
+      input: [{ role: "user", content: [{ type: "input_text", text: lastPrompt }] }],
+    });
+    const caption = finalizeCaption(parseCaption(responseText(response)), recentCaptions);
+    if (caption) return { caption, prompt: lastPrompt };
+  }
 
   return {
-    caption: coerceReferenceCaption(parseCaption(responseText(response)), scene),
-    prompt,
+    caption: variedFallbackCaption(scene, recentCaptions),
+    prompt: lastPrompt,
   };
 }
 
@@ -256,6 +254,7 @@ async function main() {
   }
 
   const usedSubjects = new Set();
+  const recentCaptions = [];
 
   for (let i = 1; i <= args.count; i++) {
     const name = makeAssetName(i);
@@ -319,11 +318,13 @@ async function main() {
             client: openai,
             model: args.captionModel,
             scene,
-            imageBytes: rawImageBytes,
+            recentCaptions,
           })
         );
         caption = captionResult.caption;
         captionPrompt = captionResult.prompt;
+        recentCaptions.unshift(caption);
+        if (recentCaptions.length > 40) recentCaptions.length = 40;
         finalImageBytes = await withProgress(`${prefix} placing text`, () => overlayCaption(rawImageBytes, caption));
       }
       const posterPrompt = buildLegacyPromptForMetadata(scene, caption);

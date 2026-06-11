@@ -14,6 +14,7 @@
  */
 import "dotenv/config";
 import OpenAI from "openai";
+import { createClient } from "@supabase/supabase-js";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -26,13 +27,16 @@ import {
   buildPromptWriterPrompt,
   buildScene,
   cleanGeneratedPrompt,
-  coerceReferenceCaption,
+  finalizeCaption,
+  variedFallbackCaption,
   makeAssetName,
   overlayCaption,
   parseCaption,
   saveGeneratedAsset,
   savePromptAsset,
 } from "./motivational-generator.js";
+import { BUCKET, DRAFT_PREFIX } from "./instagram-helper.js";
+import { supabaseUrl, supabaseServiceRoleKey } from "./supabase-env.js";
 
 const PROMPTS_DIR = "content/prompts";
 const DRAFTS_DIR = "content/drafts";
@@ -198,24 +202,63 @@ function responseText(response) {
   return chunks.join("\n");
 }
 
-async function generateCaption({ client, model, scene, imageBytes }) {
-  const prompt = buildCaptionPrompt(scene);
-  const imageUrl = `data:image/png;base64,${imageBytes.toString("base64")}`;
-  const response = await client.responses.create({
-    model,
-    input: [
-      {
-        role: "user",
-        content: [
-          { type: "input_text", text: prompt },
-          { type: "input_image", image_url: imageUrl },
-        ],
-      },
-    ],
+async function loadRecentCaptionsFromDb(supabase, limit = 30) {
+  if (!supabase) return [];
+  const recent = [];
+
+  const { data: drafts } = await supabase
+    .from("drafts")
+    .select("caption")
+    .not("caption", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  for (const row of drafts ?? []) {
+    if (row.caption?.smallText && row.caption?.bigText) {
+      recent.push({ smallText: row.caption.smallText, bigText: row.caption.bigText });
+    }
+  }
+
+  const { data: posts } = await supabase
+    .from("posts")
+    .select("caption")
+    .not("caption", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  for (const row of posts ?? []) {
+    const text = String(row.caption || "");
+    const comma = text.indexOf(",");
+    if (comma === -1) continue;
+    recent.push({
+      smallText: text.slice(0, comma + 1).trim(),
+      bigText: text.slice(comma + 1).trim(),
+    });
+  }
+
+  const seen = new Set();
+  return recent.filter((c) => {
+    const key = `${c.smallText}|${c.bigText}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
   });
+}
+
+async function generateCaption({ client, model, scene, recentCaptions = [] }) {
+  let lastPrompt = buildCaptionPrompt(scene, { recentCaptions });
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    lastPrompt = buildCaptionPrompt(scene, { recentCaptions, attempt });
+    const response = await client.responses.create({
+      model,
+      input: [{ role: "user", content: [{ type: "input_text", text: lastPrompt }] }],
+    });
+    const caption = finalizeCaption(parseCaption(responseText(response)), recentCaptions);
+    if (caption) return { caption, prompt: lastPrompt };
+  }
+
   return {
-    caption: coerceReferenceCaption(parseCaption(responseText(response)), scene),
-    prompt,
+    caption: variedFallbackCaption(scene, recentCaptions),
+    prompt: lastPrompt,
   };
 }
 
@@ -257,6 +300,130 @@ async function loadFromPromptsDir(dir, count, filterIds = null) {
   return prompts;
 }
 
+async function loadFromPromptsDb(supabase, count, filterIds = null) {
+  if (!supabase) return [];
+
+  let query = supabase
+    .from("prompts")
+    .select("name, scene, image_prompt, metadata")
+    .order("created_at", { ascending: true });
+
+  if (filterIds?.length) query = query.in("name", filterIds);
+  else query = query.limit(count);
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  const rows = data ?? [];
+  const orderedRows = filterIds?.length
+    ? filterIds.map(id => rows.find(row => row.name === id)).filter(Boolean)
+    : rows;
+
+  return orderedRows
+    .filter(row => row.scene && row.image_prompt)
+    .map(row => ({
+      name: row.name,
+      scene: row.scene,
+      prompt: row.image_prompt,
+      promptWriterPrompt: row.metadata?.promptWriterPrompt || "",
+    }));
+}
+
+async function loadPromptSources({ dir, count, filterIds, supabase }) {
+  if (filterIds?.length && supabase) {
+    const dbPrompts = await loadFromPromptsDb(supabase, count, filterIds);
+    const found = new Set(dbPrompts.map(p => p.name));
+    const missing = filterIds.filter(id => !found.has(id));
+    if (missing.length === 0) return { prompts: dbPrompts, source: "Supabase prompts table" };
+    throw new Error(`Prompt not found or already used: ${missing.join(", ")}`);
+  }
+
+  try {
+    return {
+      prompts: await loadFromPromptsDir(dir, count, filterIds),
+      source: dir,
+    };
+  } catch (localError) {
+    if (!supabase) throw localError;
+    const dbPrompts = await loadFromPromptsDb(supabase, count, filterIds);
+    if (dbPrompts.length) return { prompts: dbPrompts, source: "Supabase prompts table" };
+    throw localError;
+  }
+}
+
+async function upsertWithSchemaFallback(supabase, table, row, { onConflict, optionalColumns }) {
+  let nextRow = row;
+  let remainingOptional = new Set(optionalColumns);
+
+  for (;;) {
+    const { error } = await supabase.from(table).upsert(nextRow, { onConflict });
+    if (!error) return;
+
+    const message = error.message || "";
+    const missingColumn = [...remainingOptional].find((column) =>
+      message.includes(`'${column}'`) || message.includes(`column ${column}`)
+    );
+    if (!missingColumn) throw error;
+
+    remainingOptional.delete(missingColumn);
+    const { [missingColumn]: _missing, ...stripped } = nextRow;
+    nextRow = stripped;
+  }
+}
+
+async function uploadDraftToDb(supabase, { name, imageBytes, rawImageBytes = null, metadata }) {
+  const storagePath = `${DRAFT_PREFIX}/${name}.png`;
+  const { error: uploadErr } = await supabase.storage
+    .from(BUCKET)
+    .upload(storagePath, imageBytes, { contentType: "image/png", upsert: true });
+  if (uploadErr) throw uploadErr;
+
+  let rawStoragePath = null;
+  if (rawImageBytes) {
+    rawStoragePath = `${DRAFT_PREFIX}/backgrounds/${name}.png`;
+    const { error: rawUploadErr } = await supabase.storage
+      .from(BUCKET)
+      .upload(rawStoragePath, rawImageBytes, { contentType: "image/png", upsert: true });
+    if (rawUploadErr) throw rawUploadErr;
+  }
+
+  await upsertWithSchemaFallback(supabase, "drafts",
+    {
+      name,
+      storage_path: storagePath,
+      caption: metadata.caption ?? null,
+      scene: metadata.scene ?? null,
+      image_prompt: metadata.scenePrompt ?? null,
+      metadata,
+      raw_storage_path: rawStoragePath,
+      image_model: metadata.imageModel ?? null,
+      caption_model: metadata.captionModel ?? null,
+      prompt_model: metadata.promptModel ?? null,
+      status: "draft",
+    },
+    { onConflict: "name", optionalColumns: ["metadata", "raw_storage_path"] }
+  );
+}
+
+async function uploadPromptToDb(supabase, { name, prompt, metadata }) {
+  await upsertWithSchemaFallback(supabase, "prompts",
+    {
+      name,
+      scene: metadata.scene ?? null,
+      image_prompt: prompt,
+      prompt_model: metadata.promptModel ?? null,
+      metadata,
+    },
+    { onConflict: "name", optionalColumns: ["metadata"] }
+  );
+}
+
+async function removePromptFromDb(supabase, name) {
+  if (!supabase || !name) return;
+  const { error } = await supabase.from("prompts").delete().eq("name", name);
+  if (error) throw error;
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
@@ -265,6 +432,12 @@ async function main() {
   }
 
   const openai = args.dryRun ? null : new OpenAI({ apiKey: env("OPENAI_API_KEY") });
+  let supabase = null;
+  try {
+    supabase = createClient(supabaseUrl(), supabaseServiceRoleKey());
+  } catch {
+    console.warn("Supabase not configured — drafts/prompts won't be saved to DB");
+  }
   const startedAt = Date.now();
   let saved = 0;
   let failed = 0;
@@ -279,11 +452,20 @@ async function main() {
 
   let promptSources = null;
   if (args.fromPrompts) {
-    promptSources = await loadFromPromptsDir(args.fromPromptsDir, args.count, args.promptIds);
-    console.log(`Loaded ${promptSources.length} prompts from ${args.fromPromptsDir}/\n`);
+    const loaded = await loadPromptSources({
+      dir: args.fromPromptsDir,
+      count: args.count,
+      filterIds: args.promptIds,
+      supabase,
+    });
+    promptSources = loaded.prompts;
+    console.log(`Loaded ${promptSources.length} prompts from ${loaded.source}`);
+    if (args.promptIds?.length) console.log(`Prompt IDs: ${args.promptIds.join(", ")}`);
+    console.log("");
   }
 
   const usedSubjects = new Set();
+  const recentCaptions = supabase ? await loadRecentCaptionsFromDb(supabase) : [];
 
   for (let i = 1; i <= args.count; i++) {
     const prefix = `[${i}/${args.count}]`;
@@ -325,19 +507,25 @@ async function main() {
       }
 
       if (args.mode === "prompts") {
+        const promptMetadata = {
+          promptModel: args.promptModel,
+          generatedAt: new Date().toISOString(),
+          scene,
+          promptWriterPrompt,
+        };
         const paths = await withProgress(`${prefix} saving prompt`, () =>
           savePromptAsset({
             outputDir: args.outDir,
             name,
             prompt: scenePrompt,
-            metadata: {
-              promptModel: args.promptModel,
-              generatedAt: new Date().toISOString(),
-              scene,
-              promptWriterPrompt,
-            },
+            metadata: promptMetadata,
           })
         );
+        if (supabase) {
+          await withProgress(`${prefix} saving prompt to DB`, () =>
+            uploadPromptToDb(supabase, { name, prompt: scenePrompt, metadata: promptMetadata })
+          );
+        }
         saved++;
         console.log(`${prefix} → ${paths.promptPath}\n`);
         continue;
@@ -353,16 +541,35 @@ async function main() {
 
       if (args.mode === "full") {
         const captionResult = await withProgress(`${prefix} writing caption`, () =>
-          generateCaption({ client: openai, model: args.captionModel, scene, imageBytes: rawImageBytes })
+          generateCaption({
+            client: openai,
+            model: args.captionModel,
+            scene,
+            recentCaptions,
+          })
         );
         caption = captionResult.caption;
         captionPrompt = captionResult.prompt;
+        recentCaptions.unshift(caption);
+        if (recentCaptions.length > 40) recentCaptions.length = 40;
         finalImageBytes = await withProgress(`${prefix} placing text`, () =>
           overlayCaption(rawImageBytes, caption)
         );
       }
 
       const posterPrompt = buildLegacyPromptForMetadata(scene, caption);
+      const draftMetadata = {
+        imageModel: args.model,
+        captionModel: args.mode === "full" ? args.captionModel : null,
+        promptModel: args.promptModel,
+        size: args.size,
+        generatedAt: new Date().toISOString(),
+        scene,
+        scenePrompt,
+        promptWriterPrompt,
+        captionPrompt,
+        caption,
+      };
       const paths = await withProgress(`${prefix} saving draft`, () =>
         saveGeneratedAsset({
           outputDir: args.outDir,
@@ -372,20 +579,24 @@ async function main() {
           imageBytes: finalImageBytes,
           rawImageBytes: args.mode === "full" ? rawImageBytes : null,
           prompt: posterPrompt,
-          metadata: {
-            imageModel: args.model,
-            captionModel: args.mode === "full" ? args.captionModel : null,
-            promptModel: args.promptModel,
-            size: args.size,
-            generatedAt: new Date().toISOString(),
-            scene,
-            scenePrompt,
-            promptWriterPrompt,
-            captionPrompt,
-            caption,
-          },
+          metadata: draftMetadata,
         })
       );
+      if (supabase) {
+        await withProgress(`${prefix} saving draft to DB`, () =>
+          uploadDraftToDb(supabase, {
+            name,
+            imageBytes: finalImageBytes,
+            rawImageBytes: args.mode === "full" ? rawImageBytes : null,
+            metadata: draftMetadata,
+          })
+        );
+        if (promptSources) {
+          await withProgress(`${prefix} removing used prompt`, () =>
+            removePromptFromDb(supabase, name)
+          );
+        }
+      }
 
       saved++;
       console.log(`${prefix} → ${paths.imagePath}`);

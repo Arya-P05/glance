@@ -52,8 +52,8 @@ npm run generate-posters -- --count 5 --dry-run
 npm run generate-posters -- --count 10 --prompt-only
 npm run generate-posters -- --count 5 --image-only
 npm run generate-posters -- --count 10 --out motivational_assets
-npm run generate-posters -- --count 10 --prompt-model gpt-5-mini
-npm run generate-posters -- --count 10 --caption-model gpt-5-mini
+npm run generate-posters -- --count 10 --prompt-model gpt-4.1-mini
+npm run generate-posters -- --count 10 --caption-model gpt-4.1-mini
 npm run generate-posters -- --count 10 --upload
 ```
 

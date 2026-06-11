@@ -9,9 +9,9 @@ import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
 import { spawn } from "node:child_process";
 import { createReadStream, readFileSync } from "node:fs";
-import { readdir, readFile, stat } from "node:fs/promises";
+import { stat } from "node:fs/promises";
 import { createServer } from "node:http";
-import { dirname, join, basename, extname } from "node:path";
+import { dirname, join, extname } from "node:path";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import {
@@ -21,6 +21,7 @@ import {
   resizeForPreview,
   resizeForWidget,
 } from "./instagram-helper.js";
+import { getDraftForPublish, publishDraftFromDb } from "./publish-draft.js";
 import { supabaseServiceRoleKey, supabaseUrl } from "./supabase-env.js";
 
 const BUCKET = IG_BUCKET;
@@ -129,45 +130,44 @@ async function listAllStoragePaths(supabase) {
   return paths;
 }
 
-async function safeDirCount(dir) {
-  try { return (await readdir(dir)).length; } catch { return 0; }
+// ─── DB Helpers ───────────────────────────────────────────────────────────────
+
+async function listDrafts(supabase, projectUrl) {
+  const { data, error } = await supabase
+    .from("drafts")
+    .select("id, name, storage_path, caption, scene, image_model, caption_model, created_at")
+    .eq("status", "draft")
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map(row => ({
+    id: row.name,
+    filename: `${row.name}.png`,
+    imageUrl: publicObjectUrl(projectUrl, row.storage_path),
+    meta: {
+      caption: row.caption,
+      scene: row.scene,
+      imageModel: row.image_model,
+      captionModel: row.caption_model,
+      generatedAt: row.created_at,
+    },
+  }));
 }
 
-// ─── Content Filesystem Helpers ───────────────────────────────────────────────
-
-async function listDrafts() {
-  let files;
-  try { files = await readdir(join(CONTENT_DIR, "drafts")); } catch { return []; }
-  const pngs = files.filter(f => f.endsWith(".png") && !f.endsWith(".background.png")).sort();
-  const drafts = [];
-  for (const filename of pngs) {
-    const name = basename(filename, ".png");
-    let meta = null;
-    try {
-      const raw = await readFile(join(CONTENT_DIR, "meta", `${name}.json`), "utf8");
-      meta = JSON.parse(raw);
-    } catch {}
-    drafts.push({ id: name, filename, meta });
-  }
-  return drafts;
-}
-
-async function listPrompts() {
-  let files;
-  try { files = await readdir(join(CONTENT_DIR, "prompts")); } catch { return []; }
-  const jsons = files.filter(f => f.endsWith(".json") && !f.includes(".image-prompt")).sort();
-  const prompts = [];
-  for (const filename of jsons) {
-    const name = basename(filename, ".json");
-    try {
-      const raw = await readFile(join(CONTENT_DIR, "prompts", filename), "utf8");
-      const data = JSON.parse(raw);
-      let imagePrompt = null;
-      try { imagePrompt = await readFile(join(CONTENT_DIR, "prompts", `${name}.image-prompt.txt`), "utf8"); } catch {}
-      prompts.push({ id: name, filename, data, imagePrompt });
-    } catch {}
-  }
-  return prompts;
+async function listPrompts(supabase) {
+  const { data, error } = await supabase
+    .from("prompts")
+    .select("id, name, scene, image_prompt, created_at")
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map(row => ({
+    id: row.name,
+    filename: `${row.name}.json`,
+    data: {
+      scene: row.scene,
+      generatedAt: row.created_at,
+    },
+    imagePrompt: row.image_prompt,
+  }));
 }
 
 async function resolveTargetsWithInstaloader(targets) {
@@ -254,26 +254,25 @@ async function main() {
           { count: totalPosts },
           activeResult,
           storagePaths,
-          draftsCount,
-          promptsCount,
-          discardedCount,
+          draftsResult,
+          promptsResult,
+          discardedResult,
         ] = await Promise.all([
           supabase.from("posts").select("*", { count: "exact", head: true }),
           supabase.from("posts").select("*", { count: "exact", head: true }).eq("status", "active"),
           listAllStoragePaths(supabase),
-          safeDirCount(join(CONTENT_DIR, "drafts")),
-          safeDirCount(join(CONTENT_DIR, "prompts")),
-          safeDirCount(join(CONTENT_DIR, "discarded")),
+          supabase.from("drafts").select("*", { count: "exact", head: true }).eq("status", "draft"),
+          supabase.from("prompts").select("*", { count: "exact", head: true }),
+          supabase.from("drafts").select("*", { count: "exact", head: true }).eq("status", "discarded"),
         ]);
-        // If status column doesn't exist yet, activeResult.error is set — fall back to total
         const activePosts = activeResult.error ? (totalPosts ?? 0) : (activeResult.count ?? 0);
         json(res, 200, {
           totalPosts: totalPosts ?? 0,
           activePosts,
           storageFiles: storagePaths.length,
-          drafts: Math.floor(draftsCount / 3),
-          prompts: Math.floor(promptsCount / 2),
-          discarded: Math.floor(discardedCount / 2),
+          drafts: draftsResult.error ? 0 : (draftsResult.count ?? 0),
+          prompts: promptsResult.error ? 0 : (promptsResult.count ?? 0),
+          discarded: discardedResult.error ? 0 : (discardedResult.count ?? 0),
         });
       } catch (e) {
         json(res, 500, { error: e.message });
@@ -329,7 +328,7 @@ async function main() {
 
     if (req.method === "GET" && url.pathname === "/api/drafts") {
       try {
-        json(res, 200, { drafts: await listDrafts() });
+        json(res, 200, { drafts: await listDrafts(supabase, projectUrl) });
       } catch (e) {
         json(res, 500, { error: e.message });
       }
@@ -340,12 +339,25 @@ async function main() {
       const payload = await readBody(req);
       if (!payload) { json(res, 400, { error: "Invalid JSON" }); return; }
 
+      const status = payload.status === "inactive" ? "inactive" : "active";
+
+      // Single draft from review UI — inline, no background job.
+      if (payload.id && !payload.all && !payload.count) {
+        try {
+          const draft = await getDraftForPublish(supabase, payload.id);
+          const storagePath = await publishDraftFromDb(supabase, draft, { status });
+          json(res, 200, { success: true, id: payload.id, storagePath, status });
+        } catch (e) {
+          json(res, e.message?.startsWith("Draft not found") ? 404 : 500, { error: e.message });
+        }
+        return;
+      }
+
       let args = [];
       if (payload.all) args = ["--all"];
       else if (payload.count) args = ["--count", String(payload.count)];
-      else if (payload.id) args = ["--id", payload.id];
       else { json(res, 400, { error: "Provide all, count, or id" }); return; }
-      if (payload.status === "inactive") args = [...args, "--status", "inactive"];
+      if (status === "inactive") args = [...args, "--status", "inactive"];
 
       const jobId = spawnJob("publish", "publish.js", args);
       json(res, 200, { jobId });
@@ -356,14 +368,25 @@ async function main() {
       const payload = await readBody(req);
       if (!payload) { json(res, 400, { error: "Invalid JSON" }); return; }
 
-      let args = [];
-      if (payload.all) args = ["--all"];
-      else if (payload.count) args = ["--count", String(payload.count)];
-      else if (payload.id) args = ["--id", payload.id];
-      else { json(res, 400, { error: "Provide all, count, or id" }); return; }
-
-      const jobId = spawnJob("discard", "discard.js", args);
-      json(res, 200, { jobId });
+      try {
+        let query = supabase.from("drafts").update({ status: "discarded" });
+        if (payload.all) {
+          query = query.eq("status", "draft");
+        } else if (payload.id) {
+          query = query.eq("name", payload.id).eq("status", "draft");
+        } else {
+          json(res, 400, { error: "Provide all or id" }); return;
+        }
+        const { data, error } = await query.select("name");
+        if (error) throw error;
+        if (!data?.length) {
+          json(res, 404, { error: payload.id ? `Draft not found: ${payload.id}` : "No drafts matched" });
+          return;
+        }
+        json(res, 200, { success: true, updated: data.length, ids: data.map(row => row.name) });
+      } catch (e) {
+        json(res, 500, { error: e.message });
+      }
       return;
     }
 
@@ -371,7 +394,34 @@ async function main() {
 
     if (req.method === "GET" && url.pathname === "/api/prompts") {
       try {
-        json(res, 200, { prompts: await listPrompts() });
+        json(res, 200, { prompts: await listPrompts(supabase) });
+      } catch (e) {
+        json(res, 500, { error: e.message });
+      }
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/prompts/delete") {
+      const payload = await readBody(req);
+      if (!payload) { json(res, 400, { error: "Invalid JSON" }); return; }
+
+      const ids = Array.isArray(payload.ids)
+        ? payload.ids.filter(id => typeof id === "string" && id.trim())
+        : [];
+      if (!ids.length) { json(res, 400, { error: "ids[] required" }); return; }
+
+      try {
+        const { data, error } = await supabase
+          .from("prompts")
+          .delete()
+          .in("name", ids)
+          .select("name");
+        if (error) throw error;
+        if (!data?.length) {
+          json(res, 404, { error: "No prompts matched" });
+          return;
+        }
+        json(res, 200, { success: true, deleted: data.length, ids: data.map(row => row.name) });
       } catch (e) {
         json(res, 500, { error: e.message });
       }
@@ -392,9 +442,11 @@ async function main() {
       if (payload.captionModel) args.push("--caption-model", payload.captionModel);
       if (payload.size) args.push("--size", payload.size);
       if (payload.dryRun) args.push("--dry-run");
-      if (Array.isArray(payload.promptIds) && payload.promptIds.length)
+      if (Array.isArray(payload.promptIds) && payload.promptIds.length) {
         args.push("--prompt-ids", payload.promptIds.join(","));
+      }
 
+      console.log(`[generate] ${args.join(" ") || "(default random generation)"}`);
       const jobId = spawnJob("generate", "generate.js", args);
       json(res, 200, { jobId });
       return;
