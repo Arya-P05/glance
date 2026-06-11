@@ -21,6 +21,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ paths }),
     }),
+  setImageStatus: (paths: string[], status: "active" | "inactive") =>
+    request<{ updated: number; status: string }>("/api/images/set-status", {
+      method: "POST",
+      body: JSON.stringify({ paths, status }),
+    }),
 
   drafts: () => request<{ drafts: Draft[] }>("/api/drafts"),
   publishDraft: (opts: { id?: string; all?: boolean; count?: number }) =>
@@ -68,7 +73,12 @@ export interface Stats {
 }
 
 export interface StorageImage {
+  id: string;
+  instagramId: string;
   storagePath: string;
+  caption: string | null;
+  createdAt: string;
+  status: "active" | "inactive";
   publicUrl: string;
 }
 
