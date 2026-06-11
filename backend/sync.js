@@ -7,6 +7,7 @@ import { createClient } from "@supabase/supabase-js";
 import { chromium } from "playwright";
 import { readFile } from "node:fs/promises";
 import sharp from "sharp";
+import { supabaseServiceRoleKey, supabaseUrl } from "./supabase-env.js";
 
 const BUCKET = "instagram-posts";
 const PROFILE_URL = (username) => `https://www.instagram.com/${username}/`;
@@ -227,8 +228,8 @@ function extFromUrl(url) {
 
 async function main() {
   const username = env("INSTAGRAM_USERNAME");
-  const supabaseUrl = env("SUPABASE_URL");
-  const supabaseKey = env("SUPABASE_SERVICE_ROLE_KEY");
+  const projectUrl = supabaseUrl();
+  const supabaseKey = supabaseServiceRoleKey();
   const maxPosts = process.env.MAX_POSTS ? parseInt(process.env.MAX_POSTS, 10) : null;
   const bulk = process.argv.includes("--bulk");
   const headless = parseBool(process.env.HEADLESS, true);
@@ -247,7 +248,7 @@ async function main() {
     return instagramSessionIdRaw;
   })();
 
-  const supabase = createClient(supabaseUrl, supabaseKey);
+  const supabase = createClient(projectUrl, supabaseKey);
   const profileUrl = PROFILE_URL(username);
   const refreshExisting = parseBool(process.env.REFRESH_EXISTING, false);
 
