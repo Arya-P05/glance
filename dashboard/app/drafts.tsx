@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import {
   View, Text, ScrollView, StyleSheet, Image, Pressable, ActivityIndicator,
 } from "react-native";
+import { NavArrowLeft, NavArrowRight, RefreshDouble, Trash } from "iconoir-react-native";
 import { API_BASE, api, Draft } from "../lib/api";
 import { Btn } from "../components/Btn";
 import { C, S } from "../lib/theme";
@@ -133,14 +134,14 @@ export default function DraftsScreen() {
             style={[styles.navArrow, reviewIdx === 0 && styles.navArrowDisabled]}
             disabled={reviewIdx === 0}
           >
-            <Text style={styles.navArrowText}>‹</Text>
+            <NavArrowLeft color={C.textSecondary} width={16} height={16} />
           </Pressable>
           <Pressable
             onPress={() => setReviewIdx(i => Math.min(drafts.length - 1, i + 1))}
             style={[styles.navArrow, reviewIdx === drafts.length - 1 && styles.navArrowDisabled]}
             disabled={reviewIdx === drafts.length - 1}
           >
-            <Text style={styles.navArrowText}>›</Text>
+            <NavArrowRight color={C.textSecondary} width={16} height={16} />
           </Pressable>
         </View>
 
@@ -171,8 +172,8 @@ export default function DraftsScreen() {
             {caption ? (
               <View style={styles.metaSection}>
                 <Text style={styles.metaLabel}>Caption</Text>
-                <Text style={styles.captionSmall}>{caption.smallText}</Text>
-                <Text style={styles.captionBig}>{caption.bigText}</Text>
+                <Text style={styles.captionLine}>{caption.smallText}</Text>
+                <Text style={styles.captionLine}>{caption.bigText}</Text>
               </View>
             ) : (
               <Text style={styles.metaMissing}>No caption</Text>
@@ -211,8 +212,9 @@ export default function DraftsScreen() {
           <View style={{ flex: 1 }} />
           <ActionKey label="Inactive" keyHint="I" onPress={saveInactiveCurrent} loading={busy} variant="outline" />
           <ActionKey label="Publish" keyHint="P" onPress={publishCurrent} loading={busy} variant="primary" />
-          <ActionKey label="Skip" keyHint="S" onPress={skipCurrent} variant="ghost" />
-          <ActionKey label="🗑" keyHint="D" onPress={discardCurrent} loading={busy} variant="danger" iconOnly />
+          <ActionKey label="Skip" keyHint="S" onPress={skipCurrent} variant="outline" />
+          <ActionKey keyHint="D" onPress={discardCurrent} loading={busy} variant="danger"
+            icon={<Trash color="#fff" width={20} height={20} strokeWidth={1.8} />} />
           <View style={{ flex: 1 }} />
         </View>
       </View>
@@ -234,7 +236,7 @@ export default function DraftsScreen() {
         <Pressable onPress={load} style={styles.refreshBtn} disabled={loading}>
           {loading
             ? <ActivityIndicator size="small" color={C.textMuted} />
-            : <Text style={styles.refreshIcon}>↺</Text>
+            : <RefreshDouble color={C.textSecondary} width={16} height={16} />
           }
         </Pressable>
       </View>
@@ -265,11 +267,11 @@ export default function DraftsScreen() {
                 <View style={styles.cardInfo}>
                   {caption ? (
                     <>
-                      <Text style={styles.captionSmall}>{caption.smallText}</Text>
-                      <Text style={styles.captionBig} numberOfLines={2}>{caption.bigText}</Text>
+                      <Text style={styles.gridCaption}>{caption.smallText}</Text>
+                      <Text style={[styles.gridCaption, { fontWeight: "600" }]} numberOfLines={2}>{caption.bigText}</Text>
                     </>
                   ) : (
-                    <Text style={styles.captionSmall}>No caption</Text>
+                    <Text style={styles.gridCaption}>No caption</Text>
                   )}
                   {draft.meta?.scene?.subject && (
                     <Text style={styles.scene} numberOfLines={1}>
@@ -289,14 +291,24 @@ export default function DraftsScreen() {
 
 // Large action button with a keyboard hint badge
 function ActionKey({
-  label, keyHint, onPress, loading, variant = "ghost", iconOnly = false,
+  label, keyHint, onPress, loading, variant = "outline", icon,
 }: {
-  label: string; keyHint: string; onPress: () => void;
-  loading?: boolean; variant?: "primary" | "outline" | "ghost" | "danger"; iconOnly?: boolean;
+  label?: string; keyHint: string; onPress: () => void;
+  loading?: boolean; variant?: "primary" | "outline" | "ghost" | "danger";
+  icon?: React.ReactNode;
 }) {
-  const bg = variant === "primary" ? C.accent : variant === "danger" ? C.danger : variant === "outline" ? "transparent" : "transparent";
-  const textColor = variant === "primary" ? C.bg : variant === "danger" ? "#fff" : C.textSecondary;
-  const borderColor = variant === "outline" ? C.border : variant === "primary" ? C.accent : variant === "danger" ? C.danger : "transparent";
+  const bg =
+    variant === "primary" ? C.accent :
+    variant === "danger"  ? C.danger :
+    C.surface;
+  const textColor =
+    variant === "primary" ? C.bg :
+    variant === "danger"  ? "#fff" :
+    C.textSecondary;
+  const borderColor =
+    variant === "primary" ? C.accent :
+    variant === "danger"  ? C.danger :
+    C.border;
 
   return (
     <Pressable
@@ -304,7 +316,7 @@ function ActionKey({
       disabled={loading}
       style={[akStyles.btn, { backgroundColor: bg, borderColor, opacity: loading ? 0.5 : 1 }]}
     >
-      <Text style={[akStyles.label, { color: textColor, fontSize: iconOnly ? 22 : 16 }]}>{label}</Text>
+      {icon ?? <Text style={[akStyles.label, { color: textColor }]}>{label}</Text>}
       <View style={akStyles.hint}>
         <Text style={akStyles.hintText}>{keyHint}</Text>
       </View>
@@ -359,7 +371,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.border,
   },
-  refreshIcon: { color: C.textSecondary, fontSize: 16 },
+  refreshIcon: { color: C.textSecondary, fontSize: 16 }, // kept as fallback
   error: { color: C.danger, padding: 16 },
 
   // Grid
@@ -381,8 +393,8 @@ const styles = StyleSheet.create({
   },
   img: { width: "100%", height: 200 },
   cardInfo: { padding: 10, gap: 2 },
-  captionSmall: { color: C.textSecondary, fontSize: 11, fontWeight: "300" },
-  captionBig: { color: C.textPrimary, fontSize: 14, fontWeight: "700" },
+  captionLine: { color: C.textPrimary, fontSize: 13, fontWeight: "500", lineHeight: 19 },
+  gridCaption: { color: C.textSecondary, fontSize: 12, lineHeight: 17 },
   scene: { color: C.textMuted, fontSize: 10, marginTop: 2 },
 
   // Review header
@@ -415,7 +427,6 @@ const styles = StyleSheet.create({
     borderColor: C.border,
   },
   navArrowDisabled: { opacity: 0.3 },
-  navArrowText: { color: C.textPrimary, fontSize: 20, lineHeight: 24 },
 
   // Review body
   reviewBody: {

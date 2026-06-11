@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Modal } from "react-native";
+import { RefreshDouble, MoreHoriz } from "iconoir-react-native";
 import { useRouter } from "expo-router";
 import { api, Prompt } from "../lib/api";
 import { Btn } from "../components/Btn";
@@ -90,7 +91,7 @@ export default function PromptsScreen() {
         <Pressable onPress={load} style={styles.refreshBtn} disabled={loading}>
           {loading
             ? <ActivityIndicator size="small" color={C.textMuted} />
-            : <Text style={styles.refreshIcon}>↺</Text>
+            : <RefreshDouble color={C.textSecondary} width={16} height={16} />
           }
         </Pressable>
       </View>
@@ -151,7 +152,7 @@ export default function PromptsScreen() {
                   onPress={e => { e.stopPropagation?.(); setExpanded(p.id); }}
                   style={styles.detailBtn}
                 >
-                  <Text style={styles.detailBtnText}>···</Text>
+                  <MoreHoriz color={C.textSecondary} width={18} height={18} />
                 </Pressable>
               </Pressable>
             </View>
@@ -298,7 +299,7 @@ const styles = StyleSheet.create({
     backgroundColor: C.surfaceHigh,
     flexShrink: 0,
   },
-  detailBtnText: { color: C.textSecondary, fontSize: 14, letterSpacing: 1 },
+  detailBtnText: { color: C.textSecondary, fontSize: 14 },
 
   logArea: { paddingHorizontal: 20, paddingBottom: 20 },
 

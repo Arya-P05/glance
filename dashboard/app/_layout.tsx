@@ -1,20 +1,25 @@
 import { Stack, useRouter } from "expo-router";
-import { View, Text, StyleSheet, Pressable, Platform, useWindowDimensions, StyleSheet as RNStyleSheet } from "react-native";
+import { View, Text, StyleSheet, Pressable, Platform, useWindowDimensions } from "react-native";
 import { usePathname } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  Home, MediaImage, Frame, List, Sparks, Download, Import, Eye, Settings,
+} from "iconoir-react-native";
 import { C } from "../lib/theme";
 
-const NAV = [
-  { href: "/", label: "Overview", icon: "◉" },
-  { href: "/library", label: "Library", icon: "⊞" },
-  { href: "/drafts", label: "Drafts", icon: "✦" },
-  { href: "/prompts", label: "Prompts", icon: "☰" },
-  { href: "/generate", label: "Generate", icon: "✺" },
-  { href: "/scrape", label: "Scrape", icon: "↓" },
-  { href: "/import", label: "Import", icon: "⊕" },
-  { href: "/preview", label: "Preview", icon: "◻" },
-  { href: "/maintenance", label: "Maintenance", icon: "⚙" },
-] as const;
+type NavIcon = React.ComponentType<{ color?: string; width?: number; height?: number; strokeWidth?: number }>;
+
+const NAV: { href: string; label: string; Icon: NavIcon }[] = [
+  { href: "/",           label: "Overview",    Icon: Home },
+  { href: "/library",    label: "Library",     Icon: MediaImage },
+  { href: "/drafts",     label: "Drafts",      Icon: Frame },
+  { href: "/prompts",    label: "Prompts",     Icon: List },
+  { href: "/generate",   label: "Generate",    Icon: Sparks },
+  { href: "/scrape",     label: "Scrape",      Icon: Download },
+  { href: "/import",     label: "Import",      Icon: Import },
+  { href: "/preview",    label: "Preview",     Icon: Eye },
+  { href: "/maintenance",label: "Maintenance", Icon: Settings },
+];
 
 function Sidebar() {
   const pathname = usePathname();
@@ -28,9 +33,8 @@ function Sidebar() {
 
       <View style={styles.nav}>
         {NAV.map(item => {
-          const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href as string);
+          const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
           const navStyle = StyleSheet.flatten([styles.navItem, active ? styles.navItemActive : null]);
-          const iconStyle = StyleSheet.flatten([styles.navIcon, active ? styles.navIconActive : null]);
           const labelStyle = StyleSheet.flatten([styles.navLabel, active ? styles.navLabelActive : null]);
           return (
             <Pressable
@@ -38,7 +42,12 @@ function Sidebar() {
               style={navStyle}
               onPress={() => router.push(item.href as any)}
             >
-              <Text style={iconStyle}>{item.icon}</Text>
+              <item.Icon
+                color={active ? C.accent : C.textMuted}
+                width={16}
+                height={16}
+                strokeWidth={1.8}
+              />
               <Text style={labelStyle}>{item.label}</Text>
             </Pressable>
           );
@@ -83,11 +92,7 @@ export default function RootLayout() {
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    flexDirection: "row",
-    backgroundColor: C.bg,
-  },
+  root: { flex: 1, flexDirection: "row", backgroundColor: C.bg },
   sidebar: {
     width: C.sidebarW,
     backgroundColor: C.surface,
@@ -100,7 +105,6 @@ const styles = StyleSheet.create({
   brand: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
     paddingHorizontal: 16,
     marginBottom: 28,
   },
@@ -116,8 +120,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   navItemActive: { backgroundColor: C.surfaceHigh },
-  navIcon: { color: C.textMuted, fontSize: 14, width: 20, textAlign: "center" },
-  navIconActive: { color: C.accent },
   navLabel: { color: C.textSecondary, fontSize: 13, fontWeight: "500" },
   navLabelActive: { color: C.textPrimary },
 
@@ -130,8 +132,5 @@ const styles = StyleSheet.create({
   footerDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: C.success },
   footerText: { color: C.textMuted, fontSize: 11 },
 
-  content: {
-    flex: 1,
-    backgroundColor: C.bg,
-  },
+  content: { flex: 1, backgroundColor: C.bg },
 });
