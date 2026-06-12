@@ -30,6 +30,11 @@ export function RemoteImage({ uri, style, resizeMode = "cover", raw = false, web
         objectFit: resizeMode,
         display: "block",
         backgroundColor: flattened.backgroundColor,
+        position: flattened.position as React.CSSProperties["position"],
+        left: flattened.left,
+        top: flattened.top,
+        right: flattened.right,
+        bottom: flattened.bottom,
         ...webStyle,
       },
     });

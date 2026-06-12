@@ -1,25 +1,32 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { RemoteImage } from "../RemoteImage";
+import { PosterPreview } from "../PosterPreview";
+import { CaptionLayout, CaptionText } from "../../lib/captionLayout";
 
 interface Props {
   imageUri?: string;
-  caption?: { smallText: string; bigText: string } | null;
+  caption?: CaptionText | null;
+  posterPreview?: {
+    backgroundUri: string;
+    caption: CaptionText;
+    layout?: Partial<CaptionLayout> | null;
+  };
 }
 
-export function WidgetLarge({ imageUri, caption }: Props) {
+export function WidgetLarge({ imageUri, caption, posterPreview }: Props) {
   return (
     <View style={styles.container}>
-      {imageUri ? (
-        <>
-          <RemoteImage uri={imageUri} style={styles.image} resizeMode="cover" />
-          {caption && (
-            <View style={styles.overlay}>
-              <Text style={styles.small}>{caption.smallText}</Text>
-              <Text style={styles.big}>{caption.bigText}</Text>
-            </View>
-          )}
-        </>
+      {posterPreview ? (
+        <PosterPreview
+          backgroundUri={posterPreview.backgroundUri}
+          caption={posterPreview.caption}
+          layout={posterPreview.layout}
+          width={329}
+          height={329}
+        />
+      ) : imageUri ? (
+        <RemoteImage uri={imageUri} style={styles.image} resizeMode="cover" />
       ) : (
         <View style={styles.placeholder}>
           <Text style={styles.placeholderIcon}>🖼</Text>

@@ -32,6 +32,18 @@ export const api = {
     request<PublishDraftResult>("/api/drafts/publish", { method: "POST", body: JSON.stringify(opts) }),
   discardDraft: (opts: { id?: string; all?: boolean }) =>
     request<{ success: boolean; updated: number; ids: string[] }>("/api/drafts/discard", { method: "POST", body: JSON.stringify(opts) }),
+  renderDraftCaption: (opts: {
+    id: string;
+    layout: { xRatio: number; yRatio: number; textColor: "#050505" | "#ffffff" };
+    caption?: { smallText: string; bigText: string };
+  }) =>
+    request<{
+      success: boolean;
+      id: string;
+      imageUrl: string;
+      caption: { smallText: string; bigText: string };
+      captionLayout: { xRatio: number; yRatio: number; textColor: string | null };
+    }>("/api/drafts/render-caption", { method: "POST", body: JSON.stringify(opts) }),
 
   prompts: () => request<{ prompts: Prompt[] }>("/api/prompts"),
   deletePrompts: (ids: string[]) =>
@@ -87,9 +99,16 @@ export interface StorageImage {
   publicUrl: string;
 }
 
+export interface CaptionLayout {
+  xRatio: number;
+  yRatio: number;
+  textColor: "#050505" | "#ffffff" | null;
+}
+
 export interface DraftMeta {
   filename?: string;
   caption?: { smallText: string; bigText: string };
+  captionLayout?: CaptionLayout | null;
   scene?: Record<string, string>;
   generatedAt?: string;
   imageModel?: string;
@@ -102,6 +121,7 @@ export interface Draft {
   id: string;
   filename: string;
   imageUrl: string;
+  rawImageUrl?: string | null;
   meta: DraftMeta | null;
 }
 

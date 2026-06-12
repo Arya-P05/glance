@@ -10,8 +10,10 @@ import { WidgetSmall } from "../components/iPhoneMockup/WidgetSmall";
 import { WidgetMedium } from "../components/iPhoneMockup/WidgetMedium";
 import { WidgetLarge } from "../components/iPhoneMockup/WidgetLarge";
 import { RemoteImage, previewImageUrl } from "../components/RemoteImage";
+import { CaptionEditor } from "../components/CaptionEditor";
+import { CaptionLayout } from "../lib/captionLayout";
 
-type Screen = "grid" | "review";
+type Screen = "grid" | "review" | "edit";
 
 const CELL = 240;
 
@@ -23,6 +25,12 @@ function draftImageUri(draft: Draft, width: number) {
 function draftGridImageUri(draft: Draft) {
   if (draft.imageUrl) return draft.imageUrl;
   return `${API_BASE}/content/drafts/${draft.filename}`;
+}
+
+function draftBackgroundUri(draft: Draft) {
+  if (draft.rawImageUrl) return draft.rawImageUrl;
+  const base = draft.filename.replace(/\.png$/i, "");
+  return `${API_BASE}/content/backgrounds/${base}.png`;
 }
 
 export default function DraftsScreen() {
@@ -110,7 +118,55 @@ export default function DraftsScreen() {
     advance(drafts);
   }
 
-  // Keyboard shortcuts for review mode (i=inactive, p=publish, s=skip, d=delete)
+  function openEditCurrent() {
+    const draft = drafts[reviewIdx];
+    if (!draft?.meta?.caption || busy) return;
+    setScreen("edit");
+  }
+
+  async function applyCaptionLayout(layout: CaptionLayout) {
+    const draft = drafts[reviewIdx];
+    if (!draft?.meta?.caption) return;
+
+    let result;
+    try {
+      result = await api.renderDraftCaption({
+        id: draft.id,
+        layout,
+        caption: draft.meta.caption,
+      });
+    } catch (e: any) {
+      const msg = e?.message === "Not found"
+        ? "Caption save failed — restart the backend admin server (npm run admin in backend/) and try again."
+        : e?.message ?? "Failed to save caption";
+      alert(msg);
+      throw e;
+    }
+
+    const bustedUrl = `${result.imageUrl}${result.imageUrl.includes("?") ? "&" : "?"}t=${Date.now()}`;
+    setDrafts((prev) =>
+      prev.map((d) =>
+        d.id === draft.id
+          ? {
+              ...d,
+              imageUrl: bustedUrl,
+              meta: {
+                ...d.meta,
+                caption: result.caption,
+                captionLayout: {
+                  xRatio: result.captionLayout.xRatio,
+                  yRatio: result.captionLayout.yRatio,
+                  textColor: result.captionLayout.textColor === "#ffffff" ? "#ffffff" : "#050505",
+                },
+              },
+            }
+          : d
+      )
+    );
+    setScreen("review");
+  }
+
+  // Keyboard shortcuts for review mode (i=inactive, p=publish, s=skip, d=delete, e=edit)
   useEffect(() => {
     if (screen !== "review" || typeof document === "undefined") return;
     function onKey(e: KeyboardEvent) {
@@ -119,10 +175,50 @@ export default function DraftsScreen() {
       else if (e.key === "p") publishCurrent();
       else if (e.key === "s") skipCurrent();
       else if (e.key === "d") discardCurrent();
+      else if (e.key === "e") openEditCurrent();
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [screen, reviewIdx, drafts, busy]);
+
+  // ── Caption editor ─────────────────────────────────────────────────────────
+  if (screen === "edit") {
+    const draft = drafts[reviewIdx];
+    const caption = draft?.meta?.caption;
+    if (!draft || !caption) {
+      return (
+        <View style={styles.root}>
+          <View style={styles.reviewHeader}>
+            <Pressable onPress={() => setScreen("review")} style={styles.backBtn}>
+              <Text style={styles.backBtnText}>← Review</Text>
+            </Pressable>
+            <Text style={S.body}>No caption to edit</Text>
+          </View>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.root}>
+        <View style={styles.reviewHeader}>
+          <Pressable onPress={() => setScreen("review")} style={styles.backBtn}>
+            <Text style={styles.backBtnText}>← Review</Text>
+          </Pressable>
+          <Text style={styles.reviewCounter}>Edit caption</Text>
+          <Text style={[S.body, { color: C.textMuted }]}>
+            {reviewIdx + 1} / {drafts.length}
+          </Text>
+        </View>
+        <CaptionEditor
+          backgroundUri={draftBackgroundUri(draft)}
+          caption={caption}
+          initialLayout={draft.meta?.captionLayout}
+          onApply={applyCaptionLayout}
+          onCancel={() => setScreen("review")}
+        />
+      </View>
+    );
+  }
 
   // ── Review mode ────────────────────────────────────────────────────────────
   if (screen === "review") {
@@ -200,6 +296,7 @@ export default function DraftsScreen() {
                 <Text style={styles.metaLabel}>Caption</Text>
                 <Text style={styles.captionLine}>{caption.smallText}</Text>
                 <Text style={styles.captionLine}>{caption.bigText}</Text>
+                <Btn label="Edit caption" onPress={openEditCurrent} small variant="outline" />
               </View>
             ) : (
               <Text style={styles.metaMissing}>No caption</Text>
@@ -233,9 +330,12 @@ export default function DraftsScreen() {
           </View>
         </View>
 
-        {/* Action bar — keyboard: i=inactive p=publish s=skip d=delete */}
+        {/* Action bar — keyboard: e=edit i=inactive p=publish s=skip d=delete */}
         <View style={styles.actionBar}>
           <View style={{ flex: 1 }} />
+          {caption && (
+            <ActionKey label="Edit" keyHint="E" onPress={openEditCurrent} variant="outline" />
+          )}
           <ActionKey label="Inactive" keyHint="I" onPress={saveInactiveCurrent} loading={busy} variant="outline" />
           <ActionKey label="Publish" keyHint="P" onPress={publishCurrent} loading={busy} variant="primary" />
           <ActionKey label="Skip" keyHint="S" onPress={skipCurrent} variant="outline" />
