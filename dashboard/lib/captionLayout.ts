@@ -6,6 +6,9 @@ export interface CaptionLayout {
   textColor: CaptionTextColor;
 }
 
+export type CaptionLayoutInput =
+  Partial<Omit<CaptionLayout, "textColor"> & { textColor: CaptionTextColor | null }>;
+
 export interface CaptionText {
   smallText: string;
   bigText: string;
@@ -13,7 +16,7 @@ export interface CaptionText {
 
 export const DEFAULT_CAPTION_LAYOUT: CaptionLayout = {
   xRatio: 0.5,
-  yRatio: 0.36,
+  yRatio: 0.3,
   textColor: "#050505",
 };
 
@@ -22,7 +25,7 @@ export const CAPTION_LINE_GAP_RATIO = 0.02;
 
 export const CAPTION_FONT_FAMILY = "Arial Black, Arial, Helvetica, sans-serif";
 
-export function normalizeCaptionLayout(layout?: Partial<CaptionLayout> | null): CaptionLayout {
+export function normalizeCaptionLayout(layout?: CaptionLayoutInput | null): CaptionLayout {
   const xRatio = Number(layout?.xRatio);
   const yRatio = Number(layout?.yRatio);
   const textColor = layout?.textColor === "#ffffff" ? "#ffffff" : "#050505";
@@ -45,17 +48,17 @@ function fitTextSize(text: string, targetSize: number, maxWidth: number) {
 }
 
 export function captionFontSizes(frameWidth: number, caption: CaptionText) {
-  const maxTextWidth = frameWidth * 0.76;
+  const maxTextWidth = frameWidth * 0.66;
   return {
-    smallSize: fitTextSize(caption.smallText, Math.round(frameWidth * 0.034), maxTextWidth),
-    bigSize: fitTextSize(caption.bigText, Math.round(frameWidth * 0.079), maxTextWidth),
+    smallSize: fitTextSize(caption.smallText, Math.round(frameWidth * 0.024), maxTextWidth),
+    bigSize: fitTextSize(caption.bigText, Math.round(frameWidth * 0.058), maxTextWidth),
   };
 }
 
 /** Top-left caption block rect for a square frame (yRatio = top of small line). */
 export function captionBlockRect(frameSize: number, layout: CaptionLayout, caption: CaptionText) {
   const { smallSize, bigSize } = captionFontSizes(frameSize, caption);
-  const maxTextWidth = frameSize * 0.76;
+  const maxTextWidth = frameSize * 0.66;
   const centerX = frameSize * layout.xRatio;
   const topY = frameSize * layout.yRatio;
   return {

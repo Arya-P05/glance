@@ -629,10 +629,10 @@ export const EMOTIONS = [
 ];
 
 export const COPY_FORMULAS = [
-  "smile twin/bro/sis/homie, then a punchy truth",
-  "quick reminder, then hype or reassurance",
-  "stay weird/goofy/real, then it's iconic/gangsta/valid af",
-  "life update:, then we're so back / still in it",
+  "plain opener, then deadpan truth",
+  "smile/stay/remember opener, then tiny sincere payoff",
+  "small weather or feeling phrase, then clear mind / no rush / learning",
+  "group-chat line, then iconic/gangsta/real payoff",
   "defiant small line, then dreams to chase / hate's lame af",
   "through thick & thin, then i got you bro/sis",
 ];
@@ -652,17 +652,26 @@ export const REFERENCE_COPY_PAIRS = [
   ["life update:", "we're so back"],
   ["f*ck 'em,", "got dreams to chase"],
   ["i'm weird", "but i'm real tho."],
+  ["breathe deep,", "reset slowly."],
+  ["smile today,", "it helps."],
+  ["take it slow,", "no rush."],
+  ["cold air,", "clear mind."],
+  ["stay calm,", "you're learning."],
+  ["remember,", "you've come far."],
+  ["keep moving,", "it adds up."],
+  ["quick reminders,", "enjoy christmas bro."],
+  ["remember to", "f*ck their opinion."],
+  ["stay real,", "stay true twin."],
   ["smile twin,", "you're alive."],
   ["smile bro,", "u are on fire."],
   ["stay weird,", "it's gangsta."],
-  ["hey twin,", "proud of u."],
-  ["you got this,", "lowkey twin."],
-  ["keep showing up,", "it matters."],
+  ["remember,", "u've come far."],
+  ["stay goofy twin,", "it's iconic."],
+  ["stay weird,", "it's iconic."],
+  ["quick reminder,", "u are awesome."],
+  ["smile homie,", "life's awesome."],
   ["still here,", "that's everything."],
   ["rough day,", "still worthy."],
-  ["take it slow,", "no rush."],
-  ["keep moving,", "it adds up."],
-  ["remember,", "u've come far."],
   ["you're enough,", "always were."],
 ];
 
@@ -1110,7 +1119,7 @@ export function buildSceneFromArchetype(rng = Math.random, archetype = pick(POST
   ) {
     subject = `${subject} (${pick(PERSON_ETHNICITIES, rng)})`;
   } else if (archetype.subjectKind === "animal" && !subject.startsWith("a ")) {
-    subject = `a ${subject}`;
+    subject = /^(a|an)\s+/i.test(subject) ? subject : `a ${subject}`;
   }
 
   const weather = pick(archetype.weather, rng);
@@ -1150,17 +1159,17 @@ export function buildPromptWriterPrompt(brief) {
   const composition = brief.composition || brief.cameraAngle || "subject close to the lens, low camera angle, open negative space above";
   const colorDirection = brief.colorDirection || "clean early-digital blue and green color";
 
-  return `Write one extremely detailed image-generation prompt for a square Instagram moodboard poster background.
+  return `Write one image-generation prompt for a square Instagram lock-screen poster background.
 
 You are not generating the image. You are writing the final prompt that will be sent to an image model.
 
 The final image must feel like:
-- a forgotten photo from someone's camera roll
-- dreamy internet nostalgia
-- aesthetically cool, cinematic, and emotionally warm
+- a real forgotten camera-roll photo, not AI art
+- early internet nostalgia: awkward, funny, slightly blown out, imperfect
+- ugly-pretty and iconic because it feels found, not because it feels polished
 - happy, positive, and slightly goofy in a believable way
 - the situation may be surreal or staged, but every clothing item, prop, and setting detail must make visual sense together
-- high-quality grainy early-2000s digital photography, not low-resolution
+- grainy early-2000s digital photography with enough resolution to look good
 
 Core ingredients for this one unique image:
 VIBE: ${brief.vibe || brief.emotion}
@@ -1175,23 +1184,28 @@ ${propLine}
 
 Hard requirements:
 - no text, no letters, no typography, no logo, no watermark
-- the subject must look happy, joyful, goofy, peaceful, or like it is making the most of the moment
+- do not include any poster quote inside the image
+- the subject must look happy, goofy, peaceful, proud, or like it is making the most of the moment
 - if the scene has fog, snow, rain, night, or unusual weather, the subject is still visibly happy and positive
-- the subject must be large and close to camera, roughly 35-55% of image height
-- the subject must sit low in the frame with 50-80% clean negative space above it
+- the subject must sit in the lower third or lower half with 60-85% clean negative space above it
+- the subject should feel close to camera but not centered like a portrait; roughly 25-45% of image height is usually enough
 - keep the subject's face and body comfortably inside the frame; do not crop the face at the edge
-- keep the upper half simple enough for poster text: sky, blank wall, fog, snow, ocean, ceiling, or simple color field
+- keep the upper half extremely simple for later text: sky, blank wall, fog, snow, ocean, ceiling, or simple color field
 - use natural light only unless the camera style is flash
-- avoid corporate motivation, fantasy painting, 3D render, studio portrait, glossy ad, cinematic movie still, or editorial fashion shoot
+- avoid corporate motivation, fantasy painting, 3D render, studio portrait, glossy ad, cinematic movie still, editorial fashion shoot, shallow-depth product photography, or lifestyle stock photo
 - avoid clutter and avoid multiple competing subjects
 - avoid sickly green/yellow/cyan color casts; prefer natural early-digital blues, greens, warm sunlight, clean whites, or pastel sunset
 - for people: clothing and accessories must fit the setting (no bike helmets unless cycling/skating, no life jackets away from water, no random safety gear)
-- absurd animal behavior is allowed: headphones, soda bottle, rude little paw pose, sunglasses, gaming desk, or prop comedy can be great
+- absurd animal behavior is allowed when it looks like a real internet snapshot: headphones, soda bottle, rude little paw pose, sunglasses, gaming desk, or prop comedy can be great
 - if an animal uses a human-like prop or pose, make it look like a real internet meme photo, cheap edit, costume, forced perspective, or lucky candid snapshot, not glossy CGI
-- prioritize aesthetic coherence over random joke props; the image should feel like something someone would actually post because it looks cool
+- prioritize aesthetic coherence over random joke props; the image should feel like something someone would save because it looks accidentally cool
 - if any ingredients feel contradictory, reinterpret them into one coherent happy scene while preserving the core subject, action, and vibe
 
-Use a fresh, specific, non-template description. Add concrete visual details that make this exact image feel unique: pose, lens distortion, background shapes, color, texture, accidental framing, and why the subject feels happy.
+Style discipline:
+- write the prompt as a direct photo brief, not poetic marketing copy
+- use words like snapshot, cheap flash, fisheye, blown-out sky, sensor noise, soft blur, dust, JPEG artifact, accidental framing
+- do not use words like cinematic, premium, elegant, luxurious, editorial, professional, dreamy portrait, masterpiece, film still, or commercial
+- avoid over-explaining emotions; describe the visible expression and the weird little camera-roll detail
 
 Great outcome examples in spirit:
 - a happy dog huge in the foreground on a blue-sky hill
@@ -1290,7 +1304,7 @@ export function buildMotivationalPrompt(scene = buildScene()) {
     ? "Even though the weather is imperfect, the subject should look happy, positive, wholesome, and like it is making the most of the moment."
     : "The subject should look happy, positive, wholesome, and full of gentle goofy energy.";
 
-  return `Create a square motivational poster background that feels like a forgotten photo from someone's camera roll.
+  return `Create a square reference-style poster background that feels like a real forgotten photo from someone's camera roll.
 
 IMPORTANT:
 Do not add any text, lettering, caption, logo, watermark, or typography. Text will be added later.
@@ -1311,24 +1325,19 @@ Raw ${scene.camera}.
 Angle: ${scene.cameraAngle}.
 
 STYLE:
-Raw early-2000s digital photography.
-Heavy film grain.
-Visible sensor noise.
-Slight motion blur.
-Soft focus.
-Overexposed highlights.
-Natural lighting only.
-No studio lighting.
-No commercial polish.
-Authentic and imperfect.
-Dreamy internet nostalgia.
-High-quality square image with a grainy early-digital look, not low-resolution.
+Raw early-2000s digital photography, like an old uploaded camera-roll image.
+Visible sensor noise, JPEG texture, dust, soft blur, slight lens distortion.
+Blown-out highlights or crushed shadows are okay if the image still reads clearly.
+Natural lighting only unless it is a cheap flash snapshot.
+No studio lighting, no commercial polish, no editorial fashion, no cinematic movie-still look.
+Authentic, imperfect, funny, and accidentally beautiful.
+High-quality square image with grainy early-digital texture, not low-resolution.
 
 COMPOSITION:
 Square 1:1 image.
-Large negative space, 50-80% of the frame.
-Subject positioned low in frame.
-Subject should be large and close to camera, occupying roughly 35-55% of the image height.
+Large negative space, 60-85% of the frame.
+Subject positioned low in frame, lower third or lower half.
+Subject should feel close to camera while leaving a huge clean upper field for text.
 Subject should be the obvious focal point, not tiny or distant.
 Simple composition.
 Wide-angle or fisheye lens feeling.
@@ -1340,11 +1349,11 @@ The upper half should stay visually simple: sky, blank wall, fog, snow, ocean, o
 FINAL LOOK:
 Calm, hopeful, playful, gentle.
 Life is weird but things are okay.
-Dreamy internet nostalgia.
+Early internet nostalgia.
 Aesthetically cool and photographically believable.
 Every outfit and prop should make sense in the scene.
 Soft emotional impact.
-Highly shareable Instagram moodboard aesthetic.
+Something someone would save because it feels oddly iconic, not because it is polished.
 `;
 }
 
@@ -1354,31 +1363,35 @@ export function captionSignature(caption) {
 
 const EMOTION_CAPTION_EXAMPLES = {
   gentle: [
-    ["smile homie,", "life's awesome"],
+    ["smile homie,", "life's awesome."],
     ["take it slow,", "no rush."],
+    ["smile today,", "it helps."],
+    ["stay calm,", "you're learning."],
     ["through thick & thin,", "i got you bro"],
-    ["you're enough,", "always were."],
   ],
   funny: [
-    ["stay weird sis,", "it's iconic af"],
+    ["stay goofy twin,", "it's iconic."],
     ["smile twin,", "it's gangsta"],
     ["i'm weird", "but i'm real tho."],
+    ["stay weird,", "it's gangsta."],
   ],
   momentum: [
     ["f*ck 'em,", "got dreams to chase"],
     ["life update:", "we're so back"],
-    ["keep showing up,", "it matters."],
+    ["keep moving,", "it adds up."],
+    ["smile bro,", "u are on fire."],
   ],
   "self-worth": [
-    ["quick reminder,", "u are awesome"],
+    ["quick reminder,", "u are awesome."],
     ["smile bro,", "u're still in it"],
     ["unlearn the hate bro,", "it's lame af"],
     ["you're enough,", "always were."],
   ],
   perspective: [
     ["spread love,", "hate's lame af"],
-    ["remember,", "u've come far."],
-    ["still here,", "that's everything."],
+    ["remember,", "you've come far."],
+    ["cold air,", "clear mind."],
+    ["breathe deep,", "reset slowly."],
   ],
 };
 
@@ -1399,26 +1412,31 @@ export function buildCaptionPrompt(scene, { recentCaptions = [], attempt = 0 } =
       ? "\nLast attempt was repeated or off-tone. Write a fresh original quote.\n"
       : "";
 
-  return `Write one short poster quote for a motivational moodboard.
+  return `Write one tiny two-line caption for a reference-style internet poster.
 
-Voice — text like a real friend, NOT a therapist or brand:
+Voice:
 - lowercase always
-- use: twin, bro, sis, homie, u, ur, u're, tho, af, lowkey
-- casual internet slang is good ("it's gangsta", "iconic af", "lame af", "we're so back")
-- warm, defiant, funny, sincere — group chat hype OR quiet sincere (e.g. "you're enough, always were.")
+- text like a real friend, not a therapist or brand
+- plain, deadpan, tiny, meme-caption energy
+- casual slang is ok when it sounds natural ("it's gangsta", "iconic", "lame af", "we're so back")
+- warm, defiant, funny, sincere — group chat hype OR quiet sincere
 - mild edge ok (e.g. "f*ck 'em," "hate's lame af") but never cruel or mean-spirited
-- NEVER: corporate speak, therapy clichés, hustle culture, "believe in yourself", "main character", explaining the photo
-- NEVER: "hey you", "heads up", "you're doing great/bananas/amazing", "just wanted to say", "friendly reminder", random food metaphors, multiple ??? or !!!
-- NEVER: vague wellness fragments ("quiet moments", "gentle reminder", "in this moment", "you're enough today") — both lines must connect like a real text
+- do NOT use "hey", "legend", "champ", "lowkey", "vibe", "vibes", "you got this", or "you're doing..."
+- do NOT use food metaphors, brand pep-talk, corporate motivation, therapy clichés, hustle language, "believe in yourself", "main character", or photo descriptions
+- do NOT write vague wellness fragments ("quiet moments", "gentle reminder", "in this moment", "you're enough today")
 
 Structure (${scene.copyFormula}):
-- smallText: 2-5 words — opener with comma or colon (e.g. "smile twin," / "life update:" / "quick reminder,")
-- bigText: 2-7 words — punchy payoff (e.g. "it's gangsta" / "u are awesome" / "got dreams to chase")
+- smallText: 1-4 words, usually ending with comma or colon
+- bigText: 2-5 words, tiny payoff
+- the whole caption should feel smaller than a quote; never a sentence paragraph
 
 Gold-standard examples (match this exact energy):
 - "smile twin," / "it's gangsta"
-- "quick reminder," / "u are awesome"
-- "stay weird sis," / "it's iconic af"
+- "stay goofy twin," / "it's iconic."
+- "smile today," / "it helps."
+- "cold air," / "clear mind."
+- "remember," / "you've come far."
+- "stay calm," / "you're learning."
 - "spread love," / "hate's lame af"
 - "through thick & thin," / "i got you bro"
 - "life update:" / "we're so back"
@@ -1429,6 +1447,7 @@ Important:
 - does NOT describe the image (no animals, places, outfits, weather)
 - original wording only — not a famous quote
 - no em dashes, no long sentences
+- avoid trying to be clever; if in doubt, be plainer
 
 Poster vibe: ${scene.vibe || scene.emotion}
 Mood: ${scene.emotion}
@@ -1455,16 +1474,26 @@ const BANNED_CAPTION_PHRASES = [
   /soft heart/i,
   /strong soul/i,
   /heart open/i,
-  /breathe deep/i,
-  /reset slowly/i,
   /heads up/i,
-  /^hey you\b/i,
-  /\bhey you,/i,
+  /^hey\b/i,
+  /\bhey (you|legend|champ|twin|sis|bro|homie|night owl)\b/i,
   /banana/i,
+  /bananas/i,
+  /snack/i,
   /you're doing/i,
   /ur doing/i,
   /u are doing/i,
   /doing (great|good|amazing|well|fantastic|incredible|awesome)/i,
+  /nailing it/i,
+  /looks good/i,
+  /magic/i,
+  /on your side/i,
+  /look easy/i,
+  /making chaos/i,
+  /making magic/i,
+  /listen up/i,
+  /pause here/i,
+  /just so you know/i,
   /just wanted to/i,
   /friendly reminder/i,
   /don't forget/i,
@@ -1495,7 +1524,18 @@ const BANNED_CAPTION_PHRASES = [
   /self-care/i,
   /mindful/i,
   /mindfulness/i,
+  /\blowkey\b/i,
+  /\bvibes?\b/i,
+  /captain floof/i,
+  /night owl/i,
+  /hey legend/i,
+  /hey champ/i,
+  /real snack/i,
+  /party-hat/i,
 ];
+
+const IMAGE_DESC_WORDS =
+  /\b(cat|cats|dog|dogs|cow|cows|bird|birds|floof|pup|pups|kitten|kitty|bunny|rabbit|horse|bear|swan|duck|goose|alpaca|llama|goat|sheep|donkey|capybara|penguin|seal|otter|frog|parrot|cockatoo|turtle|hedgehog|ferret|pony|hamster|retriever|chihuahua|tabby|siamese|animal|owl|waves|ocean|beach|campsite|skateboard)\b/i;
 
 const VAGUE_SMALL_OPENERS = [
   /^quiet\b/i,
@@ -1507,26 +1547,52 @@ const VAGUE_SMALL_OPENERS = [
   /^dear\b/i,
   /^in this\b/i,
   /^take a\b/i,
-  /^breathe\b/i,
+  /^little\b/i,
+  /^just\b/i,
   /\bmoments,/i,
   /\bmoment,/i,
+  /^lowkey/i,
 ];
 
 const AFFIRMATION_TODAY =
   /(you're|you are|u are|u're) (enough|worthy|loved|valid|ok|fine|doing ok) today/i;
 
-function isOffToneCaption({ smallText, bigText }) {
+function captionDescribesImage({ smallText, bigText }, scene) {
+  const text = `${smallText} ${bigText}`;
+  if (IMAGE_DESC_WORDS.test(text)) return true;
+  if (/\b\w+\s+vibes?\b/i.test(text) && !/\b(it'?s|good|bad|main)\s+vibes?\b/i.test(text)) return true;
+  if (scene?.subject) {
+    const subjectNoun = scene.subject.replace(/^a |^an /i, "").split(/\s+/).pop();
+    if (subjectNoun && subjectNoun.length > 3 && new RegExp(`\\b${subjectNoun}s?\\b`, "i").test(text)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function isOffToneCaption({ smallText, bigText }, scene) {
   const text = `${smallText} ${bigText}`;
   if (BANNED_CAPTION_PHRASES.some((pattern) => pattern.test(text))) return true;
   if (VAGUE_SMALL_OPENERS.some((pattern) => pattern.test(smallText))) return true;
+  if (!hasReferenceCaptionShape({ smallText, bigText })) return true;
   if (AFFIRMATION_TODAY.test(bigText) || AFFIRMATION_TODAY.test(text)) return true;
   if (/\benough\b/i.test(smallText) && /\benough\b/i.test(bigText)) return true;
-  if (smallText.length > 30 || bigText.length > 34) return true;
+  if (captionDescribesImage({ smallText, bigText }, scene)) return true;
+  if (smallText.length > 24 || bigText.length > 28) return true;
   if (/[A-Z]/.test(text.replace(/\*/g, ""))) return true;
   return false;
 }
 
-export function finalizeCaption(caption, recentCaptions = []) {
+function hasReferenceCaptionShape({ smallText, bigText }) {
+  const smallWords = smallText.split(/\s+/).filter(Boolean).length;
+  const bigWords = bigText.split(/\s+/).filter(Boolean).length;
+  if (smallWords > 5 || bigWords > 6) return false;
+  if (/[?!]/.test(`${smallText} ${bigText}`)) return false;
+  if (!/[,.:]$/.test(smallText) && !/^i'm weird$|^remember to$/i.test(smallText)) return false;
+  return true;
+}
+
+export function finalizeCaption(caption, recentCaptions = [], scene = null) {
   const normalized = {
     smallText: normalizeCaptionLine(caption?.smallText || "", 34),
     bigText: normalizeCaptionLine(caption?.bigText || "", 28),
@@ -1534,7 +1600,7 @@ export function finalizeCaption(caption, recentCaptions = []) {
 
   if (!normalized.smallText || !normalized.bigText) return null;
   if (normalized.smallText.length < 2 || normalized.bigText.length < 2) return null;
-  if (isOffToneCaption(normalized)) return null;
+  if (isOffToneCaption(normalized, scene)) return null;
 
   const sig = captionSignature(normalized);
   const recentSigs = new Set(recentCaptions.map((c) => captionSignature(c)));
@@ -1605,7 +1671,7 @@ export function referenceCaptionForScene(scene) {
 
 /** @deprecated Use finalizeCaption instead — kept for older scripts */
 export function coerceReferenceCaption(caption, scene, recentCaptions = []) {
-  return finalizeCaption(caption, recentCaptions) ?? variedFallbackCaption(scene, recentCaptions);
+  return finalizeCaption(caption, recentCaptions, scene) ?? variedFallbackCaption(scene, recentCaptions);
 }
 
 function captionFromPair([smallText, bigText]) {
@@ -1641,6 +1707,8 @@ export function parseCaption(text) {
 function normalizeCaptionLine(line, maxLength) {
   return String(line)
     .trim()
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
     .replace(/\s+/g, " ")
     .toLowerCase()
     .replace(/[—–]/g, " ")
@@ -1658,7 +1726,7 @@ function escapeXml(s) {
 
 export const DEFAULT_CAPTION_LAYOUT = {
   xRatio: 0.5,
-  yRatio: 0.36,
+  yRatio: 0.3,
   textColor: null,
 };
 
@@ -1674,10 +1742,10 @@ export function normalizeCaptionLayout(layout = {}) {
 }
 
 export function captionFontSizes(width, caption) {
-  const maxTextWidth = width * 0.76;
+  const maxTextWidth = width * 0.66;
   return {
-    smallSize: fitTextSize(caption.smallText, Math.round(width * 0.034), maxTextWidth),
-    bigSize: fitTextSize(caption.bigText, Math.round(width * 0.079), maxTextWidth),
+    smallSize: fitTextSize(caption.smallText, Math.round(width * 0.024), maxTextWidth),
+    bigSize: fitTextSize(caption.bigText, Math.round(width * 0.058), maxTextWidth),
   };
 }
 

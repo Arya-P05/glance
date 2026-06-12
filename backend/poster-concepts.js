@@ -188,7 +188,7 @@ export const POSTER_ARCHETYPES = [
   },
   {
     id: "cockpit-sunset",
-    vibe: "cinematic cockpit golden hour",
+    vibe: "cockpit golden-hour candid",
     subjectKind: "person",
     subjects: ["a teenage girl in a flight suit", "a young woman in a flight suit", "a young man in a flight suit"],
     action: "smiling through cockpit glass while pastel sunset fills the sky",
@@ -980,21 +980,27 @@ export function buildSceneDirectorPrompt({ avoidSignatures = new Set(), examples
     .map((k) => `- ${k.replace(/^(family|concept):/, "")}`)
     .join("\n");
 
-  return `Invent ONE brand-new moodboard poster photo concept for a square Instagram lock-screen widget.
+  return `Invent ONE brand-new reference-quality photo concept for a square Instagram lock-screen poster.
 
 Style references (do NOT copy — match this level of specificity and vibe):
 ${exampleBlock}
 
 Each concept must feel like:
-- one specific camera-roll moment, not a stock photo category
-- unexpected but visually coherent (wholesome, ironic, meme-worthy, documentary, or moody — not generic)
-- subject large and low in frame with huge negative space above for text later
-- raw early-2000s grainy digital photo energy
+- one specific old camera-roll upload, not a stock photo category
+- iconic at thumbnail size: one subject, one joke/feeling, one clean background
+- weird or deadpan enough to feel internet-native, but visually believable
+- subject low in frame with a huge plain color field above for text later
+- raw early-2000s grainy digital photo energy: flash, fisheye, blown-out sky, cheap sensor noise, accidental framing
+- less "beautiful lifestyle shoot", more "oddly perfect saved image from the internet"
 
 Banned overused ideas (do NOT use):
 - fireworks, sparklers, outdoor basketball court at night
 - generic "plain wall" unless sunlight or a prop makes it interesting
 - parking lot unless tied to a specific road-trip or skate moment
+- cozy coffee/bookshop/diner/window scenes that read like therapy content
+- generic friend groups smiling in a lifestyle ad
+- poetic quiet-curiosity concepts where the prop is the whole idea
+- glossy fashion, cinematic, editorial, premium, commercial, or polished portrait language
 ${avoidList ? `\nRecently used — avoid similar:\n${avoidList}` : ""}
 
 Return ONLY JSON with these exact fields:
@@ -1013,7 +1019,7 @@ Return ONLY JSON with these exact fields:
   "composition": "same as cameraAngle",
   "colorDirection": "color palette phrase",
   "emotion": "one of: gentle, funny, momentum, self-worth, perspective",
-  "copyFormula": "small phrase comma, then a bigger truth"
+  "copyFormula": "one of: plain opener, then deadpan truth | smile/stay/remember opener, then tiny sincere payoff | group-chat line, then iconic/gangsta/real payoff"
 }`;
 }
 
@@ -1046,7 +1052,7 @@ export function parseDirectorScene(text) {
     composition: String(parsed.composition || parsed.cameraAngle || "subject close to the lens, low camera angle, open negative space above").trim(),
     colorDirection: String(parsed.colorDirection || "clean early-digital blue and green color").trim(),
     emotion: String(parsed.emotion || "gentle").trim(),
-    copyFormula: String(parsed.copyFormula || "small phrase comma, then a bigger truth").trim(),
+    copyFormula: String(parsed.copyFormula || "plain opener, then deadpan truth").trim(),
     source: "director",
   };
 }

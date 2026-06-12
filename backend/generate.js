@@ -257,9 +257,9 @@ async function pickUniqueScene({ client, promptModel, avoidSignatures }) {
     const roll = Math.random();
     let scene;
 
-    if (roll < 0.42) {
+    if (roll < 0.68) {
       scene = buildSceneFromArchetype();
-    } else if (roll < 0.72) {
+    } else if (roll < 0.88) {
       scene = buildScene(Math.random, { avoidSignatures });
     } else if (client) {
       try {
@@ -333,7 +333,7 @@ async function generateCaption({ client, model, scene, recentCaptions = [] }) {
       temperature: 0.7,
       input: [{ role: "user", content: [{ type: "input_text", text: lastPrompt }] }],
     });
-    const caption = finalizeCaption(parseCaption(responseText(response)), recentCaptions);
+    const caption = finalizeCaption(parseCaption(responseText(response)), recentCaptions, scene);
     if (caption) return { caption, prompt: lastPrompt };
   }
 
@@ -559,13 +559,11 @@ async function main() {
       ({ scene, prompt: scenePrompt, promptWriterPrompt, name } = source);
     } else {
       name = makeAssetName(i);
-      scene = args.dryRun
-        ? buildScene(Math.random, { avoidSignatures: avoidSceneSignatures })
-        : await pickUniqueScene({
-            client: openai,
-            promptModel: args.promptModel,
-            avoidSignatures: avoidSceneSignatures,
-          });
+      scene = await pickUniqueScene({
+        client: openai,
+        promptModel: args.promptModel,
+        avoidSignatures: avoidSceneSignatures,
+      });
       rememberScene(scene, avoidSceneSignatures);
     }
 

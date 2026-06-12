@@ -220,7 +220,7 @@ async function generateCaption({ client, model, scene, recentCaptions = [] }) {
       temperature: 0.7,
       input: [{ role: "user", content: [{ type: "input_text", text: lastPrompt }] }],
     });
-    const caption = finalizeCaption(parseCaption(responseText(response)), recentCaptions);
+    const caption = finalizeCaption(parseCaption(responseText(response)), recentCaptions, scene);
     if (caption) return { caption, prompt: lastPrompt };
   }
 
@@ -263,9 +263,9 @@ async function main() {
     const name = makeAssetName(i);
     let scene = null;
     for (let tries = 0; tries < 25; tries++) {
-      const candidate = Math.random() < 0.55 ? buildSceneFromArchetype() : buildScene(Math.random, { avoidSignatures: avoidSceneSignatures });
+      const candidate = Math.random() < 0.78 ? buildSceneFromArchetype() : buildScene(Math.random, { avoidSignatures: avoidSceneSignatures });
       const keys = sceneDedupKeys(candidate);
-      if (keys.every((key) => !avoidSceneSignatures.has(key))) {
+      if ([...keys].every((key) => !avoidSceneSignatures.has(key))) {
         scene = candidate;
         break;
       }

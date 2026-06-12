@@ -11,6 +11,7 @@ import { C, S } from "../lib/theme";
 import { CaptionTextBlock } from "./CaptionOverlay";
 import {
   CaptionLayout,
+  CaptionLayoutInput,
   CaptionText,
   DEFAULT_CAPTION_LAYOUT,
   captionBlockRect,
@@ -22,7 +23,7 @@ const EDITOR_SIZE = 420;
 type Props = {
   backgroundUri: string;
   caption: CaptionText;
-  initialLayout?: Partial<CaptionLayout> | null;
+  initialLayout?: CaptionLayoutInput | null;
   onApply: (layout: CaptionLayout) => Promise<void>;
   onCancel: () => void;
 };
@@ -193,7 +194,11 @@ const styles = StyleSheet.create({
     cursor: "grab" as any,
   },
   dragOutline: {
-    ...StyleSheet.absoluteFillObject,
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     borderWidth: 1.5,
     borderStyle: "dashed",
     borderRadius: 8,
