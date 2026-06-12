@@ -19,6 +19,8 @@ import {
   buildMotivationalPrompt,
   buildPromptWriterPrompt,
   buildScene,
+  buildSceneFromArchetype,
+  sceneDedupKeys,
   cleanGeneratedPrompt,
   finalizeCaption,
   variedFallbackCaption,
@@ -211,10 +213,11 @@ function responseText(response) {
 async function generateCaption({ client, model, scene, recentCaptions = [] }) {
   let lastPrompt = buildCaptionPrompt(scene, { recentCaptions });
 
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < 5; attempt++) {
     lastPrompt = buildCaptionPrompt(scene, { recentCaptions, attempt });
     const response = await client.responses.create({
       model,
+      temperature: 0.7,
       input: [{ role: "user", content: [{ type: "input_text", text: lastPrompt }] }],
     });
     const caption = finalizeCaption(parseCaption(responseText(response)), recentCaptions);
@@ -253,16 +256,22 @@ async function main() {
     console.log("");
   }
 
-  const usedSubjects = new Set();
+  const avoidSceneSignatures = new Set();
   const recentCaptions = [];
 
   for (let i = 1; i <= args.count; i++) {
     const name = makeAssetName(i);
-    let scene = buildScene();
-    for (let tries = 0; usedSubjects.has(scene.subject) && tries < 20; tries++) {
-      scene = buildScene();
+    let scene = null;
+    for (let tries = 0; tries < 25; tries++) {
+      const candidate = Math.random() < 0.55 ? buildSceneFromArchetype() : buildScene(Math.random, { avoidSignatures: avoidSceneSignatures });
+      const keys = sceneDedupKeys(candidate);
+      if (keys.every((key) => !avoidSceneSignatures.has(key))) {
+        scene = candidate;
+        break;
+      }
     }
-    usedSubjects.add(scene.subject);
+    if (!scene) scene = buildSceneFromArchetype();
+    for (const key of sceneDedupKeys(scene)) avoidSceneSignatures.add(key);
     const fallbackScenePrompt = buildMotivationalPrompt(scene);
     const promptWriterPrompt = buildPromptWriterPrompt(scene);
     const prefix = `[${i}/${args.count}]`;
