@@ -26,6 +26,8 @@ import {
   buildMotivationalPrompt,
   buildPromptWriterPrompt,
   buildScene,
+  buildSceneFromArchetype,
+  buildSceneFromDirector,
   cleanGeneratedPrompt,
   finalizeCaption,
   variedFallbackCaption,
@@ -34,7 +36,12 @@ import {
   parseCaption,
   saveGeneratedAsset,
   savePromptAsset,
+  sceneDedupKeys,
 } from "./motivational-generator.js";
+import {
+  buildSceneDirectorPrompt,
+  parseDirectorScene,
+} from "./poster-concepts.js";
 import { BUCKET, DRAFT_PREFIX } from "./instagram-helper.js";
 import { supabaseUrl, supabaseServiceRoleKey } from "./supabase-env.js";
 
@@ -202,6 +209,79 @@ function responseText(response) {
   return chunks.join("\n");
 }
 
+async function loadRecentScenesFromDb(supabase, limit = 40) {
+  if (!supabase) return new Set();
+  const keys = new Set();
+
+  const { data: drafts } = await supabase
+    .from("drafts")
+    .select("scene")
+    .not("scene", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  for (const row of drafts ?? []) {
+    if (row.scene && typeof row.scene === "object") {
+      for (const key of sceneDedupKeys(row.scene)) keys.add(key);
+    }
+  }
+
+  const { data: prompts } = await supabase
+    .from("prompts")
+    .select("scene")
+    .not("scene", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  for (const row of prompts ?? []) {
+    if (row.scene && typeof row.scene === "object") {
+      for (const key of sceneDedupKeys(row.scene)) keys.add(key);
+    }
+  }
+
+  return keys;
+}
+
+async function generateSceneFromDirector({ client, model, avoidSignatures }) {
+  const prompt = buildSceneDirectorPrompt({ avoidSignatures });
+  const response = await client.responses.create({
+    model,
+    input: [{ role: "user", content: [{ type: "input_text", text: prompt }] }],
+  });
+  const raw = parseDirectorScene(responseText(response));
+  return buildSceneFromDirector(raw);
+}
+
+async function pickUniqueScene({ client, promptModel, avoidSignatures }) {
+  for (let attempt = 0; attempt < 28; attempt++) {
+    const roll = Math.random();
+    let scene;
+
+    if (roll < 0.42) {
+      scene = buildSceneFromArchetype();
+    } else if (roll < 0.72) {
+      scene = buildScene(Math.random, { avoidSignatures });
+    } else if (client) {
+      try {
+        scene = await generateSceneFromDirector({ client, model: promptModel, avoidSignatures });
+      } catch {
+        scene = buildSceneFromArchetype();
+      }
+    } else {
+      scene = buildSceneFromArchetype();
+    }
+
+    const keys = sceneDedupKeys(scene);
+    if ([...keys].every((key) => !avoidSignatures.has(key))) return scene;
+  }
+
+  return buildSceneFromArchetype();
+}
+
+function rememberScene(scene, avoidSignatures) {
+  for (const key of sceneDedupKeys(scene)) avoidSignatures.add(key);
+}
+
 async function loadRecentCaptionsFromDb(supabase, limit = 30) {
   if (!supabase) return [];
   const recent = [];
@@ -246,10 +326,11 @@ async function loadRecentCaptionsFromDb(supabase, limit = 30) {
 async function generateCaption({ client, model, scene, recentCaptions = [] }) {
   let lastPrompt = buildCaptionPrompt(scene, { recentCaptions });
 
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < 5; attempt++) {
     lastPrompt = buildCaptionPrompt(scene, { recentCaptions, attempt });
     const response = await client.responses.create({
       model,
+      temperature: 0.7,
       input: [{ role: "user", content: [{ type: "input_text", text: lastPrompt }] }],
     });
     const caption = finalizeCaption(parseCaption(responseText(response)), recentCaptions);
@@ -464,7 +545,7 @@ async function main() {
     console.log("");
   }
 
-  const usedSubjects = new Set();
+  const avoidSceneSignatures = supabase ? await loadRecentScenesFromDb(supabase) : new Set();
   const recentCaptions = supabase ? await loadRecentCaptionsFromDb(supabase) : [];
 
   for (let i = 1; i <= args.count; i++) {
@@ -478,11 +559,14 @@ async function main() {
       ({ scene, prompt: scenePrompt, promptWriterPrompt, name } = source);
     } else {
       name = makeAssetName(i);
-      scene = buildScene();
-      for (let tries = 0; usedSubjects.has(scene.subject) && tries < 20; tries++) {
-        scene = buildScene();
-      }
-      usedSubjects.add(scene.subject);
+      scene = args.dryRun
+        ? buildScene(Math.random, { avoidSignatures: avoidSceneSignatures })
+        : await pickUniqueScene({
+            client: openai,
+            promptModel: args.promptModel,
+            avoidSignatures: avoidSceneSignatures,
+          });
+      rememberScene(scene, avoidSceneSignatures);
     }
 
     const fallbackPrompt = buildMotivationalPrompt(scene);
