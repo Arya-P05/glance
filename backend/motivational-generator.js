@@ -1,6 +1,13 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import sharp from "sharp";
+import {
+  POSTER_ARCHETYPES,
+  isSceneBlocked,
+  sceneDedupKeys,
+  sceneSignature,
+  settingFamily,
+} from "./poster-concepts.js";
 
 export const DEFAULT_OUTPUT_DIR = "motivational_assets";
 export const DEFAULT_IMAGE_MODEL = "gpt-image-2";
@@ -98,17 +105,18 @@ const PERSON_ROLES = [
   "wearing headphones",
 ];
 
+// Actions describe pose/behavior only — location lives in `setting`, never here.
 const WILD_ACTIONS = [
   "smiling into the camera",
   "standing way too close to the camera",
   "jumping over a tiny ramp",
-  "riding through a sunset",
-  "looking out at the ocean",
-  "running through a field",
+  "riding through golden light",
+  "looking out toward the horizon",
+  "running with pure joy",
   "sitting peacefully in sunlight",
   "standing proudly on something ordinary",
   "standing next to a tiny flower like it matters",
-  "wearing oversized headphones at a messy computer desk",
+  "wearing oversized headphones",
   "sipping from a soda bottle like a tiny menace",
   "raising one paw like it has attitude",
   "leaning toward the camera with a ridiculous grin",
@@ -118,15 +126,15 @@ const WILD_ACTIONS = [
   "wearing sunglasses with complete confidence",
   "standing beside a weirdly parked car",
   "peeking over a fence",
-  "standing under fireworks in the far background",
-  "chasing glowing sparklers in a safe open field",
-  "floating in a canoe on calm water",
-  "standing inside a fighter jet cockpit at sunset",
-  "sitting on a skateboard in an empty parking lot",
+  "watching distant fireworks",
+  "chasing glowing sparklers",
+  "floating in a canoe",
+  "sitting in a fighter jet cockpit",
+  "sitting on a skateboard",
   "holding an ice cream cone on a windy day",
-  "running down a grassy hill",
-  "standing in a kiddie pool",
-  "looking proud at a rest stop",
+  "running downhill with arms out",
+  "splashing in a kiddie pool",
+  "looking proud on a road trip",
   "walking through fog with a huge smile",
 ];
 
@@ -160,7 +168,6 @@ const MOODBOARD_SETTINGS = [
   "a desert road with pastel sky",
   "a laundromat with a blank wall",
   "a school field on a sunny day",
-  "a field under fireworks far in the background",
   "inside a fighter jet cockpit with sunset sky outside",
 ];
 
@@ -179,7 +186,6 @@ const POSITIVE_WEATHER = [
   "windy day with playful movement",
   "bright white winter light",
   "dreamy summer haze",
-  "clear night with distant fireworks",
 ];
 
 const CAMERA_TEXTURES = [
@@ -212,10 +218,34 @@ const COLOR_DIRECTIONS = [
   "clean early-digital blue and green color",
 ];
 
+const DESK_SETTINGS = [
+  "a messy bedroom gaming desk with a blank wall above",
+  "a cluttered desk under a plain wall",
+  "a sunny bedroom corner with a plain wall",
+];
+
 const INDOOR_SETTINGS = [
   "a sunny bedroom corner with a plain wall",
   "a laundromat with a blank wall",
   "a front porch with blank siding behind it",
+];
+
+const FIREWORKS_SETTINGS = [
+  "an empty outdoor basketball court at night with fireworks in the distance",
+  "a field under fireworks far in the background",
+  "a rooftop with open sky and distant fireworks",
+];
+
+const SKATE_SETTINGS = [
+  "an empty basketball court",
+  "a parking lot at golden hour",
+  "a school field on a sunny day",
+];
+
+const ROAD_TRIP_SETTINGS = [
+  "a quiet highway rest stop",
+  "a grocery store parking lot",
+  "a gas station at sunset",
 ];
 
 const COLD_SETTINGS = [
@@ -230,7 +260,6 @@ const FIELD_SETTINGS = [
   "a farm field with a low horizon",
   "a soccer field after school",
   "a sunflower field",
-  "a field under fireworks far in the background",
   "a backyard with harsh afternoon sun",
 ];
 
@@ -239,6 +268,28 @@ const BEACH_WATER_SETTINGS = [
   "a boat dock on a calm lake",
   "a ferry deck with ocean behind it",
   "a canoe in a quiet lake",
+];
+
+const FIELD_SETTINGS_NO_FIREWORKS = [
+  "a huge green hill under a bright blue sky",
+  "a farm field with a low horizon",
+  "a soccer field after school",
+  "a sunflower field",
+  "a backyard with harsh afternoon sun",
+];
+
+/** When an action implies a location family, pick a matching setting if the current one conflicts. */
+const ACTION_SETTING_HINTS = [
+  { pattern: /headphones|soda bottle|gaming desk/, settings: DESK_SETTINGS },
+  { pattern: /skateboard|tiny ramp/, settings: SKATE_SETTINGS },
+  { pattern: /canoe|horizon|ocean/, settings: BEACH_WATER_SETTINGS },
+  { pattern: /fireworks|sparkler/, settings: FIREWORKS_SETTINGS },
+  { pattern: /cockpit|fighter jet/, settings: ["inside a fighter jet cockpit with sunset sky outside"] },
+  { pattern: /road trip|rest stop|parked car/, settings: ROAD_TRIP_SETTINGS },
+  { pattern: /flower|pure joy|running with/, settings: FIELD_SETTINGS_NO_FIREWORKS },
+  { pattern: /kiddie pool|splashing/, settings: ["a backyard with harsh afternoon sun", "a front porch with blank siding behind it"] },
+  { pattern: /downhill|grassy/, settings: ["a huge green hill under a bright blue sky", "a farm field with a low horizon", "a sunflower field"] },
+  { pattern: /snowy day/, settings: COLD_SETTINGS },
 ];
 
 const SKY_COMPOSITIONS = [
@@ -578,39 +629,41 @@ export const EMOTIONS = [
 ];
 
 export const COPY_FORMULAS = [
-  "small phrase comma, then a bigger truth",
-  "remember, then a sincere thing",
-  "smile twin, then a grounded observation",
-  "quick reminder:, then a reassuring truth",
-  "two short punchy fragments",
+  "smile twin/bro/sis/homie, then a punchy truth",
+  "quick reminder, then hype or reassurance",
+  "stay weird/goofy/real, then it's iconic/gangsta/valid af",
+  "life update:, then we're so back / still in it",
+  "defiant small line, then dreams to chase / hate's lame af",
+  "through thick & thin, then i got you bro/sis",
 ];
 
 export const REFERENCE_COPY_PAIRS = [
+  ["smile twin,", "it's gangsta"],
+  ["smile bro,", "u're still in it"],
+  ["smile homie,", "life's awesome"],
+  ["quick reminder,", "u are awesome"],
+  ["stay weird sis,", "it's iconic af"],
+  ["stay goofy twin,", "it's iconic af"],
+  ["spread love,", "hate's lame af"],
+  ["unlearn the hate bro,", "it's lame af"],
+  ["unlearn the hate sis,", "it's lame af"],
+  ["through thick & thin,", "i got you bro"],
+  ["through thick & thin,", "i got you sis"],
+  ["life update:", "we're so back"],
+  ["f*ck 'em,", "got dreams to chase"],
+  ["i'm weird", "but i'm real tho."],
   ["smile twin,", "you're alive."],
   ["smile bro,", "u are on fire."],
-  ["remember,", "you've come far."],
-  ["keep moving,", "it adds up."],
-  ["take it slow,", "no rush."],
-  ["breathe deep,", "reset slowly."],
-  ["stay calm,", "you're learning."],
-  ["stay goofy twin,", "it's iconic."],
   ["stay weird,", "it's gangsta."],
-  ["stay real,", "stay true twin."],
-  ["smile today,", "it helps."],
-  ["hey twin,", "proud of you."],
-  ["you're enough,", "always were."],
-  ["still here,", "that's everything."],
-  ["small wins,", "count them."],
-  ["you're loved,", "remember that."],
-  ["rough day,", "still worthy."],
-  ["keep showing up,", "it matters."],
-  ["soft heart,", "strong soul."],
-  ["head up,", "heart open."],
-  ["you made it,", "through today."],
-  ["breathe twin,", "you're okay."],
-  ["good days,", "bad days."],
-  ["still growing,", "still going."],
+  ["hey twin,", "proud of u."],
   ["you got this,", "lowkey twin."],
+  ["keep showing up,", "it matters."],
+  ["still here,", "that's everything."],
+  ["rough day,", "still worthy."],
+  ["take it slow,", "no rush."],
+  ["keep moving,", "it adds up."],
+  ["remember,", "u've come far."],
+  ["you're enough,", "always were."],
 ];
 
 export const QUOTE_BANK = REFERENCE_COPY_PAIRS;
@@ -758,6 +811,31 @@ function sceneContext(brief) {
   return `${brief.subject} ${brief.setting} ${brief.action} ${brief.weather} ${brief.prop}`.toLowerCase();
 }
 
+function settingMatchesPool(setting, pool) {
+  const s = setting.toLowerCase();
+  return pool.some((candidate) => s === candidate.toLowerCase());
+}
+
+/** Keep `setting` as the single source of truth for WHERE; action is pose/behavior only. */
+function reconcileActionAndSetting(brief, rng = Math.random) {
+  const out = { ...brief };
+  if (out.conceptId || out.source === "archetype" || out.source === "director") {
+    return out;
+  }
+
+  const action = out.action.toLowerCase();
+
+  for (const hint of ACTION_SETTING_HINTS) {
+    if (!hint.pattern.test(action)) continue;
+    if (!settingMatchesPool(out.setting, hint.settings)) {
+      out.setting = pick(hint.settings, rng);
+    }
+    break;
+  }
+
+  return out;
+}
+
 function splitPersonSubject(subject) {
   const ethnicityMatch = String(subject).match(/\(([^)]+)\)\s*$/);
   const ethnicity = ethnicityMatch ? ethnicityMatch[1] : null;
@@ -899,7 +977,7 @@ function harmonizeCreativeBrief(brief, rng = Math.random) {
     out.colorDirection = "bright white negative space with black-text-friendly contrast";
   }
 
-  if (/cat|hamster|ferret|guinea pig|hedgehog/.test(subject) && rng() < 0.72) {
+  if (/cat|hamster|ferret|guinea pig|hedgehog/.test(subject) && rng() < 0.35) {
     out.setting = pick(INDOOR_SETTINGS, rng);
     out.composition = pick(WALL_COMPOSITIONS, rng);
     out.cameraAngle = out.composition;
@@ -909,7 +987,7 @@ function harmonizeCreativeBrief(brief, rng = Math.random) {
   }
 
   if (/headphones|soda bottle|paw/.test(action)) {
-    out.setting = pick(["a messy bedroom gaming desk with a blank wall above", "a cluttered desk under a plain wall", "a sunny bedroom corner with a plain wall"], rng);
+    out.setting = pick(DESK_SETTINGS, rng);
     out.composition = pick(WALL_COMPOSITIONS, rng);
     out.cameraAngle = out.composition;
     out.weather = pick(["warm golden hour", "bright white winter light", "sun peeking through clouds"], rng);
@@ -963,23 +1041,16 @@ function harmonizeCreativeBrief(brief, rng = Math.random) {
     out.cameraAngle = out.composition;
   }
 
-  if (/roller skates|ramp/.test(`${subject} ${action}`)) {
-    out.setting = pick(["an empty basketball court", "a parking lot at golden hour", "a school field on a sunny day"], rng);
+  if (/roller skates|ramp|skateboard/.test(`${subject} ${action}`)) {
+    out.setting = pick(SKATE_SETTINGS, rng);
     out.weather = pick(["clear blue sky", "warm golden hour", "bright midday sun"], rng);
     out.timeOfDay = out.weather;
     out.composition = pick(SKY_COMPOSITIONS, rng);
     out.cameraAngle = out.composition;
   }
 
-  if (/fireworks|sparklers/.test(action)) {
-    out.setting = pick(
-      [
-        "an empty outdoor basketball court at night with fireworks in the distance",
-        "a field under fireworks far in the background",
-        "a rooftop with open sky and distant fireworks",
-      ],
-      rng
-    );
+  if (/watching distant fireworks|chasing glowing sparklers/.test(action)) {
+    out.setting = pick(FIREWORKS_SETTINGS, rng);
     out.weather = "clear night with distant fireworks";
     out.timeOfDay = out.weather;
     out.colorDirection = "flash-lit subject against dark simple background";
@@ -1009,9 +1080,70 @@ function harmonizeCreativeBrief(brief, rng = Math.random) {
     out.colorDirection = pick(["saturated blue sky and green grass", "golden sunlight and soft shadows", "clean early-digital blue and green color"], rng);
   }
 
-  const harmonized = assignCoherentWardrobe(out, rng);
+  return finalizeBrief(out, rng);
+}
+
+/** Wardrobe + prop + action/setting reconciliation without subject-pool overrides. */
+export function finalizeBrief(brief, rng = Math.random) {
+  const reconciled = reconcileActionAndSetting(brief, rng);
+  const harmonized = assignCoherentWardrobe(reconciled, rng);
   return reconcileProps(harmonized, rng);
 }
+
+function subjectHasExplicitEthnicity(subject) {
+  return /\b(black|south asian|east asian|latino|middle eastern|southeast asian|pacific islander|indian|desi|mixed.?race)\b/i.test(
+    String(subject)
+  );
+}
+
+function subjectIsMultiPerson(subject) {
+  return /\b(two|three|four|five|group|friends|couple|siblings|cousins|pair|trio|both)\b/i.test(String(subject));
+}
+
+export function buildSceneFromArchetype(rng = Math.random, archetype = pick(POSTER_ARCHETYPES, rng)) {
+  let subject = pick(archetype.subjects, rng);
+  if (
+    archetype.subjectKind === "person" &&
+    !/\([^)]+\)/.test(subject) &&
+    !subjectHasExplicitEthnicity(subject) &&
+    !subjectIsMultiPerson(subject)
+  ) {
+    subject = `${subject} (${pick(PERSON_ETHNICITIES, rng)})`;
+  } else if (archetype.subjectKind === "animal" && !subject.startsWith("a ")) {
+    subject = `a ${subject}`;
+  }
+
+  const weather = pick(archetype.weather, rng);
+  const composition = pick(archetype.compositions, rng);
+
+  return finalizeBrief(
+    {
+      conceptId: archetype.id,
+      vibe: archetype.vibe,
+      source: "archetype",
+      subjectKind: archetype.subjectKind,
+      subject,
+      action: archetype.action,
+      setting: pick(archetype.settings, rng),
+      camera: pick(archetype.cameras, rng),
+      weather,
+      timeOfDay: weather,
+      prop: pick(archetype.props, rng),
+      cameraAngle: composition,
+      composition,
+      colorDirection: pick(archetype.colors, rng),
+      emotion: pick(archetype.emotions, rng),
+      copyFormula: pick(COPY_FORMULAS, rng),
+    },
+    rng
+  );
+}
+
+export function buildSceneFromDirector(directorScene) {
+  return finalizeBrief({ ...directorScene, source: "director" });
+}
+
+export { sceneSignature, settingFamily, sceneDedupKeys, isSceneBlocked };
 
 export function buildPromptWriterPrompt(brief) {
   const propLine = brief.prop === "nothing" ? "No required prop." : `Optional prop to include naturally: ${brief.prop}.`;
@@ -1031,9 +1163,10 @@ The final image must feel like:
 - high-quality grainy early-2000s digital photography, not low-resolution
 
 Core ingredients for this one unique image:
+VIBE: ${brief.vibe || brief.emotion}
 SUBJECT: ${brief.subject}
-ACTION: ${brief.action}
-SETTING: ${brief.setting}
+ACTION (pose/behavior only — no location words): ${brief.action}
+SETTING (the only location — do not invent a second place): ${brief.setting}
 WEATHER / LIGHT: ${brief.weather}
 CAMERA TEXTURE: ${brief.camera}
 COMPOSITION: ${composition}
@@ -1069,8 +1202,8 @@ Great outcome examples in spirit:
 - an old man skateboarding in a sunlit parking lot
 - a grandma on roller skates jumping a tiny ramp
 - a girl in a fighter jet cockpit with sunset sky outside
-- a young woman on an outdoor basketball court at night, blanket over her shoulders, fireworks in the distance
-- a dog joyfully running under distant fireworks in an open field
+- an elderly man skateboarding on a sunlit road with a vintage car behind him
+- a fluffy cat with daisies on its head sitting on a wooden bench under a huge blue sky
 
 Return only the final image prompt as plain text.`;
 }
@@ -1125,52 +1258,30 @@ function actionsForSubject(subject) {
   return ANIMAL_ACTIONS;
 }
 
-export function buildScene(rng = Math.random) {
-  if (rng() < 0.03) {
-    const preset = pick(SCENE_PRESETS, rng);
-    return harmonizeCreativeBrief(
-      {
-        subjectKind: PEOPLE_SUBJECTS.has(preset.subject) ? "person" : "animal",
-        composition: preset.cameraAngle,
-        colorDirection: pick(COLOR_DIRECTIONS, rng),
-        ...preset,
-        copyFormula: pick(COPY_FORMULAS, rng),
-      },
-      rng
-    );
+export function buildScene(rng = Math.random, { avoidSignatures = new Set() } = {}) {
+  for (let tries = 0; tries < 30; tries++) {
+    const roll = rng();
+    let scene;
+    if (roll < 0.55) {
+      scene = buildSceneFromArchetype(rng);
+    } else if (roll < 0.9) {
+      scene = buildCreativeBrief(rng);
+    } else {
+      const preset = pick(SCENE_PRESETS, rng);
+      scene = harmonizeCreativeBrief(
+        {
+          subjectKind: PEOPLE_SUBJECTS.has(preset.subject) ? "person" : "animal",
+          composition: preset.cameraAngle,
+          colorDirection: pick(COLOR_DIRECTIONS, rng),
+          ...preset,
+          copyFormula: pick(COPY_FORMULAS, rng),
+        },
+        rng
+      );
+    }
+    if (!isSceneBlocked(scene, avoidSignatures)) return scene;
   }
-
-  if (rng() < 0.92) return buildCreativeBrief(rng);
-
-  const subject = pick(SUBJECTS, rng);
-  const setting = pick(settingsForSubject(subject), rng);
-  const action = pick(actionsForSubject(subject), rng);
-  const camera = pick(CAMERA_STYLES, rng);
-  const weather = weatherForScene({ setting, action }, rng);
-  const timeOfDay = timeForWeather(weather, rng);
-  const prop = pick(propsForSubject(subject), rng);
-  const cameraAngle = pick(CAMERA_ANGLES, rng);
-  const emotion = pick(EMOTIONS, rng);
-  const copyFormula = pick(COPY_FORMULAS, rng);
-
-  return harmonizeCreativeBrief(
-    {
-      subjectKind: PEOPLE_SUBJECTS.has(subject) ? "person" : "animal",
-      subject,
-      setting,
-      action,
-      camera,
-      weather,
-      timeOfDay,
-      prop,
-      cameraAngle,
-      emotion,
-      copyFormula,
-      composition: cameraAngle,
-      colorDirection: pick(COLOR_DIRECTIONS, rng),
-    },
-    rng
-  );
+  return buildSceneFromArchetype(rng);
 }
 
 export function buildMotivationalPrompt(scene = buildScene()) {
@@ -1241,8 +1352,38 @@ export function captionSignature(caption) {
   return `${normalizeCaptionLine(caption?.smallText || "", 34)}|${normalizeCaptionLine(caption?.bigText || "", 28)}`;
 }
 
+const EMOTION_CAPTION_EXAMPLES = {
+  gentle: [
+    ["smile homie,", "life's awesome"],
+    ["take it slow,", "no rush."],
+    ["through thick & thin,", "i got you bro"],
+    ["you're enough,", "always were."],
+  ],
+  funny: [
+    ["stay weird sis,", "it's iconic af"],
+    ["smile twin,", "it's gangsta"],
+    ["i'm weird", "but i'm real tho."],
+  ],
+  momentum: [
+    ["f*ck 'em,", "got dreams to chase"],
+    ["life update:", "we're so back"],
+    ["keep showing up,", "it matters."],
+  ],
+  "self-worth": [
+    ["quick reminder,", "u are awesome"],
+    ["smile bro,", "u're still in it"],
+    ["unlearn the hate bro,", "it's lame af"],
+    ["you're enough,", "always were."],
+  ],
+  perspective: [
+    ["spread love,", "hate's lame af"],
+    ["remember,", "u've come far."],
+    ["still here,", "that's everything."],
+  ],
+};
+
 export function buildCaptionPrompt(scene, { recentCaptions = [], attempt = 0 } = {}) {
-  const toneExamples = QUOTE_BANK.slice(0, 10)
+  const moodExamples = (EMOTION_CAPTION_EXAMPLES[scene.emotion] || EMOTION_CAPTION_EXAMPLES.gentle)
     .map(([smallText, bigText]) => `- "${smallText} ${bigText}"`)
     .join("\n");
 
@@ -1258,28 +1399,42 @@ export function buildCaptionPrompt(scene, { recentCaptions = [], attempt = 0 } =
       ? "\nLast attempt was repeated or off-tone. Write a fresh original quote.\n"
       : "";
 
-  return `Write one short positive poster quote for a motivational moodboard.
+  return `Write one short poster quote for a motivational moodboard.
 
-Voice:
-- supportive internet friend
-- lowercase
-- warm, uplifting, slightly funny but sincere
-- sounds like a text from someone who believes in you
+Voice — text like a real friend, NOT a therapist or brand:
+- lowercase always
+- use: twin, bro, sis, homie, u, ur, u're, tho, af, lowkey
+- casual internet slang is good ("it's gangsta", "iconic af", "lame af", "we're so back")
+- warm, defiant, funny, sincere — group chat hype OR quiet sincere (e.g. "you're enough, always were.")
+- mild edge ok (e.g. "f*ck 'em," "hate's lame af") but never cruel or mean-spirited
+- NEVER: corporate speak, therapy clichés, hustle culture, "believe in yourself", "main character", explaining the photo
+- NEVER: "hey you", "heads up", "you're doing great/bananas/amazing", "just wanted to say", "friendly reminder", random food metaphors, multiple ??? or !!!
+- NEVER: vague wellness fragments ("quiet moments", "gentle reminder", "in this moment", "you're enough today") — both lines must connect like a real text
 
 Structure (${scene.copyFormula}):
-- smallText: 2-4 words, usually ends with a comma or colon
-- bigText: 2-6 words, the uplifting punchline
+- smallText: 2-5 words — opener with comma or colon (e.g. "smile twin," / "life update:" / "quick reminder,")
+- bigText: 2-7 words — punchy payoff (e.g. "it's gangsta" / "u are awesome" / "got dreams to chase")
+
+Gold-standard examples (match this exact energy):
+- "smile twin," / "it's gangsta"
+- "quick reminder," / "u are awesome"
+- "stay weird sis," / "it's iconic af"
+- "spread love," / "hate's lame af"
+- "through thick & thin," / "i got you bro"
+- "life update:" / "we're so back"
+- "f*ck 'em," / "got dreams to chase"
+- "you're enough," / "always were."
 
 Important:
-- does NOT need to describe any image, animal, place, outfit, or weather
-- should work as a universal feel-good line anyone would want on their lock screen
-- original wording — not a famous quote, not corporate, not therapy-speak, not hustle culture
-- no em dashes, no long sentences, no explaining a scene
+- does NOT describe the image (no animals, places, outfits, weather)
+- original wording only — not a famous quote
+- no em dashes, no long sentences
 
-Mood hint: ${scene.emotion}
+Poster vibe: ${scene.vibe || scene.emotion}
+Mood: ${scene.emotion}
 ${avoidBlock}${retryNote}
-Tone examples (style only, do not copy):
-${toneExamples}
+More examples for this mood (style only, do not copy verbatim):
+${moodExamples}
 
 Return only JSON:
 {"smallText":"first line","bigText":"second line"}`;
@@ -1297,7 +1452,79 @@ const BANNED_CAPTION_PHRASES = [
   /night court/i,
   /shoreline/i,
   /goofy king/i,
+  /soft heart/i,
+  /strong soul/i,
+  /heart open/i,
+  /breathe deep/i,
+  /reset slowly/i,
+  /heads up/i,
+  /^hey you\b/i,
+  /\bhey you,/i,
+  /banana/i,
+  /you're doing/i,
+  /ur doing/i,
+  /u are doing/i,
+  /doing (great|good|amazing|well|fantastic|incredible|awesome)/i,
+  /just wanted to/i,
+  /friendly reminder/i,
+  /don't forget/i,
+  /so proud of you/i,
+  /killing it/i,
+  /crushing it/i,
+  /great job/i,
+  /awesome job/i,
+  /well done/i,
+  /hang in there/i,
+  /you matter/i,
+  /you deserve/i,
+  /keep going/i,
+  /you got this/i,
+  /stay strong/i,
+  /believe in/i,
+  /\?{2,}/,
+  /!{3,}/,
+  /quiet moments/i,
+  /gentle moments/i,
+  /in this moment/i,
+  /you're enough today/i,
+  /you are enough today/i,
+  /enough today/i,
+  /worthy today/i,
+  /be kind to yourself/i,
+  /hold space/i,
+  /self-care/i,
+  /mindful/i,
+  /mindfulness/i,
 ];
+
+const VAGUE_SMALL_OPENERS = [
+  /^quiet\b/i,
+  /^gentle\b/i,
+  /^soft\b/i,
+  /^peaceful\b/i,
+  /^calm\b/i,
+  /^sweet\b/i,
+  /^dear\b/i,
+  /^in this\b/i,
+  /^take a\b/i,
+  /^breathe\b/i,
+  /\bmoments,/i,
+  /\bmoment,/i,
+];
+
+const AFFIRMATION_TODAY =
+  /(you're|you are|u are|u're) (enough|worthy|loved|valid|ok|fine|doing ok) today/i;
+
+function isOffToneCaption({ smallText, bigText }) {
+  const text = `${smallText} ${bigText}`;
+  if (BANNED_CAPTION_PHRASES.some((pattern) => pattern.test(text))) return true;
+  if (VAGUE_SMALL_OPENERS.some((pattern) => pattern.test(smallText))) return true;
+  if (AFFIRMATION_TODAY.test(bigText) || AFFIRMATION_TODAY.test(text)) return true;
+  if (/\benough\b/i.test(smallText) && /\benough\b/i.test(bigText)) return true;
+  if (smallText.length > 30 || bigText.length > 34) return true;
+  if (/[A-Z]/.test(text.replace(/\*/g, ""))) return true;
+  return false;
+}
 
 export function finalizeCaption(caption, recentCaptions = []) {
   const normalized = {
@@ -1307,9 +1534,7 @@ export function finalizeCaption(caption, recentCaptions = []) {
 
   if (!normalized.smallText || !normalized.bigText) return null;
   if (normalized.smallText.length < 2 || normalized.bigText.length < 2) return null;
-
-  const text = `${normalized.smallText} ${normalized.bigText}`;
-  if (BANNED_CAPTION_PHRASES.some((pattern) => pattern.test(text))) return null;
+  if (isOffToneCaption(normalized)) return null;
 
   const sig = captionSignature(normalized);
   const recentSigs = new Set(recentCaptions.map((c) => captionSignature(c)));
@@ -1321,11 +1546,31 @@ export function finalizeCaption(caption, recentCaptions = []) {
 export function variedFallbackCaption(scene, recentCaptions = [], rng = Math.random) {
   const recentSigs = new Set(recentCaptions.map((c) => captionSignature(c)));
   const emotionPool = {
-    gentle: [["take it slow,", "no rush."], ["soft day,", "stay gentle."], ["breathe twin,", "you're okay."]],
-    funny: [["stay goofy twin,", "it's iconic."], ["stay weird,", "it's gangsta."], ["smile bro,", "u are on fire."]],
-    momentum: [["keep moving,", "it adds up."], ["keep showing up,", "it matters."], ["still growing,", "still going."]],
-    "self-worth": [["you're enough,", "always were."], ["remember,", "you've come far."], ["you're loved,", "remember that."]],
-    perspective: [["head up,", "heart open."], ["look around,", "life is here."], ["good days,", "bad days."]],
+    gentle: [
+      ["smile homie,", "life's awesome"],
+      ["take it slow,", "no rush."],
+      ["through thick & thin,", "i got you sis"],
+    ],
+    funny: [
+      ["stay weird sis,", "it's iconic af"],
+      ["smile twin,", "it's gangsta"],
+      ["i'm weird", "but i'm real tho."],
+    ],
+    momentum: [
+      ["f*ck 'em,", "got dreams to chase"],
+      ["life update:", "we're so back"],
+      ["keep moving,", "it adds up."],
+    ],
+    "self-worth": [
+      ["quick reminder,", "u are awesome"],
+      ["smile bro,", "u're still in it"],
+      ["unlearn the hate sis,", "it's lame af"],
+    ],
+    perspective: [
+      ["spread love,", "hate's lame af"],
+      ["remember,", "u've come far."],
+      ["still here,", "that's everything."],
+    ],
   };
 
   const pool = [...(emotionPool[scene.emotion] || []), ...QUOTE_BANK].filter(
@@ -1343,19 +1588,19 @@ export function referenceCaptionForScene(scene) {
   const emotion = scene.emotion;
 
   if (/snow|fog|mist|blue hour/.test(`${weather} ${scene.setting}`)) {
-    return captionFromPair(["cold air,", "clear mind."]);
+    return captionFromPair(["smile homie,", "life's awesome"]);
   }
   if (/sunglasses|skateboard|skateboarding|birthday hat/.test(`${scene.prop} ${action}`)) {
-    return captionFromPair(["stay goofy twin,", "it's iconic."]);
+    return captionFromPair(["stay goofy twin,", "it's iconic af"]);
   }
   if (/smiling|standing slightly too close|golden retriever|cow|cat|highland cow/.test(`${action} ${subject}`)) {
-    return captionFromPair(["smile twin,", "you're alive."]);
+    return captionFromPair(["smile twin,", "it's gangsta"]);
   }
-  if (emotion === "momentum") return captionFromPair(["keep moving,", "it adds up."]);
-  if (emotion === "self-worth") return captionFromPair(["remember,", "you've come far."]);
-  if (emotion === "gentle") return captionFromPair(["take it slow,", "no rush."]);
-  if (emotion === "perspective") return captionFromPair(["look around,", "life is here."]);
-  return captionFromPair(["stay weird,", "it's gangsta."]);
+  if (emotion === "momentum") return captionFromPair(["life update:", "we're so back"]);
+  if (emotion === "self-worth") return captionFromPair(["quick reminder,", "u are awesome"]);
+  if (emotion === "gentle") return captionFromPair(["through thick & thin,", "i got you bro"]);
+  if (emotion === "perspective") return captionFromPair(["spread love,", "hate's lame af"]);
+  return captionFromPair(["stay weird sis,", "it's iconic af"]);
 }
 
 /** @deprecated Use finalizeCaption instead — kept for older scripts */
@@ -1386,9 +1631,10 @@ export function parseCaption(text) {
     .split(/\r?\n/)
     .map((line) => line.replace(/^["'\s-]+|["'\s]+$/g, "").trim())
     .filter(Boolean);
+  const fallback = pick(QUOTE_BANK);
   return {
-    smallText: normalizeCaptionLine(lines[0] || "quick reminder:", 34),
-    bigText: normalizeCaptionLine(lines[1] || "you're doing fine.", 28),
+    smallText: normalizeCaptionLine(lines[0] || fallback[0], 34),
+    bigText: normalizeCaptionLine(lines[1] || fallback[1], 28),
   };
 }
 
@@ -1410,7 +1656,33 @@ function escapeXml(s) {
     .replace(/"/g, "&quot;");
 }
 
-export async function overlayCaption(imageBytes, caption) {
+export const DEFAULT_CAPTION_LAYOUT = {
+  xRatio: 0.5,
+  yRatio: 0.36,
+  textColor: null,
+};
+
+export function normalizeCaptionLayout(layout = {}) {
+  const xRatio = Number(layout.xRatio);
+  const yRatio = Number(layout.yRatio);
+  const textColor = layout.textColor === "#ffffff" || layout.textColor === "#050505" ? layout.textColor : null;
+  return {
+    xRatio: Number.isFinite(xRatio) ? Math.min(0.92, Math.max(0.08, xRatio)) : DEFAULT_CAPTION_LAYOUT.xRatio,
+    yRatio: Number.isFinite(yRatio) ? Math.min(0.88, Math.max(0.08, yRatio)) : DEFAULT_CAPTION_LAYOUT.yRatio,
+    textColor,
+  };
+}
+
+export function captionFontSizes(width, caption) {
+  const maxTextWidth = width * 0.76;
+  return {
+    smallSize: fitTextSize(caption.smallText, Math.round(width * 0.034), maxTextWidth),
+    bigSize: fitTextSize(caption.bigText, Math.round(width * 0.079), maxTextWidth),
+  };
+}
+
+export async function overlayCaption(imageBytes, caption, layout = {}) {
+  const normalizedLayout = normalizeCaptionLayout(layout);
   const metadata = await sharp(imageBytes).metadata();
   const baseSize = Math.min(metadata.width || 1024, metadata.height || 1024);
   const image = sharp(imageBytes)
@@ -1419,13 +1691,19 @@ export async function overlayCaption(imageBytes, caption) {
     .sharpen({ sigma: 0.35, m1: 0.4, m2: 0.2 });
   const width = baseSize;
   const height = baseSize;
-  const maxTextWidth = width * 0.76;
-  const smallSize = fitTextSize(caption.smallText, Math.round(width * 0.034), maxTextWidth);
-  const bigSize = fitTextSize(caption.bigText, Math.round(width * 0.079), maxTextWidth);
-  const y = Math.round(height * 0.245);
-  const x = Math.round(width * 0.5);
+  const { smallSize, bigSize } = captionFontSizes(width, caption);
+  const x = Math.round(width * normalizedLayout.xRatio);
+  const yTop = Math.round(height * normalizedLayout.yRatio);
+  const lineGap = Math.round(bigSize * 0.02);
+  // Sharp/librsvg ignores dominant-baseline:hanging — use alphabetic baseline + ascent
+  // so baked text matches the dashboard editor (yRatio = top of small line).
+  const SMALL_ASCENT = 0.88;
+  const BIG_ASCENT = 0.88;
+  const ySmall = yTop + Math.round(smallSize * SMALL_ASCENT);
+  const yBig = yTop + smallSize + lineGap + Math.round(bigSize * BIG_ASCENT);
   const basePng = await image.png().toBuffer();
-  const textColor = await pickTextColor(basePng, width, height, x, y);
+  const textColor =
+    normalizedLayout.textColor ?? (await pickTextColor(basePng, width, height, x, yTop + Math.round(smallSize * 0.5)));
 
   const svg = Buffer.from(`
 <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
@@ -1438,8 +1716,8 @@ export async function overlayCaption(imageBytes, caption) {
     .small { font-size: ${smallSize}px; font-weight: 900; letter-spacing: -0.018em; }
     .big { font-size: ${bigSize}px; font-weight: 900; letter-spacing: -0.032em; }
   </style>
-  <text class="small" x="${x}" y="${y}">${escapeXml(caption.smallText)}</text>
-  <text class="big" x="${x}" y="${y + Math.round(bigSize * 1.02)}">${escapeXml(caption.bigText)}</text>
+  <text class="small" x="${x}" y="${ySmall}">${escapeXml(caption.smallText)}</text>
+  <text class="big" x="${x}" y="${yBig}">${escapeXml(caption.bigText)}</text>
 </svg>`);
 
   const composited = await sharp(basePng).composite([{ input: svg, top: 0, left: 0 }]).png().toBuffer();
@@ -1450,7 +1728,7 @@ function fitTextSize(text, targetSize, maxWidth) {
   const length = Math.max(1, String(text).length);
   const estimatedWidth = length * targetSize * 0.56;
   if (estimatedWidth <= maxWidth) return targetSize;
-  return Math.max(28, Math.floor(targetSize * (maxWidth / estimatedWidth)));
+  return Math.max(Math.round(maxWidth * 0.036), Math.floor(targetSize * (maxWidth / estimatedWidth)));
 }
 
 async function pickTextColor(imageBytes, width, height, x, y) {
