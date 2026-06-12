@@ -22,6 +22,7 @@ import {
   resizeForWidget,
 } from "./instagram-helper.js";
 import { getDraftForPublish, publishDraftFromDb } from "./publish-draft.js";
+import { overlayCaption, normalizeCaptionLayout } from "./motivational-generator.js";
 import { supabaseServiceRoleKey, supabaseUrl } from "./supabase-env.js";
 
 const BUCKET = IG_BUCKET;
@@ -135,7 +136,7 @@ async function listAllStoragePaths(supabase) {
 async function listDrafts(supabase, projectUrl) {
   const { data, error } = await supabase
     .from("drafts")
-    .select("id, name, storage_path, caption, scene, image_model, caption_model, created_at")
+    .select("id, name, storage_path, raw_storage_path, caption, scene, image_model, caption_model, created_at, metadata")
     .eq("status", "draft")
     .order("created_at", { ascending: true });
   if (error) throw error;
@@ -143,14 +144,68 @@ async function listDrafts(supabase, projectUrl) {
     id: row.name,
     filename: `${row.name}.png`,
     imageUrl: publicObjectUrl(projectUrl, row.storage_path),
+    rawImageUrl: row.raw_storage_path ? publicObjectUrl(projectUrl, row.raw_storage_path) : null,
     meta: {
       caption: row.caption,
+      captionLayout: row.metadata?.captionLayout ?? null,
       scene: row.scene,
       imageModel: row.image_model,
       captionModel: row.caption_model,
       generatedAt: row.created_at,
     },
   }));
+}
+
+async function renderDraftCaption(supabase, { id, caption, layout }) {
+  const { data: row, error } = await supabase
+    .from("drafts")
+    .select("name, storage_path, raw_storage_path, caption, metadata")
+    .eq("name", id)
+    .eq("status", "draft")
+    .maybeSingle();
+  if (error) throw error;
+  if (!row) throw new Error(`Draft not found: ${id}`);
+
+  const sourcePath = row.raw_storage_path || row.storage_path;
+  if (!row.raw_storage_path) {
+    console.warn(`Draft ${id} has no raw background — re-rendering from final image`);
+  }
+
+  const { data: blob, error: downloadErr } = await supabase.storage.from(BUCKET).download(sourcePath);
+  if (downloadErr) throw downloadErr;
+
+  const finalCaption = caption?.smallText && caption?.bigText ? caption : row.caption;
+  if (!finalCaption?.smallText || !finalCaption?.bigText) {
+    throw new Error("Draft has no caption to render");
+  }
+
+  const normalizedLayout = normalizeCaptionLayout(layout ?? row.metadata?.captionLayout ?? {});
+  const imageBytes = Buffer.from(await blob.arrayBuffer());
+  const rendered = await overlayCaption(imageBytes, finalCaption, normalizedLayout);
+
+  const { error: uploadErr } = await supabase.storage
+    .from(BUCKET)
+    .upload(row.storage_path, rendered, { contentType: "image/png", upsert: true });
+  if (uploadErr) throw uploadErr;
+
+  const metadata = {
+    ...(row.metadata && typeof row.metadata === "object" ? row.metadata : {}),
+    captionLayout: normalizedLayout,
+  };
+
+  const { error: updateErr } = await supabase
+    .from("drafts")
+    .update({ caption: finalCaption, metadata })
+    .eq("name", id)
+    .eq("status", "draft");
+  if (updateErr) throw updateErr;
+
+  return {
+    id,
+    imageUrl: publicObjectUrl(supabaseUrl(), row.storage_path),
+    caption: finalCaption,
+    captionLayout: normalizedLayout,
+  };
 }
 
 async function listPrompts(supabase) {
@@ -361,6 +416,22 @@ async function main() {
 
       const jobId = spawnJob("publish", "publish.js", args);
       json(res, 200, { jobId });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/drafts/render-caption") {
+      const payload = await readBody(req);
+      if (!payload?.id) { json(res, 400, { error: "id required" }); return; }
+      try {
+        const result = await renderDraftCaption(supabase, {
+          id: payload.id,
+          caption: payload.caption,
+          layout: payload.layout,
+        });
+        json(res, 200, { success: true, ...result });
+      } catch (e) {
+        json(res, e.message?.startsWith("Draft not found") ? 404 : 500, { error: e.message });
+      }
       return;
     }
 
