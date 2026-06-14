@@ -15,7 +15,46 @@ const MODES: { id: Mode; label: string; desc: string }[] = [
 
 const SIZES: Size[] = ["1024x1024", "1536x1024", "1024x1536"];
 
-const SESSION_KEY = "generate_jobId";
+const GENERATE_JOB_KEY = "generate_job";
+const LEGACY_SESSION_KEY = "generate_jobId";
+
+type SavedGenerateJob = {
+  id: string;
+  mode?: Mode;
+  savedAt?: number;
+};
+
+function resultMessage(mode: Mode, code: number | null) {
+  if (code !== 0) return "Job failed. Check the log above.";
+  return mode === "prompts" ? "Done. Check Prompts." : "Done. Check Backgrounds.";
+}
+
+function readSavedGenerateJob(): SavedGenerateJob | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage?.getItem(GENERATE_JOB_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as SavedGenerateJob;
+      if (parsed?.id) return parsed;
+    }
+  } catch {}
+
+  const legacy = window.sessionStorage?.getItem(LEGACY_SESSION_KEY);
+  return legacy ? { id: legacy } : null;
+}
+
+function saveGenerateJob(id: string, mode: Mode) {
+  if (typeof window === "undefined") return;
+  const payload: SavedGenerateJob = { id, mode, savedAt: Date.now() };
+  window.localStorage?.setItem(GENERATE_JOB_KEY, JSON.stringify(payload));
+  window.sessionStorage?.setItem(LEGACY_SESSION_KEY, id);
+}
+
+function clearSavedGenerateJob() {
+  if (typeof window === "undefined") return;
+  window.localStorage?.removeItem(GENERATE_JOB_KEY);
+  window.sessionStorage?.removeItem(LEGACY_SESSION_KEY);
+}
 
 export default function GenerateScreen() {
   const [count, setCount] = useState("5");
@@ -28,19 +67,46 @@ export default function GenerateScreen() {
   const [loading, setLoading] = useState(false);
   const [lastResult, setLastResult] = useState<string | null>(null);
 
-  // Restore in-progress job on mount so navigating away doesn't lose the log
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const saved = sessionStorage.getItem(SESSION_KEY);
-      if (saved) setJobId(saved);
+    let cancelled = false;
+
+    async function restoreJob() {
+      const saved = readSavedGenerateJob();
+      if (saved?.id) {
+        try {
+          const job = await api.job(saved.id);
+          if (cancelled) return;
+          if (job.type === "generate") {
+            setJobId(job.id);
+            if (saved.mode) setMode(saved.mode);
+            if (job.status !== "running") setLastResult(resultMessage(saved.mode ?? mode, job.exitCode));
+            return;
+          }
+        } catch {
+          clearSavedGenerateJob();
+        }
+      }
+
+      try {
+        const { jobs } = await api.jobs();
+        if (cancelled) return;
+        const runningGenerate = jobs.find(job => job.type === "generate" && job.status === "running");
+        if (runningGenerate) {
+          setJobId(runningGenerate.id);
+          saveGenerateJob(runningGenerate.id, mode);
+        }
+      } catch {}
     }
+
+    void restoreJob();
+    return () => { cancelled = true; };
   }, []);
 
   async function run() {
     setLoading(true);
     setLastResult(null);
     setJobId(null);
-    if (typeof window !== "undefined") sessionStorage.removeItem(SESSION_KEY);
+    clearSavedGenerateJob();
     try {
       const opts: GenerateOptions = {
         count: parseInt(count, 10) || 5,
@@ -52,7 +118,7 @@ export default function GenerateScreen() {
       };
       const { jobId: id } = await api.generate(opts);
       setJobId(id);
-      if (typeof window !== "undefined") sessionStorage.setItem(SESSION_KEY, id);
+      saveGenerateJob(id, mode);
     } catch (e: any) {
       alert(e.message);
     } finally {
@@ -169,11 +235,8 @@ export default function GenerateScreen() {
       )}
 
       <JobLog jobId={jobId} onDone={(code) => {
-        if (typeof window !== "undefined") sessionStorage.removeItem(SESSION_KEY);
-        setLastResult(code === 0
-          ? (mode === "prompts" ? "Done. Check Prompts." : "Done. Check Backgrounds.")
-          : "Job failed. Check the log above."
-        );
+        if (jobId) saveGenerateJob(jobId, mode);
+        setLastResult(resultMessage(mode, code));
       }} />
     </ScrollView>
   );

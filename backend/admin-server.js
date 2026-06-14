@@ -1092,6 +1092,7 @@ async function main() {
     if (req.method === "GET" && streamMatch) {
       const job = jobs.get(streamMatch[1]);
       if (!job) { json(res, 404, { error: "Job not found" }); return; }
+      const since = Math.max(0, Number(url.searchParams.get("since") || "0") || 0);
 
       res.writeHead(200, {
         "Content-Type": "text/event-stream",
@@ -1101,7 +1102,7 @@ async function main() {
       });
 
       // Replay buffered lines
-      for (const line of job.lines) {
+      for (const line of job.lines.slice(since)) {
         res.write(`data: ${JSON.stringify({ line })}\n\n`);
       }
 
