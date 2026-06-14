@@ -2,6 +2,8 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import sharp from "sharp";
 import {
+  HIGH_CONCEPT_ARCHETYPES,
+  ICONIC_ENERGY_ARCHETYPES,
   POSTER_ARCHETYPES,
   isSceneBlocked,
   sceneDedupKeys,
@@ -860,8 +862,14 @@ function splitPersonSubject(subject) {
 function assignCoherentWardrobe(brief, rng = Math.random) {
   if (brief.subjectKind !== "person") return brief;
   const out = { ...brief };
+  if (subjectIsMultiPerson(out.subject)) return out;
   const { base, ethnicity } = splitPersonSubject(out.subject);
   const ctx = sceneContext(out);
+  const alreadyStyled =
+    /\b(in a|in an|in oversized|in thrifted|in cheap|in red|in blue|in loose|in vintage|in sunglasses|wearing|holding)\b/i.test(
+      base
+    );
+  if (alreadyStyled && !/cockpit|fighter jet/.test(ctx)) return out;
   let wardrobe = null;
 
   if (/cockpit|fighter jet|flight suit/.test(ctx)) {
@@ -869,20 +877,20 @@ function assignCoherentWardrobe(brief, rng = Math.random) {
   } else if (/fireworks|sparkler|clear night/.test(ctx) && /basketball/.test(ctx)) {
     wardrobe = pick(
       [
-        "wrapped in a colorful blanket over their shoulders, wearing a casual crop top and sweatpants",
-        "in a cropped tank top and light sweatpants with a blanket draped over their shoulders",
+        "with a colorful blanket draped over the shoulders and loose sweatpants",
+        "in a loose tank top and light sweatpants with a blanket draped around the shoulders",
       ],
       rng
     );
   } else if (/fireworks|sparkler|clear night/.test(ctx)) {
     wardrobe = pick(
-      ["wrapped in a cozy blanket over their shoulders", "in an oversized hoodie", "in casual night-out clothes"],
+      ["with a cozy blanket draped around the shoulders", "in an oversized hoodie", "in casual night-out clothes"],
       rng
     );
   } else if (/basketball/.test(ctx)) {
     wardrobe = pick(["in a cropped tank top and sweatpants", "in vintage athletic wear", "in a loose jersey and shorts"], rng);
   } else if (/beach|ocean|lake|dock|ferry|canoe/.test(ctx)) {
-    wardrobe = pick(["in a linen shirt and rolled-up jeans", "in a swimsuit cover-up", "barefoot in casual summer clothes"], rng);
+    wardrobe = pick(["in a linen shirt and rolled-up jeans", "in a sun-faded t-shirt and shorts", "barefoot in casual summer clothes"], rng);
   } else if (/snow|winter|snowfall/.test(ctx)) {
     wardrobe = pick(["in a puffy winter coat", "in a wool scarf and warm jacket"], rng);
   } else if (/rain/.test(ctx)) {
@@ -890,7 +898,7 @@ function assignCoherentWardrobe(brief, rng = Math.random) {
   } else if (/bike|cycl/.test(ctx)) {
     wardrobe = "wearing a bike helmet and casual riding clothes";
   } else if (/skateboard|skating|roller skates|ramp/.test(ctx)) {
-    wardrobe = pick(["in casual streetwear", "wearing a helmet and knee pads"], rng);
+    wardrobe = pick(["in casual streetwear", "in a vintage track jacket", "in an oversized thrifted tee"], rng);
   } else if (/soccer/.test(ctx)) {
     wardrobe = "in a soccer jersey";
   } else if (/rest stop|grocery|road/.test(ctx)) {
@@ -1106,7 +1114,7 @@ function subjectHasExplicitEthnicity(subject) {
 }
 
 function subjectIsMultiPerson(subject) {
-  return /\b(two|three|four|five|group|friends|couple|siblings|cousins|pair|trio|both)\b/i.test(String(subject));
+  return /\b(two|three|four|five|group|friends|couple|siblings|cousins|pair|trio|both)\b|\band\b/i.test(String(subject));
 }
 
 export function buildSceneFromArchetype(rng = Math.random, archetype = pick(POSTER_ARCHETYPES, rng)) {
@@ -1148,6 +1156,14 @@ export function buildSceneFromArchetype(rng = Math.random, archetype = pick(POST
   );
 }
 
+export function buildIconicEnergyScene(rng = Math.random) {
+  return buildSceneFromArchetype(rng, pick(ICONIC_ENERGY_ARCHETYPES, rng));
+}
+
+export function buildHighConceptScene(rng = Math.random) {
+  return buildSceneFromArchetype(rng, pick(HIGH_CONCEPT_ARCHETYPES, rng));
+}
+
 export function buildSceneFromDirector(directorScene) {
   return finalizeBrief({ ...directorScene, source: "director" });
 }
@@ -1158,6 +1174,7 @@ export function buildPromptWriterPrompt(brief) {
   const propLine = brief.prop === "nothing" ? "No required prop." : `Optional prop to include naturally: ${brief.prop}.`;
   const composition = brief.composition || brief.cameraAngle || "subject close to the lens, low camera angle, open negative space above";
   const colorDirection = brief.colorDirection || "clean early-digital blue and green color";
+  const sceneSpecific = sceneSpecificPromptNotes(brief);
 
   return `Write one image-generation prompt for a square Instagram lock-screen poster background.
 
@@ -1181,6 +1198,7 @@ CAMERA TEXTURE: ${brief.camera}
 COMPOSITION: ${composition}
 COLOR: ${colorDirection}
 ${propLine}
+${sceneSpecific}
 
 Hard requirements:
 - no text, no letters, no typography, no logo, no watermark
@@ -1193,7 +1211,7 @@ Hard requirements:
 - keep the upper half extremely simple for later text: sky, blank wall, fog, snow, ocean, ceiling, or simple color field
 - use natural light only unless the camera style is flash
 - avoid corporate motivation, fantasy painting, 3D render, studio portrait, glossy ad, cinematic movie still, editorial fashion shoot, shallow-depth product photography, or lifestyle stock photo
-- avoid clutter and avoid multiple competing subjects
+- avoid clutter and avoid multiple competing subjects; if the scene is messy, keep the mess low in frame and leave the upper half clean
 - avoid sickly green/yellow/cyan color casts; prefer natural early-digital blues, greens, warm sunlight, clean whites, or pastel sunset
 - for people: clothing and accessories must fit the setting (no bike helmets unless cycling/skating, no life jackets away from water, no random safety gear)
 - absurd animal behavior is allowed when it looks like a real internet snapshot: headphones, soda bottle, rude little paw pose, sunglasses, gaming desk, or prop comedy can be great
@@ -1203,7 +1221,8 @@ Hard requirements:
 
 Style discipline:
 - write the prompt as a direct photo brief, not poetic marketing copy
-- use words like snapshot, cheap flash, fisheye, blown-out sky, sensor noise, soft blur, dust, JPEG artifact, accidental framing
+- use words like snapshot, cheap flash, fisheye, blown-out sky, heavy sensor noise, soft blur, dust, JPEG artifact, accidental framing
+- make the nostalgia texture obvious: visible grain, compression, imperfect focus, old-camera color, slightly ugly digital softness
 - do not use words like cinematic, premium, elegant, luxurious, editorial, professional, dreamy portrait, masterpiece, film still, or commercial
 - avoid over-explaining emotions; describe the visible expression and the weird little camera-roll detail
 
@@ -1215,11 +1234,52 @@ Great outcome examples in spirit:
 - a kid in a life jacket looking at bright ocean water
 - an old man skateboarding in a sunlit parking lot
 - a grandma on roller skates jumping a tiny ramp
+- a smiling skydiver in a sunset sky, shot like an old action-camera upload
+- a flash-lit cool stranger on an empty subway platform, accidental album-cover energy
+- someone in formalwear jumping off a diving board at a public pool
+- friends dancing badly in a parking lot under cheap flash
 - a girl in a fighter jet cockpit with sunset sky outside
 - an elderly man skateboarding on a sunlit road with a vintage car behind him
 - a fluffy cat with daisies on its head sitting on a wooden bench under a huge blue sky
 
 Return only the final image prompt as plain text.`;
+}
+
+function sceneSpecificPromptNotes(brief) {
+  const id = String(brief.conceptId || "");
+  const notes = [];
+
+  if (id === "skydiver-sunset-grin") {
+    notes.push(
+      "FREEFALL FRAMING: show the subject's face, torso, and both arms clearly, not an extreme selfie crop. Keep the subject in the lower third with the sunset sky dominating the frame and tiny earth far below. The face should be joyful and readable, but the body should not fill the whole image."
+    );
+  }
+
+  if (id === "diving-board-suit") {
+    notes.push(
+      "POOL JUMP EXECUTION: the person must be visibly airborne above pool water, with both feet off the diving board. Include a hint of the diving board behind or below them so the action reads instantly. Do not show them crouching, sitting, standing still, or merely posing beside the pool."
+    );
+  }
+
+  if (id === "roommates-couch-laugh") {
+    notes.push(
+      "COUCH CHAOS CONTROL: keep only one clear group of friends and one odd low-frame detail. The wall above them should stay mostly blank; do not fill the room with many objects, pets, posters, or competing focal points."
+    );
+  }
+
+  if (/beach-race|empty-beach|boat|ocean|lake|ferry/.test(id)) {
+    notes.push(
+      "NOSTALGIA TEXTURE: make this feel like an old vacation photo upload: disposable-camera grain, slightly washed colors, mild motion blur, blown highlights, and JPEG softness. Avoid a clean modern travel photo."
+    );
+  }
+
+  if (brief.subjectKind === "animal") {
+    notes.push(
+      "ANIMAL MEME ENERGY: keep the animal as the unmistakable hero, low in frame, with a funny expression or posture that feels like a real found internet photo. Avoid glossy wildlife photography."
+    );
+  }
+
+  return notes.length ? `\nScene-specific direction:\n- ${notes.join("\n- ")}\n` : "";
 }
 
 export function cleanGeneratedPrompt(text) {
@@ -1557,13 +1617,22 @@ const VAGUE_SMALL_OPENERS = [
 const AFFIRMATION_TODAY =
   /(you're|you are|u are|u're) (enough|worthy|loved|valid|ok|fine|doing ok) today/i;
 
+function escapeRegex(text) {
+  return String(text).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function captionDescribesImage({ smallText, bigText }, scene) {
   const text = `${smallText} ${bigText}`;
   if (IMAGE_DESC_WORDS.test(text)) return true;
   if (/\b\w+\s+vibes?\b/i.test(text) && !/\b(it'?s|good|bad|main)\s+vibes?\b/i.test(text)) return true;
   if (scene?.subject) {
-    const subjectNoun = scene.subject.replace(/^a |^an /i, "").split(/\s+/).pop();
-    if (subjectNoun && subjectNoun.length > 3 && new RegExp(`\\b${subjectNoun}s?\\b`, "i").test(text)) {
+    const subjectNoun = scene.subject
+      .replace(/\([^)]*\)/g, "")
+      .replace(/^a |^an /i, "")
+      .trim()
+      .split(/\s+/)
+      .pop();
+    if (subjectNoun && subjectNoun.length > 3 && new RegExp(`\\b${escapeRegex(subjectNoun)}s?\\b`, "i").test(text)) {
       return true;
     }
   }
