@@ -1,5 +1,7 @@
+import { readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 import {
   HIGH_CONCEPT_ARCHETYPES,
@@ -10,6 +12,12 @@ import {
   sceneSignature,
   settingFamily,
 } from "./poster-concepts.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const APPROVED_CAPTION_EXAMPLES_CSV = join(__dirname, "extract-post-text.manual.csv");
+const DEFAULT_CAPTION_OPTION_COUNT = 5;
+const MAX_SMALL_TEXT_LENGTH = 36;
+const MAX_BIG_TEXT_LENGTH = 44;
 
 export const DEFAULT_OUTPUT_DIR = "motivational_assets";
 export const DEFAULT_IMAGE_MODEL = "gpt-image-2";
@@ -1418,105 +1426,167 @@ Something someone would save because it feels oddly iconic, not because it is po
 }
 
 export function captionSignature(caption) {
-  return `${normalizeCaptionLine(caption?.smallText || "", 34)}|${normalizeCaptionLine(caption?.bigText || "", 28)}`;
+  return `${normalizeCaptionLine(caption?.smallText || "", MAX_SMALL_TEXT_LENGTH)}|${normalizeCaptionLine(caption?.bigText || "", MAX_BIG_TEXT_LENGTH)}`;
 }
 
-const EMOTION_CAPTION_EXAMPLES = {
-  gentle: [
-    ["smile homie,", "life's awesome."],
-    ["take it slow,", "no rush."],
-    ["smile today,", "it helps."],
-    ["stay calm,", "you're learning."],
-    ["through thick & thin,", "i got you bro"],
-  ],
-  funny: [
-    ["stay goofy twin,", "it's iconic."],
-    ["smile twin,", "it's gangsta"],
-    ["i'm weird", "but i'm real tho."],
-    ["stay weird,", "it's gangsta."],
-  ],
-  momentum: [
-    ["f*ck 'em,", "got dreams to chase"],
-    ["life update:", "we're so back"],
-    ["keep moving,", "it adds up."],
-    ["smile bro,", "u are on fire."],
-  ],
-  "self-worth": [
-    ["quick reminder,", "u are awesome."],
-    ["smile bro,", "u're still in it"],
-    ["unlearn the hate bro,", "it's lame af"],
-    ["you're enough,", "always were."],
-  ],
-  perspective: [
-    ["spread love,", "hate's lame af"],
-    ["remember,", "you've come far."],
-    ["cold air,", "clear mind."],
-    ["breathe deep,", "reset slowly."],
-  ],
-};
+let approvedCaptionExamplesCache = null;
 
-export function buildCaptionPrompt(scene, { recentCaptions = [], attempt = 0 } = {}) {
-  const moodExamples = (EMOTION_CAPTION_EXAMPLES[scene.emotion] || EMOTION_CAPTION_EXAMPLES.gentle)
-    .map(([smallText, bigText]) => `- "${smallText} ${bigText}"`)
+function parseCsvRows(text) {
+  const rows = [];
+  let row = [];
+  let field = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+
+    if (ch === '"') {
+      if (inQuotes && text[i + 1] === '"') {
+        field += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === "," && !inQuotes) {
+      row.push(field);
+      field = "";
+    } else if ((ch === "\n" || ch === "\r") && !inQuotes) {
+      if (ch === "\r" && text[i + 1] === "\n") i++;
+      row.push(field);
+      if (row.some((value) => value !== "")) rows.push(row);
+      row = [];
+      field = "";
+    } else {
+      field += ch;
+    }
+  }
+
+  row.push(field);
+  if (row.some((value) => value !== "")) rows.push(row);
+  return rows;
+}
+
+function readApprovedCaptionExamples() {
+  if (approvedCaptionExamplesCache) return approvedCaptionExamplesCache;
+
+  try {
+    const rows = parseCsvRows(readFileSync(APPROVED_CAPTION_EXAMPLES_CSV, "utf8"));
+    const headers = rows[0] || [];
+    const index = Object.fromEntries(headers.map((header, i) => [header, i]));
+
+    approvedCaptionExamplesCache = rows.slice(1)
+      .map((row) => {
+        const path = row[index.path] || "";
+        const smallText = normalizeCaptionLine(row[index.line_1] || "", MAX_SMALL_TEXT_LENGTH);
+        const bigText = normalizeCaptionLine(row[index.line_2] || "", MAX_BIG_TEXT_LENGTH);
+        return {
+          path,
+          text: normalizeCaptionLine(row[index.text] || `${smallText} ${bigText}`, MAX_SMALL_TEXT_LENGTH + MAX_BIG_TEXT_LENGTH + 1),
+          smallText,
+          bigText,
+          isPosterGenerated: /(^|\/)poster_/i.test(path),
+          source: row[index.source] || "approved-csv",
+        };
+      })
+      .filter((example) => example.smallText && example.bigText);
+  } catch {
+    approvedCaptionExamplesCache = REFERENCE_COPY_PAIRS.map(([smallText, bigText]) => ({
+      path: "fallback",
+      text: `${smallText} ${bigText}`,
+      smallText: normalizeCaptionLine(smallText, MAX_SMALL_TEXT_LENGTH),
+      bigText: normalizeCaptionLine(bigText, MAX_BIG_TEXT_LENGTH),
+      isPosterGenerated: false,
+      source: "fallback",
+    }));
+  }
+
+  return approvedCaptionExamplesCache;
+}
+
+export function loadApprovedCaptionExamples({ includePosterImages = false } = {}) {
+  return readApprovedCaptionExamples().filter((example) =>
+    includePosterImages ? true : !example.isPosterGenerated
+  );
+}
+
+function approvedCaptionExamplesForPrompt() {
+  const seen = new Set();
+  return loadApprovedCaptionExamples()
+    .filter((example) => {
+      const key = captionSignature(example);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .map((example) => `- "${example.smallText}" / "${example.bigText}"`)
     .join("\n");
+}
 
-  const avoidBlock =
-    recentCaptions.length > 0
-      ? `\nAlready used — do NOT repeat or closely imitate:\n${recentCaptions
-          .map((c) => `- "${c.smallText} ${c.bigText}"`)
-          .join("\n")}\n`
-      : "";
+function formatRecentCaptionsForPrompt(recentCaptions) {
+  if (!recentCaptions.length) return "";
+  return `\nAlready used in recent drafts — do not repeat or lightly remix these:\n${recentCaptions
+    .map((caption) => `- "${caption.smallText} ${caption.bigText}"`)
+    .join("\n")}\n`;
+}
 
+function formatSceneForCaptionPrompt(scene) {
+  if (!scene || typeof scene !== "object") return "No reliable scene metadata; use the attached image.";
+  return [
+    scene.vibe && `vibe: ${scene.vibe}`,
+    scene.emotion && `mood: ${scene.emotion}`,
+    scene.subject && `subject: ${scene.subject}`,
+    scene.action && `action: ${scene.action}`,
+    scene.setting && `setting: ${scene.setting}`,
+    scene.weather && `light/weather: ${scene.weather}`,
+  ].filter(Boolean).join("\n") || "No reliable scene metadata; use the attached image.";
+}
+
+export function buildCaptionPrompt(scene, {
+  recentCaptions = [],
+  attempt = 0,
+  count = DEFAULT_CAPTION_OPTION_COUNT,
+  hasImage = false,
+} = {}) {
   const retryNote =
     attempt > 0
-      ? "\nLast attempt was repeated or off-tone. Write a fresh original quote.\n"
+      ? "\nPrevious output was repeated, invalid, or off-tone. Keep the same taste library, but produce five fresh options.\n"
       : "";
 
-  return `Write one tiny two-line caption for a reference-style internet poster.
+  return `Write ${count} candidate two-line messages for a square Glance background image.
 
-Voice:
-- lowercase always
-- text like a real friend, not a therapist or brand
-- plain, deadpan, tiny, meme-caption energy
-- casual slang is ok when it sounds natural ("it's gangsta", "iconic", "lame af", "we're so back")
-- warm, defiant, funny, sincere — group chat hype OR quiet sincere
-- mild edge ok (e.g. "f*ck 'em," "hate's lame af") but never cruel or mean-spirited
-- do NOT use "hey", "legend", "champ", "lowkey", "vibe", "vibes", "you got this", or "you're doing..."
-- do NOT use food metaphors, brand pep-talk, corporate motivation, therapy clichés, hustle language, "believe in yourself", "main character", or photo descriptions
-- do NOT write vague wellness fragments ("quiet moments", "gentle reminder", "in this moment", "you're enough today")
+${hasImage ? "Use the attached background image first." : "No image is attached in this call, so use the scene metadata."} The image is only for mood, emotional temperature, and broad fit. The message should usually NOT describe the literal subject, animal, outfit, prop, or location.
 
-Structure (${scene.copyFormula}):
-- smallText: 1-4 words, usually ending with comma or colon
-- bigText: 2-5 words, tiny payoff
-- the whole caption should feel smaller than a quote; never a sentence paragraph
+This is a new message generator. Treat the approved examples below as the taste library. Match what they do:
+- tiny two-line internet-poster copy, not a polished quote
+- lowercase, casual, human, a little imperfect
+- friend voice: warm, sincere, defiant, funny, loyal, or gently reflective
+- simple phrase architecture: opener/framing line, then small payoff
+- slang is allowed when it feels native to the examples: bro, twin, homie, sis, u, ur, im, af, fr, goated, gangsta
+- punctuation can be loose; commas/colons are common, but punctuation-free approved shapes are allowed
+- one option may be more reflective if the image supports it, but most options should stay short and punchy
 
-Gold-standard examples (match this exact energy):
-- "smile twin," / "it's gangsta"
-- "stay goofy twin," / "it's iconic."
-- "smile today," / "it helps."
-- "cold air," / "clear mind."
-- "remember," / "you've come far."
-- "stay calm," / "you're learning."
-- "spread love," / "hate's lame af"
-- "through thick & thin," / "i got you bro"
-- "life update:" / "we're so back"
-- "f*ck 'em," / "got dreams to chase"
-- "you're enough," / "always were."
+Do not do the stuff the rejected generated poster messages tended to do:
+- no "hey you", "look at you", "captain floof", "night owl", "big heart energy", "chill vibes", "making magic quietly", or image-specific nicknames
+- no literal animal/place/outfit/weather captions
+- no therapist voice, brand voice, corporate motivation, hustle language, or self-care jargon
+- no "main character", "lowkey", "believe in yourself", "you got this", "so proud of you", "killing it", or "crushing it"
+- no food metaphors, hashtags, emojis, question marks, exclamation marks, or em dashes
+- no long paragraph sentence unless it resembles the few longer reflective approved examples
 
-Important:
-- does NOT describe the image (no animals, places, outfits, weather)
-- original wording only — not a famous quote
-- no em dashes, no long sentences
-- avoid trying to be clever; if in doubt, be plainer
+Line rules:
+- smallText: usually 1-5 words, maximum ${MAX_SMALL_TEXT_LENGTH} characters
+- bigText: usually 2-6 words, maximum ${MAX_BIG_TEXT_LENGTH} characters
+- lowercase only
+- return five meaningfully different options, not the same caption with synonyms
 
-Poster vibe: ${scene.vibe || scene.emotion}
-Mood: ${scene.emotion}
-${avoidBlock}${retryNote}
-More examples for this mood (style only, do not copy verbatim):
-${moodExamples}
+Background context, secondary to the image:
+${formatSceneForCaptionPrompt(scene)}
+${formatRecentCaptionsForPrompt(recentCaptions)}${retryNote}
+Approved examples from the CSV, excluding every poster_ image:
+${approvedCaptionExamplesForPrompt()}
 
-Return only JSON:
-{"smallText":"first line","bigText":"second line"}`;
+Return only JSON in this exact shape:
+{"options":[{"smallText":"first line","bigText":"second line"},{"smallText":"first line","bigText":"second line"},{"smallText":"first line","bigText":"second line"},{"smallText":"first line","bigText":"second line"},{"smallText":"first line","bigText":"second line"}]}`;
 }
 
 const BANNED_CAPTION_PHRASES = [
@@ -1534,19 +1604,13 @@ const BANNED_CAPTION_PHRASES = [
   /soft heart/i,
   /strong soul/i,
   /heart open/i,
-  /heads up/i,
   /^hey\b/i,
   /\bhey (you|legend|champ|twin|sis|bro|homie|night owl)\b/i,
   /banana/i,
   /bananas/i,
   /snack/i,
-  /you're doing/i,
-  /ur doing/i,
-  /u are doing/i,
-  /doing (great|good|amazing|well|fantastic|incredible|awesome)/i,
   /nailing it/i,
   /looks good/i,
-  /magic/i,
   /on your side/i,
   /look easy/i,
   /making chaos/i,
@@ -1556,7 +1620,6 @@ const BANNED_CAPTION_PHRASES = [
   /just so you know/i,
   /just wanted to/i,
   /friendly reminder/i,
-  /don't forget/i,
   /so proud of you/i,
   /killing it/i,
   /crushing it/i,
@@ -1566,7 +1629,6 @@ const BANNED_CAPTION_PHRASES = [
   /hang in there/i,
   /you matter/i,
   /you deserve/i,
-  /keep going/i,
   /you got this/i,
   /stay strong/i,
   /believe in/i,
@@ -1600,7 +1662,6 @@ const IMAGE_DESC_WORDS =
 const VAGUE_SMALL_OPENERS = [
   /^quiet\b/i,
   /^gentle\b/i,
-  /^soft\b/i,
   /^peaceful\b/i,
   /^calm\b/i,
   /^sweet\b/i,
@@ -1647,7 +1708,7 @@ function isOffToneCaption({ smallText, bigText }, scene) {
   if (AFFIRMATION_TODAY.test(bigText) || AFFIRMATION_TODAY.test(text)) return true;
   if (/\benough\b/i.test(smallText) && /\benough\b/i.test(bigText)) return true;
   if (captionDescribesImage({ smallText, bigText }, scene)) return true;
-  if (smallText.length > 24 || bigText.length > 28) return true;
+  if (smallText.length > MAX_SMALL_TEXT_LENGTH || bigText.length > MAX_BIG_TEXT_LENGTH) return true;
   if (/[A-Z]/.test(text.replace(/\*/g, ""))) return true;
   return false;
 }
@@ -1655,16 +1716,16 @@ function isOffToneCaption({ smallText, bigText }, scene) {
 function hasReferenceCaptionShape({ smallText, bigText }) {
   const smallWords = smallText.split(/\s+/).filter(Boolean).length;
   const bigWords = bigText.split(/\s+/).filter(Boolean).length;
-  if (smallWords > 5 || bigWords > 6) return false;
+  if (smallWords > 6 || bigWords > 8) return false;
   if (/[?!]/.test(`${smallText} ${bigText}`)) return false;
-  if (!/[,.:]$/.test(smallText) && !/^i'm weird$|^remember to$/i.test(smallText)) return false;
+  if (smallWords + bigWords > 12) return false;
   return true;
 }
 
 export function finalizeCaption(caption, recentCaptions = [], scene = null) {
   const normalized = {
-    smallText: normalizeCaptionLine(caption?.smallText || "", 34),
-    bigText: normalizeCaptionLine(caption?.bigText || "", 28),
+    smallText: normalizeCaptionLine(caption?.smallText || "", MAX_SMALL_TEXT_LENGTH),
+    bigText: normalizeCaptionLine(caption?.bigText || "", MAX_BIG_TEXT_LENGTH),
   };
 
   if (!normalized.smallText || !normalized.bigText) return null;
@@ -1676,6 +1737,19 @@ export function finalizeCaption(caption, recentCaptions = [], scene = null) {
   if (recentSigs.has(sig)) return null;
 
   return normalized;
+}
+
+export function finalizeCaptionOptions(captions, recentCaptions = [], scene = null, { count = DEFAULT_CAPTION_OPTION_COUNT } = {}) {
+  const accepted = [];
+
+  for (const candidate of Array.isArray(captions) ? captions : []) {
+    const caption = finalizeCaption(candidate, [...recentCaptions, ...accepted], scene);
+    if (!caption) continue;
+    accepted.push(caption);
+    if (accepted.length >= count) break;
+  }
+
+  return accepted;
 }
 
 export function variedFallbackCaption(scene, recentCaptions = [], rng = Math.random) {
@@ -1716,6 +1790,40 @@ export function variedFallbackCaption(scene, recentCaptions = [], rng = Math.ran
   return captionFromPair(pick(pool, rng));
 }
 
+export function variedFallbackCaptionOptions(scene, recentCaptions = [], count = DEFAULT_CAPTION_OPTION_COUNT, rng = Math.random) {
+  const options = [];
+  const avoid = [...recentCaptions];
+
+  for (let attempt = 0; options.length < count && attempt < 100; attempt++) {
+    const candidate = variedFallbackCaption(scene, avoid, rng);
+    const caption = finalizeCaption(candidate, avoid, scene);
+    if (!caption) continue;
+    options.push(caption);
+    avoid.push(caption);
+  }
+
+  return options;
+}
+
+export function completeCaptionOptions(
+  captions,
+  scene,
+  recentCaptions = [],
+  count = DEFAULT_CAPTION_OPTION_COUNT,
+  { requireSeed = false } = {}
+) {
+  const options = finalizeCaptionOptions(captions, recentCaptions, scene, { count });
+  if (requireSeed && !options.length) return [];
+  if (options.length >= count) return options;
+
+  const fallbackOptions = variedFallbackCaptionOptions(
+    scene,
+    [...recentCaptions, ...options],
+    count - options.length
+  );
+  return [...options, ...fallbackOptions].slice(0, count);
+}
+
 export function referenceCaptionForScene(scene) {
   const subject = scene.subject;
   const weather = scene.weather;
@@ -1747,37 +1855,119 @@ function captionFromPair([smallText, bigText]) {
   return { smallText, bigText };
 }
 
-export function parseCaption(text) {
-  const cleaned = String(text || "").trim();
-  try {
-    const jsonText = cleaned.match(/\{[\s\S]*\}/)?.[0] || cleaned;
-    const parsed = JSON.parse(jsonText);
-    if (typeof parsed.smallText === "string" && typeof parsed.bigText === "string") {
-      return {
-        smallText: normalizeCaptionLine(parsed.smallText, 34),
-        bigText: normalizeCaptionLine(parsed.bigText, 28),
-      };
+function parseJsonCandidate(cleaned) {
+  const candidates = [cleaned];
+  const objectStart = cleaned.indexOf("{");
+  const objectEnd = cleaned.lastIndexOf("}");
+  if (objectStart !== -1 && objectEnd > objectStart) {
+    candidates.push(cleaned.slice(objectStart, objectEnd + 1));
+  }
+  const arrayStart = cleaned.indexOf("[");
+  const arrayEnd = cleaned.lastIndexOf("]");
+  if (arrayStart !== -1 && arrayEnd > arrayStart) {
+    candidates.push(cleaned.slice(arrayStart, arrayEnd + 1));
+  }
+
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      // Try the next candidate.
     }
-  } catch (_) {
-    // Fall through to line parsing.
+  }
+
+  return null;
+}
+
+function optionFromUnknown(value) {
+  if (!value) return null;
+
+  if (Array.isArray(value) && value.length >= 2) {
+    return { smallText: value[0], bigText: value[1] };
+  }
+
+  if (typeof value === "string") {
+    const [smallText, bigText] = value.split(/\s+\/\s+|\s+\|\s+|\n/);
+    if (smallText && bigText) return { smallText, bigText };
+    return null;
+  }
+
+  if (typeof value === "object") {
+    const smallText = value.smallText ?? value.small_text ?? value.line_1 ?? value.line1 ?? value.small;
+    const bigText = value.bigText ?? value.big_text ?? value.line_2 ?? value.line2 ?? value.big;
+    if (typeof smallText === "string" && typeof bigText === "string") {
+      return { smallText, bigText };
+    }
+  }
+
+  return null;
+}
+
+export function parseCaptionOptions(text) {
+  const cleaned = String(text || "").trim();
+  const parsed = parseJsonCandidate(cleaned);
+
+  if (parsed) {
+    const rawOptions = Array.isArray(parsed)
+      ? parsed
+      : Array.isArray(parsed.options)
+        ? parsed.options
+        : Array.isArray(parsed.captions)
+          ? parsed.captions
+          : Array.isArray(parsed.messages)
+            ? parsed.messages
+            : [parsed];
+    return rawOptions
+      .map(optionFromUnknown)
+      .filter(Boolean)
+      .map((option) => ({
+        smallText: normalizeCaptionLine(option.smallText, MAX_SMALL_TEXT_LENGTH),
+        bigText: normalizeCaptionLine(option.bigText, MAX_BIG_TEXT_LENGTH),
+      }));
   }
 
   const lines = cleaned
     .split(/\r?\n/)
     .map((line) => line.replace(/^["'\s-]+|["'\s]+$/g, "").trim())
     .filter(Boolean);
+  const options = [];
+  for (const line of lines) {
+    const option = optionFromUnknown(line);
+    if (option) options.push(option);
+  }
+  if (options.length) {
+    return options.map((option) => ({
+      smallText: normalizeCaptionLine(option.smallText, MAX_SMALL_TEXT_LENGTH),
+      bigText: normalizeCaptionLine(option.bigText, MAX_BIG_TEXT_LENGTH),
+    }));
+  }
+
+  return [];
+}
+
+export function parseCaption(text) {
+  const options = parseCaptionOptions(text);
+  if (options[0]) return options[0];
+
+  const lines = String(text || "")
+    .trim()
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^["'\s-]+|["'\s]+$/g, "").trim())
+    .filter(Boolean);
   const fallback = pick(QUOTE_BANK);
   return {
-    smallText: normalizeCaptionLine(lines[0] || fallback[0], 34),
-    bigText: normalizeCaptionLine(lines[1] || fallback[1], 28),
+    smallText: normalizeCaptionLine(lines[0] || fallback[0], MAX_SMALL_TEXT_LENGTH),
+    bigText: normalizeCaptionLine(lines[1] || fallback[1], MAX_BIG_TEXT_LENGTH),
   };
 }
 
 function normalizeCaptionLine(line, maxLength) {
   return String(line)
     .trim()
+    .replace(/^["']+|["']+$/g, "")
     .replace(/[“”]/g, '"')
     .replace(/[‘’]/g, "'")
+    .replace(/^["']+|["']+$/g, "")
     .replace(/\s+/g, " ")
     .toLowerCase()
     .replace(/[—–]/g, " ")
