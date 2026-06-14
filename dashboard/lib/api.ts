@@ -1,4 +1,9 @@
-export const API_BASE = process.env.EXPO_PUBLIC_API_URL ?? "http://127.0.0.1:3847";
+const runtimeEnv =
+  typeof globalThis !== "undefined"
+    ? ((globalThis as any).process?.env ?? {})
+    : {};
+
+export const API_BASE = runtimeEnv.EXPO_PUBLIC_API_URL ?? "http://127.0.0.1:3847";
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -44,6 +49,20 @@ export const api = {
       caption: { smallText: string; bigText: string };
       captionLayout: { xRatio: number; yRatio: number; textColor: string | null };
     }>("/api/drafts/render-caption", { method: "POST", body: JSON.stringify(opts) }),
+  approveDraftBackground: (opts: {
+    id: string;
+    captionModel?: string;
+    layout?: { xRatio: number; yRatio: number; textColor: "#050505" | "#ffffff" };
+  }) =>
+    request<{
+      success: boolean;
+      id: string;
+      imageUrl: string;
+      rawImageUrl: string;
+      caption: { smallText: string; bigText: string };
+      captionLayout: { xRatio: number; yRatio: number; textColor: string | null };
+      captionModel: string;
+    }>("/api/drafts/approve-background", { method: "POST", body: JSON.stringify(opts) }),
 
   prompts: () => request<{ prompts: Prompt[] }>("/api/prompts"),
   deletePrompts: (ids: string[]) =>
@@ -106,12 +125,15 @@ export interface CaptionLayout {
 }
 
 export interface DraftMeta {
+  kind?: "draft" | "background";
   filename?: string;
   caption?: { smallText: string; bigText: string };
+  needsCaption?: boolean;
   captionLayout?: CaptionLayout | null;
   scene?: Record<string, string>;
   generatedAt?: string;
   imageModel?: string;
+  promptModel?: string;
   captionModel?: string;
   publishedAt?: string;
   storagePath?: string;
