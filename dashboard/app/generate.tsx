@@ -11,7 +11,7 @@ type Size = "1024x1024" | "1536x1024" | "1024x1536";
 const MODES: { id: Mode; label: string; desc: string }[] = [
   { id: "full", label: "Full Pipeline", desc: "Prompt → Image → Caption → Poster" },
   { id: "prompts", label: "Prompts Only", desc: "Save scene prompts for later use" },
-  { id: "images", label: "Images Only", desc: "Generate raw images, no text overlay" },
+  { id: "images", label: "Images Only", desc: "Stage backgrounds for Drafts approval" },
 ];
 
 const SIZES: Size[] = ["1024x1024", "1536x1024", "1024x1536"];
@@ -183,7 +183,7 @@ export default function GenerateScreen() {
 
       <JobLog jobId={jobId} onDone={(code) => {
         if (typeof window !== "undefined") sessionStorage.removeItem(SESSION_KEY);
-        setLastResult(code === 0 ? "✓ Done! Check Drafts to publish." : "✗ Job failed — check log above.");
+        setLastResult(code === 0 ? "✓ Done! Check Drafts to review." : "✗ Job failed — check log above.");
       }} />
     </ScrollView>
   );
