@@ -28,10 +28,11 @@ import {
   DEFAULT_CAPTION_MODEL,
   buildCaptionPrompt,
   buildLegacyPromptForMetadata,
-  finalizeCaption,
+  captionSignature,
+  completeCaptionOptions,
   normalizeCaptionLayout,
   overlayCaption,
-  parseCaption,
+  parseCaptionOptions,
   variedFallbackCaption,
 } from "./motivational-generator.js";
 import { supabaseServiceRoleKey, supabaseUrl } from "./supabase-env.js";
@@ -205,6 +206,8 @@ async function listDrafts(supabase, projectUrl) {
         meta: {
           kind: "draft",
           caption: row.caption,
+          captionOptions: row.metadata?.captionOptions ?? null,
+          selectedCaptionIndex: row.metadata?.selectedCaptionIndex ?? null,
           needsCaption: false,
           captionLayout: row.metadata?.captionLayout ?? null,
           scene: row.scene,
@@ -306,6 +309,17 @@ function responseText(response) {
   return chunks.join("\n");
 }
 
+function captionRequestContent(prompt, imageBytes) {
+  const content = [{ type: "input_text", text: prompt }];
+  if (imageBytes?.length) {
+    content.push({
+      type: "input_image",
+      image_url: `data:image/png;base64,${imageBytes.toString("base64")}`,
+    });
+  }
+  return content;
+}
+
 async function loadRecentCaptions(supabase, limit = 30) {
   const recent = [];
 
@@ -346,22 +360,32 @@ async function loadRecentCaptions(supabase, limit = 30) {
   });
 }
 
-async function generateCaptionForScene({ client, model, scene, recentCaptions }) {
-  let lastPrompt = buildCaptionPrompt(scene, { recentCaptions });
+async function generateCaptionForScene({ client, model, scene, imageBytes = null, recentCaptions }) {
+  let lastPrompt = buildCaptionPrompt(scene, { recentCaptions, hasImage: Boolean(imageBytes?.length) });
 
   for (let attempt = 0; attempt < 5; attempt++) {
-    lastPrompt = buildCaptionPrompt(scene, { recentCaptions, attempt });
+    lastPrompt = buildCaptionPrompt(scene, { recentCaptions, attempt, hasImage: Boolean(imageBytes?.length) });
     const response = await client.responses.create({
       model,
       temperature: 0.7,
-      input: [{ role: "user", content: [{ type: "input_text", text: lastPrompt }] }],
+      input: [{ role: "user", content: captionRequestContent(lastPrompt, imageBytes) }],
     });
-    const caption = finalizeCaption(parseCaption(responseText(response)), recentCaptions, scene);
-    if (caption) return { caption, prompt: lastPrompt };
+    const options = completeCaptionOptions(parseCaptionOptions(responseText(response)), scene, recentCaptions, 5, {
+      requireSeed: true,
+    });
+    if (options.length) {
+      return {
+        caption: options[Math.floor(Math.random() * options.length)],
+        options,
+        prompt: lastPrompt,
+      };
+    }
   }
 
+  const fallbackOptions = completeCaptionOptions([], scene, recentCaptions);
   return {
-    caption: variedFallbackCaption(scene, recentCaptions),
+    caption: fallbackOptions[0] || variedFallbackCaption(scene, recentCaptions),
+    options: fallbackOptions,
     prompt: lastPrompt,
   };
 }
@@ -383,20 +407,26 @@ async function approveDraftBackground(supabase, { id, captionModel, layout }) {
   }
 
   const model = captionModel || process.env.OPENAI_CAPTION_MODEL || DEFAULT_CAPTION_MODEL;
+  const { data: blob, error: downloadErr } = await supabase.storage.from(BUCKET).download(row.storage_path);
+  if (downloadErr) throw downloadErr;
+
+  const imageBytes = Buffer.from(await blob.arrayBuffer());
+  const rawStoragePath = row.storage_path;
   const openai = new OpenAI({ apiKey: env("OPENAI_API_KEY") });
   const recentCaptions = await loadRecentCaptions(supabase);
   const captionResult = await generateCaptionForScene({
     client: openai,
     model,
     scene,
+    imageBytes,
     recentCaptions,
   });
-
-  const { data: blob, error: downloadErr } = await supabase.storage.from(BUCKET).download(row.storage_path);
-  if (downloadErr) throw downloadErr;
-
-  const imageBytes = Buffer.from(await blob.arrayBuffer());
-  const rawStoragePath = row.storage_path;
+  let captionOptions = captionResult.options?.length ? captionResult.options : [captionResult.caption];
+  const selectedCaptionSig = captionSignature(captionResult.caption);
+  if (!captionOptions.some((caption) => captionSignature(caption) === selectedCaptionSig)) {
+    captionOptions = [captionResult.caption, ...captionOptions].slice(0, 5);
+  }
+  const selectedCaptionIndex = captionOptions.findIndex((caption) => captionSignature(caption) === selectedCaptionSig);
 
   const normalizedLayout = normalizeCaptionLayout(layout || metadata.captionLayout || {});
   const rendered = await overlayCaption(imageBytes, captionResult.caption, normalizedLayout);
@@ -406,6 +436,8 @@ async function approveDraftBackground(supabase, { id, captionModel, layout }) {
   const nextMetadata = {
     ...metadata,
     caption: captionResult.caption,
+    captionOptions,
+    selectedCaptionIndex,
     captionPrompt: captionResult.prompt,
     captionLayout: normalizedLayout,
     captionApprovedAt: new Date().toISOString(),
@@ -439,18 +471,20 @@ async function approveDraftBackground(supabase, { id, captionModel, layout }) {
 
   const { error: optionErr } = await supabase
     .from("caption_options")
-    .insert({
+    .insert(captionOptions.map((caption, optionIndex) => ({
       background_id: row.id,
       draft_id: draftRow?.id ?? null,
-      caption: captionResult.caption,
+      caption,
       caption_model: model,
       prompt: captionResult.prompt,
       metadata: {
         captionLayout: normalizedLayout,
+        optionIndex,
+        selectedCaptionIndex,
         scene,
       },
-      status: "selected",
-    });
+      status: optionIndex === selectedCaptionIndex ? "selected" : "candidate",
+    })));
   if (optionErr) throw optionErr;
 
   const { error: backgroundErr } = await supabase
@@ -469,6 +503,8 @@ async function approveDraftBackground(supabase, { id, captionModel, layout }) {
     imageUrl: publicObjectUrl(supabaseUrl(), finalStoragePath),
     rawImageUrl: publicObjectUrl(supabaseUrl(), rawStoragePath),
     caption: captionResult.caption,
+    captionOptions,
+    selectedCaptionIndex,
     captionLayout: normalizedLayout,
     captionModel: model,
   };
