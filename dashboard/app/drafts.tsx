@@ -83,16 +83,14 @@ export default function DraftsScreen() {
     const draft = drafts[reviewIdx];
     if (!draft || busy) return;
 
-    const id = draft.id;
-    const next = drafts.filter(d => d.id !== id);
-
-    setDrafts(next);
-    if (next.length === 0) setScreen("grid");
-    else setReviewIdx(i => Math.min(i, next.length - 1));
-
     setBusy(true);
+    setError(null);
     try {
       await action();
+      const next = drafts.filter(d => d.id !== draft.id);
+      setDrafts(next);
+      if (next.length === 0) setScreen("grid");
+      else setReviewIdx(i => Math.min(i, next.length - 1));
       if (next.length === 0) load();
     } catch (e: any) {
       await load();
