@@ -15,6 +15,8 @@ import {
   DEFAULT_OUTPUT_DIR,
   DEFAULT_PROMPT_MODEL,
   buildCaptionPrompt,
+  buildHighConceptScene,
+  buildIconicEnergyScene,
   buildLegacyPromptForMetadata,
   buildMotivationalPrompt,
   buildPromptWriterPrompt,
@@ -108,6 +110,14 @@ function formatElapsed(ms) {
 function sceneSummary(scene) {
   const prop = scene.prop === "nothing" ? "no prop" : scene.prop;
   return `${scene.subject} / ${scene.setting} / ${scene.weather} / ${prop}`;
+}
+
+function isAllowedScene(scene, avoidSignatures, { allowFamilyRepeat = false } = {}) {
+  return [...sceneDedupKeys(scene)].every((key) =>
+    allowFamilyRepeat && key.startsWith("family:")
+      ? true
+      : !avoidSignatures.has(key)
+  );
 }
 
 async function withProgress(label, task) {
@@ -259,26 +269,58 @@ async function main() {
   const avoidSceneSignatures = new Set();
   const recentCaptions = [];
 
-  for (let i = 1; i <= args.count; i++) {
-    const name = makeAssetName(i);
+  let completed = 0;
+  let attempted = 0;
+  const maxAttempts = args.dryRun
+    ? args.count
+    : args.count + Math.max(3, Math.ceil(args.count * 0.5));
+
+  while (completed < args.count && attempted < maxAttempts) {
+    attempted++;
+    const itemNumber = completed + 1;
+    const name = makeAssetName(attempted);
     let scene = null;
     for (let tries = 0; tries < 25; tries++) {
-      const candidate = Math.random() < 0.78 ? buildSceneFromArchetype() : buildScene(Math.random, { avoidSignatures: avoidSceneSignatures });
-      const keys = sceneDedupKeys(candidate);
-      if ([...keys].every((key) => !avoidSceneSignatures.has(key))) {
+      const roll = Math.random();
+      const candidate =
+        itemNumber % 3 === 1 && tries < 12
+          ? buildHighConceptScene()
+          : roll < 0.18
+            ? buildHighConceptScene()
+            : roll < 0.42
+            ? buildIconicEnergyScene()
+            : roll < 0.78
+              ? buildSceneFromArchetype()
+              : buildScene(Math.random, { avoidSignatures: avoidSceneSignatures });
+      if (isAllowedScene(candidate, avoidSceneSignatures)) {
         scene = candidate;
         break;
       }
     }
-    if (!scene) scene = buildSceneFromArchetype();
+    if (!scene) {
+      for (let tries = 0; tries < 80; tries++) {
+        const candidate =
+          itemNumber % 3 === 1 && tries < 40
+            ? buildHighConceptScene()
+            : tries % 3 === 0
+              ? buildIconicEnergyScene()
+              : buildSceneFromArchetype();
+        if (isAllowedScene(candidate, avoidSceneSignatures, { allowFamilyRepeat: true })) {
+          scene = candidate;
+          break;
+        }
+      }
+    }
+    if (!scene) scene = itemNumber % 3 === 1 ? buildHighConceptScene() : buildSceneFromArchetype();
     for (const key of sceneDedupKeys(scene)) avoidSceneSignatures.add(key);
     const fallbackScenePrompt = buildMotivationalPrompt(scene);
     const promptWriterPrompt = buildPromptWriterPrompt(scene);
-    const prefix = `[${i}/${args.count}]`;
+    const prefix = `[${itemNumber}/${args.count}]`;
 
     if (args.dryRun) {
       console.log(`\n--- ${name} creative brief ---\n${JSON.stringify(scene, null, 2)}`);
       console.log(`\n--- ${name} prompt-writer request ---\n${promptWriterPrompt}`);
+      completed++;
       continue;
     }
 
@@ -307,6 +349,7 @@ async function main() {
           })
         );
         saved++;
+        completed++;
         console.log(`${prefix} prompt: ${paths.promptPath}\n`);
         continue;
       }
@@ -373,6 +416,7 @@ async function main() {
       }
 
       saved++;
+      completed++;
       console.log(`${prefix} saved ${paths.imagePath}${uploadNote}`);
       if (paths.rawImagePath) console.log(`${prefix} background: ${paths.rawImagePath}`);
       if (caption) console.log(`${prefix} caption: ${caption.smallText} / ${caption.bigText}`);
@@ -385,6 +429,9 @@ async function main() {
 
   if (!args.dryRun) {
     console.log(`Done: ${saved} saved, ${failed} failed in ${formatElapsed(Date.now() - startedAt)}.`);
+    if (saved < args.count) {
+      console.log(`Stopped after ${attempted} attempt${attempted === 1 ? "" : "s"} before reaching ${args.count} saved poster${args.count === 1 ? "" : "s"}.`);
+    }
   }
 }
 
