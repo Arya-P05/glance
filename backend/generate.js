@@ -22,6 +22,7 @@ import {
   buildHighConceptScene,
   buildIconicEnergyScene,
   buildMotivationalPrompt,
+  buildPlayfulAnimalScene,
   buildPromptWriterPrompt,
   buildScene,
   buildSceneFromArchetype,
@@ -267,9 +268,13 @@ async function pickUniqueScene({ client, promptModel, avoidSignatures, preferEne
     const roll = Math.random();
     let scene;
 
-    if (preferEnergy && attempt < 20) {
+    if (preferEnergy && attempt < 6) {
+      scene = buildPlayfulAnimalScene();
+    } else if (preferEnergy && attempt < 20) {
       scene = buildHighConceptScene();
-    } else if (roll < 0.38) {
+    } else if (roll < 0.18) {
+      scene = buildPlayfulAnimalScene();
+    } else if (roll < 0.42) {
       scene = buildHighConceptScene();
     } else if (roll < 0.72) {
       scene = buildIconicEnergyScene();
@@ -293,14 +298,14 @@ async function pickUniqueScene({ client, promptModel, avoidSignatures, preferEne
   for (let attempt = 0; attempt < 80; attempt++) {
     const scene =
       preferEnergy && attempt < 40
-        ? buildHighConceptScene()
+        ? (attempt % 3 === 0 ? buildPlayfulAnimalScene() : buildHighConceptScene())
         : attempt % 2 === 0
           ? buildIconicEnergyScene()
           : buildHighConceptScene();
     if (isAllowedScene(scene, avoidSignatures, { allowFamilyRepeat: true })) return scene;
   }
 
-  return preferEnergy ? buildHighConceptScene() : buildSceneFromArchetype();
+  return preferEnergy ? buildPlayfulAnimalScene() : buildSceneFromArchetype();
 }
 
 function rememberScene(scene, avoidSignatures) {

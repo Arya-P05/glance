@@ -103,6 +103,106 @@ export const POSTER_ARCHETYPES = [
     props: ["nothing"],
   },
   {
+    id: "puppy-pile-zoomies",
+    vibe: "baby dog chaos joy",
+    subjectKind: "animal",
+    subjects: [
+      "two golden retriever puppies",
+      "three border collie puppies",
+      "two samoyed puppies",
+      "a tiny chihuahua puppy and a fluffy white puppy",
+      "three mixed-breed puppies",
+    ],
+    action: "tumbling over each other mid-zoomies with open-mouth happy chaos",
+    settings: ["a bright backyard lawn with a plain fence low behind them and a huge clean blue sky above"],
+    cameras: ["wide-angle phone photo", "cheap 2006 point-and-shoot camera photo"],
+    weather: ["bright midday sun", "clear blue sky"],
+    compositions: ["puppies clustered low in frame, tiny paws and motion blur, massive open sky above"],
+    colors: ["saturated blue sky and green grass", "clean early-digital blue and green color"],
+    emotions: ["funny", "momentum"],
+    props: ["nothing"],
+  },
+  {
+    id: "kitten-cardboard-flash",
+    vibe: "tiny kitten flash mess",
+    subjectKind: "animal",
+    subjects: [
+      "three tiny kittens",
+      "two orange tabby kittens",
+      "a black kitten and a cream kitten",
+      "four sleepy foster kittens",
+      "two tiny kittens with huge eyes",
+    ],
+    action: "climbing out of a cardboard box with tiny paws everywhere",
+    settings: ["a plain apartment floor against an off-white wall with lots of blank wall above"],
+    cameras: ["compact camera flash photo", "old iPhone camera roll photo"],
+    weather: ["warm golden hour", "bright midday sun"],
+    compositions: ["kittens and box low in frame, cheap flash shadows, blank wall above"],
+    colors: ["bright white negative space with black-text-friendly contrast", "golden sunlight and soft shadows"],
+    emotions: ["funny", "gentle"],
+    props: ["nothing"],
+  },
+  {
+    id: "ducklings-puddle-parade",
+    vibe: "tiny duckling parade",
+    subjectKind: "animal",
+    subjects: [
+      "five tiny ducklings",
+      "a cluster of baby ducklings",
+      "three yellow ducklings",
+      "four ducklings and one very proud duck",
+      "a tiny line of ducklings",
+    ],
+    action: "charging through a shallow puddle like a very serious little parade",
+    settings: ["a wet park path after rain with mirror puddles low in frame and pale grey sky above"],
+    cameras: ["raw early-2000s digital camera photo", "wide-angle phone photo"],
+    weather: ["warm rain with a happy subject", "overcast"],
+    compositions: ["ducklings small and low in frame, splash ripples at their feet, huge pale sky above"],
+    colors: ["bright white negative space with black-text-friendly contrast", "clean early-digital blue and green color"],
+    emotions: ["funny", "momentum"],
+    props: ["nothing"],
+  },
+  {
+    id: "baby-goats-bench-jump",
+    vibe: "baby goat bounce photo",
+    subjectKind: "animal",
+    subjects: [
+      "two baby goats",
+      "three tiny baby goats",
+      "a baby goat and a miniature lamb",
+      "two floppy-eared baby goats",
+      "a baby goat duo",
+    ],
+    action: "mid-bounce off a tiny wooden bench with chaotic little legs everywhere",
+    settings: ["a sunny farmyard with short grass, a low wooden bench, and wide empty sky above"],
+    cameras: ["wide-angle fisheye snapshot", "cheap 2006 point-and-shoot camera photo"],
+    weather: ["clear blue sky", "warm golden hour"],
+    compositions: ["baby animals low and mid-jump, bench low in frame, giant clean sky above"],
+    colors: ["saturated blue sky and green grass", "golden sunlight and soft shadows"],
+    emotions: ["funny", "momentum"],
+    props: ["nothing"],
+  },
+  {
+    id: "bunnies-laundry-basket",
+    vibe: "baby bunny household meme",
+    subjectKind: "animal",
+    subjects: [
+      "two baby rabbits",
+      "three tiny bunnies",
+      "a white baby bunny and a grey baby bunny",
+      "a tiny bunny pair",
+      "four baby rabbits",
+    ],
+    action: "popping out of a laundry basket with suspiciously dramatic tiny faces",
+    settings: ["a sunny laundry room floor with a plain white wall and soft rectangular window light above"],
+    cameras: ["compact camera flash photo", "old iPhone camera roll photo"],
+    weather: ["sun peeking through clouds", "warm golden hour"],
+    compositions: ["basket and bunnies low in frame, blank wall and window light above"],
+    colors: ["bright white negative space with black-text-friendly contrast", "golden sunlight and soft shadows"],
+    emotions: ["funny", "gentle"],
+    props: ["nothing"],
+  },
+  {
     id: "kid-boat-sea",
     vibe: "summer boat candid",
     subjectKind: "person",
@@ -1250,6 +1350,11 @@ export const ICONIC_ENERGY_ARCHETYPE_IDS = new Set([
   "cat-attitude-wall",
   "polar-bear-snow-selfie",
   "cat-flowers-hill",
+  "puppy-pile-zoomies",
+  "kitten-cardboard-flash",
+  "ducklings-puddle-parade",
+  "baby-goats-bench-jump",
+  "bunnies-laundry-basket",
   "otter-sunglasses-vibe",
   "capybara-chill-water",
   "elderly-skateboard-road",
@@ -1285,6 +1390,11 @@ export const HIGH_CONCEPT_ARCHETYPE_IDS = new Set([
   "gaming-cat-desk",
   "cat-attitude-wall",
   "polar-bear-snow-selfie",
+  "puppy-pile-zoomies",
+  "kitten-cardboard-flash",
+  "ducklings-puddle-parade",
+  "baby-goats-bench-jump",
+  "bunnies-laundry-basket",
   "otter-sunglasses-vibe",
   "skydiver-sunset-grin",
   "diving-board-suit",
@@ -1308,6 +1418,14 @@ export const HIGH_CONCEPT_ARCHETYPE_IDS = new Set([
   "cockpit-sunset",
 ]);
 
+export const PLAYFUL_ANIMAL_ARCHETYPE_IDS = new Set([
+  "puppy-pile-zoomies",
+  "kitten-cardboard-flash",
+  "ducklings-puddle-parade",
+  "baby-goats-bench-jump",
+  "bunnies-laundry-basket",
+]);
+
 export const ICONIC_ENERGY_ARCHETYPES = POSTER_ARCHETYPES.filter((a) =>
   ICONIC_ENERGY_ARCHETYPE_IDS.has(a.id)
 );
@@ -1316,10 +1434,14 @@ export const HIGH_CONCEPT_ARCHETYPES = POSTER_ARCHETYPES.filter((a) =>
   HIGH_CONCEPT_ARCHETYPE_IDS.has(a.id)
 );
 
+export const PLAYFUL_ANIMAL_ARCHETYPES = POSTER_ARCHETYPES.filter((a) =>
+  PLAYFUL_ANIMAL_ARCHETYPE_IDS.has(a.id)
+);
+
 export function settingFamily(setting = "") {
   const s = String(setting).toLowerCase();
   if (/fireworks|night court|sparkler/.test(s)) return "fireworks-night";
-  if (/desk|bedroom|gaming|monitor|wall|laundromat|porch|kitchen|diner|museum|dorm|arcade|bookstore|barbershop|noodle|apartment/.test(s)) return "indoor-wall";
+  if (/desk|bedroom|gaming|monitor|wall|laundromat|porch|kitchen|diner|museum|dorm|arcade|bookstore|barbershop|noodle|apartment|laundry room/.test(s)) return "indoor-wall";
   if (/bodega|corner store|bus shelter|subway|thrift|flea market/.test(s)) return "urban-street";
   if (/parking garage/.test(s)) return "urban-sky";
   if (/parking|rest stop|gas station|road|highway|fair|warehouse street|underpass/.test(s)) return "roadside";
@@ -1395,7 +1517,7 @@ ${exampleBlock}
 
 Each concept must feel like:
 - one specific old camera-roll upload, not a stock photo category
-- iconic at thumbnail size: one subject, one joke/feeling, one clean background
+- iconic at thumbnail size: one subject or one tight little animal cluster, one joke/feeling, one clean background
 - weird, high-emotion, or peak-action enough to feel internet-native, but visually believable
 - the frame should catch the exact wild second: scream-laughing, midair, splash, wind blast, mist blast, flash hit, huge view reaction, or car-night chaos
 - subject low in frame with a huge plain color field above for text later
@@ -1403,6 +1525,7 @@ Each concept must feel like:
 - sometimes conventionally beautiful, model-off-duty, or celebrity-adjacent, but only as a raw candid aura; never reference or resemble a real celebrity
 - less "beautiful lifestyle shoot", more "oddly perfect saved image from the internet"
 - over many outputs, cast a broad mix: people of color, white people, and mixed groups. Do not default exclusively to any one race.
+- baby animals and playful multi-animal frames are welcome: puppies, kittens, ducklings, baby goats, bunnies, lambs, tiny paws, zoomies, puddles, baskets, and one clear chaotic cluster.
 - early-2000s tuner cars, street-racing-adjacent parking lots, flash-lit hotel driveways, giant waterfalls, canyon overlooks, rollercoaster drops, storm puddles, and accidental paparazzi energy are welcome when they stay clean and text-friendly.
 
 Banned overused ideas (do NOT use):

@@ -6,6 +6,7 @@ import sharp from "sharp";
 import {
   HIGH_CONCEPT_ARCHETYPES,
   ICONIC_ENERGY_ARCHETYPES,
+  PLAYFUL_ANIMAL_ARCHETYPES,
   POSTER_ARCHETYPES,
   isSceneBlocked,
   sceneDedupKeys,
@@ -32,11 +33,17 @@ export const DEFAULT_CAPTION_MODEL = "gpt-4.1-mini";
 
 const ANIMAL_IDEAS = [
   "golden retriever",
+  "golden retriever puppy",
   "samoyed",
+  "samoyed puppy",
   "border collie",
+  "border collie puppy",
   "tiny chihuahua",
+  "tiny chihuahua puppy",
   "orange cat",
+  "orange tabby kitten",
   "black cat",
+  "black kitten",
   "cow",
   "highland cow",
   "alpaca",
@@ -46,9 +53,12 @@ const ANIMAL_IDEAS = [
   "horse",
   "miniature horse",
   "goat",
+  "baby goat",
   "rabbit",
+  "baby rabbit",
   "polar bear",
   "sheep",
+  "lamb",
   "donkey",
   "capybara",
   "penguin",
@@ -68,6 +78,7 @@ const ANIMAL_IDEAS = [
   "ferret",
   "guinea pig",
   "pony",
+  "miniature pony foal",
 ];
 
 // Explicit ethnicity descriptors so the model varies race without overcorrecting into one lane.
@@ -151,6 +162,10 @@ const WILD_ACTIONS = [
   "holding an ice cream cone on a windy day",
   "running downhill with arms out",
   "splashing in a kiddie pool",
+  "tumbling over its own paws with happy chaos",
+  "doing zoomies with tiny legs everywhere",
+  "mid-jump with a ridiculous tiny expression",
+  "peeking out of a cardboard box like it has a plan",
   "looking proud on a road trip",
   "walking through fog with a huge smile",
 ];
@@ -1009,7 +1024,7 @@ function harmonizeCreativeBrief(brief, rng = Math.random) {
     out.colorDirection = "bright white negative space with black-text-friendly contrast";
   }
 
-  if (/cat|hamster|ferret|guinea pig|hedgehog/.test(subject) && rng() < 0.35) {
+  if (/cat|kitten|hamster|ferret|guinea pig|hedgehog/.test(subject) && rng() < 0.35) {
     out.setting = pick(INDOOR_SETTINGS, rng);
     out.composition = pick(WALL_COMPOSITIONS, rng);
     out.cameraAngle = out.composition;
@@ -1027,14 +1042,14 @@ function harmonizeCreativeBrief(brief, rng = Math.random) {
     out.colorDirection = pick(["golden sunlight and soft shadows", "bright white negative space with black-text-friendly contrast"], rng);
   }
 
-  if (/cow|alpaca|llama|horse|goat|sheep|donkey|capybara|rabbit|duck|goose|pony/.test(subject)) {
+  if (/cow|alpaca|llama|horse|goat|sheep|lamb|donkey|capybara|rabbit|bunny|duck|duckling|goose|pony|foal/.test(subject)) {
     out.setting = pick(FIELD_SETTINGS, rng);
     out.composition = pick(SKY_COMPOSITIONS, rng);
     out.cameraAngle = out.composition;
     out.colorDirection = pick(["saturated blue sky and green grass", "golden sunlight and soft shadows", "clean early-digital blue and green color"], rng);
   }
 
-  if (/dog|retriever|collie|samoyed|chihuahua/.test(subject)) {
+  if (/dog|puppy|retriever|collie|samoyed|chihuahua/.test(subject)) {
     out.setting = pick([...FIELD_SETTINGS, ...BEACH_WATER_SETTINGS], rng);
     out.composition = pick(SKY_COMPOSITIONS, rng);
     out.cameraAngle = out.composition;
@@ -1132,6 +1147,12 @@ function subjectIsMultiPerson(subject) {
   return /\b(two|three|four|five|group|friends|couple|siblings|cousins|pair|trio|both)\b|\band\b/i.test(String(subject));
 }
 
+function animalSubjectHasDeterminer(subject) {
+  return /\b(a|an|two|three|four|five|six|seven|eight|nine|ten|pair|trio|cluster|line|group)\b/i.test(
+    String(subject).trim().split(/\s+/)[0] || ""
+  );
+}
+
 export function buildSceneFromArchetype(rng = Math.random, archetype = pick(POSTER_ARCHETYPES, rng)) {
   let subject = pick(archetype.subjects, rng);
   if (
@@ -1141,8 +1162,8 @@ export function buildSceneFromArchetype(rng = Math.random, archetype = pick(POST
     !subjectIsMultiPerson(subject)
   ) {
     subject = `${subject} (${pick(PERSON_ETHNICITIES, rng)})`;
-  } else if (archetype.subjectKind === "animal" && !subject.startsWith("a ")) {
-    subject = /^(a|an)\s+/i.test(subject) ? subject : `a ${subject}`;
+  } else if (archetype.subjectKind === "animal" && !animalSubjectHasDeterminer(subject)) {
+    subject = `a ${subject}`;
   }
 
   const weather = pick(archetype.weather, rng);
@@ -1179,6 +1200,10 @@ export function buildHighConceptScene(rng = Math.random) {
   return buildSceneFromArchetype(rng, pick(HIGH_CONCEPT_ARCHETYPES, rng));
 }
 
+export function buildPlayfulAnimalScene(rng = Math.random) {
+  return buildSceneFromArchetype(rng, pick(PLAYFUL_ANIMAL_ARCHETYPES, rng));
+}
+
 export function buildSceneFromDirector(directorScene) {
   return finalizeBrief({ ...directorScene, source: "director" });
 }
@@ -1203,6 +1228,7 @@ The final image must feel like:
 - emotionally loud: huge grin, scream-laugh, shock, wind-blasted joy, full-body confidence, or unhinged but happy reaction
 - happy, positive, and goofy in a believable way, not mellow wellness content
 - visually eventful: motion, splash, mist, wind, flash, smoke, height, speed, weird scale, huge view, or one absurd peak-frame detail
+- for animals, favor baby animals, tiny paws, playful piles, zoomies, and tight multi-animal chaos when it still reads instantly
 - the situation may be surreal or staged, but every clothing item, prop, and setting detail must make visual sense together
 - grainy early-2000s digital photography with enough resolution to look good
 
@@ -1231,6 +1257,7 @@ Hard requirements:
 - avoid corporate motivation, fantasy painting, 3D render, studio portrait, glossy ad, cinematic movie still, glossy editorial fashion shoot, shallow-depth product photography, or lifestyle stock photo
 - do not name, copy, or imply a specific real celebrity; "celebrity-level presence" should mean styling, confidence, and aura only
 - avoid random clutter and multiple competing stories; one wild thing may happen, but keep the chaos readable and mostly low/mid frame
+- if there are multiple animals, keep them in one tight playful cluster with one readable action; do not scatter them across the image
 - avoid sickly green/yellow/cyan color casts; prefer natural early-digital blues, greens, warm sunlight, clean whites, or pastel sunset
 - for people: clothing and accessories must fit the setting (no bike helmets unless cycling/skating, no life jackets away from water, no random safety gear)
 - absurd animal behavior is allowed when it looks like a real internet snapshot: headphones, soda bottle, rude little paw pose, sunglasses, gaming desk, or prop comedy can be great
@@ -1248,6 +1275,10 @@ Style discipline:
 Great outcome examples in spirit:
 - a happy dog huge in the foreground on a blue-sky hill
 - a smiling cow close to a fisheye lens in a field
+- two puppies tumbling over each other in a backyard, motion-blurred paws, huge clean sky above
+- tiny kittens climbing out of a cardboard box under cheap flash with a blank apartment wall above
+- ducklings charging through a shallow puddle like a tiny parade under a pale sky
+- baby goats mid-bounce off a little bench in a sunny farmyard
 - an orange cat wearing huge headphones at a messy gaming desk, drinking from a soda bottle
 - a cat giving attitude with one paw raised in a blurry bedroom photo
 - a kid in a life jacket looking at bright ocean water
@@ -1323,7 +1354,7 @@ function sceneSpecificPromptNotes(brief) {
 
   if (brief.subjectKind === "animal") {
     notes.push(
-      "ANIMAL MEME ENERGY: keep the animal as the unmistakable hero, low in frame, with a funny expression or posture that feels like a real found internet photo. Avoid glossy wildlife photography."
+      "ANIMAL MEME ENERGY: keep the animal or tight animal cluster as the unmistakable hero, low in frame, with a funny expression, tiny-paw motion, or playful posture that feels like a real found internet photo. Avoid glossy wildlife photography."
     );
   }
 
