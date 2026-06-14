@@ -32,19 +32,21 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
 
   return (
     <View style={[styles.sidebar, collapsed && styles.sidebarCollapsed]}>
-      <View style={[styles.brand, collapsed && styles.brandCollapsed]}>
+      <View style={styles.brand}>
         {collapsed ? (
           <Pressable
             accessibilityLabel="Open sidebar"
             onPress={onToggle}
-            style={styles.collapsedLogoButton}
+            style={styles.logoSlot}
           >
             <Image source={APP_ICON} style={styles.logoImage} />
           </Pressable>
         ) : (
           <>
             <View style={styles.brandTitle}>
-              <Image source={APP_ICON} style={styles.logoImage} />
+              <View style={styles.logoSlot}>
+                <Image source={APP_ICON} style={styles.logoImage} />
+              </View>
               <Text style={styles.brandName}>glance</Text>
             </View>
             <Pressable
@@ -58,12 +60,11 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
         )}
       </View>
 
-      <View style={[styles.nav, collapsed && styles.navCollapsed]}>
+      <View style={styles.nav}>
         {NAV.map(item => {
           const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
           const navStyle = StyleSheet.flatten([
             styles.navItem,
-            collapsed ? styles.navItemCollapsed : null,
             active ? styles.navItemActive : null,
           ]);
           const labelStyle = StyleSheet.flatten([styles.navLabel, active ? styles.navLabelActive : null]);
@@ -74,20 +75,24 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
               style={navStyle}
               onPress={() => router.push(item.href as any)}
             >
-              <item.Icon
-                color={active ? C.accent : C.textMuted}
-                width={16}
-                height={16}
-                strokeWidth={1.8}
-              />
+              <View style={styles.navIconSlot}>
+                <item.Icon
+                  color={active ? C.accent : C.textMuted}
+                  width={16}
+                  height={16}
+                  strokeWidth={1.8}
+                />
+              </View>
               {!collapsed && <Text style={labelStyle}>{item.label}</Text>}
             </Pressable>
           );
         })}
       </View>
 
-      <View style={[styles.footer, collapsed && styles.footerCollapsed]}>
-        <View style={styles.footerDot} />
+      <View style={styles.footer}>
+        <View style={styles.footerDotSlot}>
+          <View style={styles.footerDot} />
+        </View>
         {!collapsed && <Text style={styles.footerText}>localhost:3847</Text>}
       </View>
     </View>
@@ -149,9 +154,10 @@ const styles = StyleSheet.create({
     paddingTop: 24,
     paddingBottom: 16,
     justifyContent: "space-between",
+    overflow: "hidden",
     transitionProperty: "width" as any,
     transitionDuration: "180ms" as any,
-    transitionTimingFunction: "ease" as any,
+    transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)" as any,
   },
   sidebarCollapsed: {
     width: 54,
@@ -160,19 +166,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
-    marginBottom: 28,
-  },
-  brandCollapsed: {
-    flexDirection: "column",
+    height: 38,
     paddingHorizontal: 8,
-    justifyContent: "center",
-    marginBottom: 20,
+    marginBottom: 28,
   },
   brandTitle: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 9,
+    minWidth: 0,
   },
   logoImage: {
     width: 24,
@@ -180,13 +181,12 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   brandName: { color: C.textPrimary, fontSize: 16, fontWeight: "700", letterSpacing: 0.5 },
-  collapsedLogoButton: {
+  logoSlot: {
     width: 38,
     height: 38,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 10,
-    backgroundColor: C.surfaceHigh,
+    marginRight: 8,
   },
   sidebarToggle: {
     width: 28,
@@ -200,24 +200,22 @@ const styles = StyleSheet.create({
   },
 
   nav: { gap: 2, paddingHorizontal: 8 },
-  navCollapsed: { alignItems: "center", paddingHorizontal: 6 },
   navItem: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    paddingVertical: 9,
-    paddingHorizontal: 10,
+    height: 38,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
     borderRadius: 8,
     transitionProperty: "width, background-color" as any,
     transitionDuration: "180ms" as any,
-    transitionTimingFunction: "ease" as any,
+    transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)" as any,
   },
-  navItemCollapsed: {
+  navIconSlot: {
     width: 38,
     height: 38,
+    alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 0,
-    paddingVertical: 0,
   },
   navItemActive: { backgroundColor: C.surfaceHigh },
   navLabel: { color: C.textSecondary, fontSize: 13, fontWeight: "500" },
@@ -226,12 +224,12 @@ const styles = StyleSheet.create({
   footer: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 18,
+    height: 38,
+    paddingHorizontal: 8,
   },
-  footerCollapsed: { justifyContent: "center", paddingHorizontal: 0 },
+  footerDotSlot: { width: 38, height: 38, alignItems: "center", justifyContent: "center" },
   footerDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: C.success },
-  footerText: { color: C.textMuted, fontSize: 11 },
+  footerText: { color: C.textMuted, fontSize: 11, marginLeft: 6 },
 
   content: { flex: 1, backgroundColor: C.bg },
 });
