@@ -23,6 +23,8 @@ import {
   DEFAULT_PROMPT_MODEL,
   buildCaptionPrompt,
   buildLegacyPromptForMetadata,
+  buildHighConceptScene,
+  buildIconicEnergyScene,
   buildMotivationalPrompt,
   buildPromptWriterPrompt,
   buildScene,
@@ -143,6 +145,14 @@ function sceneSummary(scene) {
   return `${scene.subject} / ${scene.setting} / ${scene.weather} / ${prop}`;
 }
 
+function isAllowedScene(scene, avoidSignatures, { allowFamilyRepeat = false } = {}) {
+  return [...sceneDedupKeys(scene)].every((key) =>
+    allowFamilyRepeat && key.startsWith("family:")
+      ? true
+      : !avoidSignatures.has(key)
+  );
+}
+
 async function withProgress(label, task) {
   const frames = ["-", "\\", "|", "/"];
   const startedAt = Date.now();
@@ -252,14 +262,20 @@ async function generateSceneFromDirector({ client, model, avoidSignatures }) {
   return buildSceneFromDirector(raw);
 }
 
-async function pickUniqueScene({ client, promptModel, avoidSignatures }) {
+async function pickUniqueScene({ client, promptModel, avoidSignatures, preferEnergy = false }) {
   for (let attempt = 0; attempt < 28; attempt++) {
     const roll = Math.random();
     let scene;
 
-    if (roll < 0.68) {
+    if (preferEnergy && attempt < 16) {
+      scene = buildHighConceptScene();
+    } else if (roll < 0.18) {
+      scene = buildHighConceptScene();
+    } else if (roll < 0.42) {
+      scene = buildIconicEnergyScene();
+    } else if (roll < 0.74) {
       scene = buildSceneFromArchetype();
-    } else if (roll < 0.88) {
+    } else if (roll < 0.9) {
       scene = buildScene(Math.random, { avoidSignatures });
     } else if (client) {
       try {
@@ -271,11 +287,20 @@ async function pickUniqueScene({ client, promptModel, avoidSignatures }) {
       scene = buildSceneFromArchetype();
     }
 
-    const keys = sceneDedupKeys(scene);
-    if ([...keys].every((key) => !avoidSignatures.has(key))) return scene;
+    if (isAllowedScene(scene, avoidSignatures)) return scene;
   }
 
-  return buildSceneFromArchetype();
+  for (let attempt = 0; attempt < 80; attempt++) {
+    const scene =
+      preferEnergy && attempt < 40
+        ? buildHighConceptScene()
+        : attempt % 3 === 0
+          ? buildIconicEnergyScene()
+          : buildSceneFromArchetype();
+    if (isAllowedScene(scene, avoidSignatures, { allowFamilyRepeat: true })) return scene;
+  }
+
+  return preferEnergy ? buildHighConceptScene() : buildSceneFromArchetype();
 }
 
 function rememberScene(scene, avoidSignatures) {
@@ -486,6 +511,28 @@ async function uploadDraftToDb(supabase, { name, imageBytes, rawImageBytes = nul
   );
 }
 
+async function uploadBackgroundToDb(supabase, { name, imageBytes, metadata }) {
+  const storagePath = `${DRAFT_PREFIX}/backgrounds/${name}.png`;
+  const { error: uploadErr } = await supabase.storage
+    .from(BUCKET)
+    .upload(storagePath, imageBytes, { contentType: "image/png", upsert: true });
+  if (uploadErr) throw uploadErr;
+
+  await upsertWithSchemaFallback(supabase, "backgrounds",
+    {
+      name,
+      storage_path: storagePath,
+      scene: metadata.scene ?? null,
+      image_prompt: metadata.scenePrompt ?? null,
+      metadata,
+      image_model: metadata.imageModel ?? null,
+      prompt_model: metadata.promptModel ?? null,
+      status: "pending",
+    },
+    { onConflict: "name", optionalColumns: ["metadata", "image_model", "prompt_model"] }
+  );
+}
+
 async function uploadPromptToDb(supabase, { name, prompt, metadata }) {
   await upsertWithSchemaFallback(supabase, "prompts",
     {
@@ -548,21 +595,30 @@ async function main() {
   const avoidSceneSignatures = supabase ? await loadRecentScenesFromDb(supabase) : new Set();
   const recentCaptions = supabase ? await loadRecentCaptionsFromDb(supabase) : [];
 
-  for (let i = 1; i <= args.count; i++) {
-    const prefix = `[${i}/${args.count}]`;
+  let completed = 0;
+  let attempted = 0;
+  const maxAttempts = args.dryRun
+    ? args.count
+    : args.count + Math.max(3, Math.ceil(args.count * 0.5));
+
+  while (completed < args.count && attempted < maxAttempts) {
+    attempted++;
+    const itemNumber = completed + 1;
+    const prefix = `[${itemNumber}/${args.count}]`;
 
     let scene, scenePrompt, promptWriterPrompt, name;
 
     if (promptSources) {
-      const source = promptSources[i - 1];
+      const source = promptSources[completed];
       if (!source) break;
       ({ scene, prompt: scenePrompt, promptWriterPrompt, name } = source);
     } else {
-      name = makeAssetName(i);
+      name = makeAssetName(attempted);
       scene = await pickUniqueScene({
         client: openai,
         promptModel: args.promptModel,
         avoidSignatures: avoidSceneSignatures,
+        preferEnergy: itemNumber % 3 === 1,
       });
       rememberScene(scene, avoidSceneSignatures);
     }
@@ -570,10 +626,11 @@ async function main() {
     const fallbackPrompt = buildMotivationalPrompt(scene);
 
     if (args.dryRun) {
-      console.log(`\n--- ${name ?? `item_${i}`} scene ---\n${JSON.stringify(scene, null, 2)}`);
+      console.log(`\n--- ${name ?? `item_${itemNumber}`} scene ---\n${JSON.stringify(scene, null, 2)}`);
       if (!promptSources) {
         console.log(`\n--- prompt-writer request ---\n${buildPromptWriterPrompt(scene)}`);
       }
+      completed++;
       continue;
     }
 
@@ -609,6 +666,7 @@ async function main() {
           );
         }
         saved++;
+        completed++;
         console.log(`${prefix} → ${paths.promptPath}\n`);
         continue;
       }
@@ -665,14 +723,24 @@ async function main() {
         })
       );
       if (supabase) {
-        await withProgress(`${prefix} saving draft to DB`, () =>
-          uploadDraftToDb(supabase, {
-            name,
-            imageBytes: finalImageBytes,
-            rawImageBytes: args.mode === "full" ? rawImageBytes : null,
-            metadata: draftMetadata,
-          })
-        );
+        if (args.mode === "images") {
+          await withProgress(`${prefix} saving background to DB`, () =>
+            uploadBackgroundToDb(supabase, {
+              name,
+              imageBytes: rawImageBytes,
+              metadata: draftMetadata,
+            })
+          );
+        } else {
+          await withProgress(`${prefix} saving draft to DB`, () =>
+            uploadDraftToDb(supabase, {
+              name,
+              imageBytes: finalImageBytes,
+              rawImageBytes,
+              metadata: draftMetadata,
+            })
+          );
+        }
         if (promptSources) {
           await withProgress(`${prefix} removing used prompt`, () =>
             removePromptFromDb(supabase, name)
@@ -681,6 +749,7 @@ async function main() {
       }
 
       saved++;
+      completed++;
       console.log(`${prefix} → ${paths.imagePath}`);
       if (caption) console.log(`${prefix}   caption: "${caption.smallText} ${caption.bigText}"`);
       console.log("");
@@ -692,6 +761,9 @@ async function main() {
 
   if (!args.dryRun) {
     console.log(`Done: ${saved} saved, ${failed} failed in ${formatElapsed(Date.now() - startedAt)}.`);
+    if (saved < args.count) {
+      console.log(`Stopped after ${attempted} attempt${attempted === 1 ? "" : "s"} before reaching ${args.count} saved item${args.count === 1 ? "" : "s"}.`);
+    }
     if (saved > 0 && args.mode !== "prompts") {
       console.log(`\nReady to publish? Run: npm run publish`);
     }
