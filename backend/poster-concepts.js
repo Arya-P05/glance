@@ -264,6 +264,7 @@ export const POSTER_ARCHETYPES = [
       "two South Asian friends",
       "two Black friends",
       "a Latino couple",
+      "two white friends in thrifted going-out clothes",
       "three college friends",
     ],
     action: "dancing badly under camera flash like a music video got lost",
@@ -273,6 +274,86 @@ export const POSTER_ARCHETYPES = [
     compositions: ["subjects low in frame with dark empty sky and parking-lot lights above"],
     colors: ["flash-lit subject against dark simple background"],
     emotions: ["funny", "momentum"],
+    props: ["nothing"],
+  },
+  {
+    id: "tuner-car-flash",
+    vibe: "early-2000s tuner-car aura",
+    subjectKind: "person",
+    subjects: [
+      "a white model-looking stranger in oversized sunglasses",
+      "a white young man in a vintage racing jacket",
+      "a Black woman in a cropped racing jacket",
+      "a Latina woman in a thrifted leather jacket",
+      "a mixed-race friend group in early-2000s streetwear",
+    ],
+    action: "leaning on a silver tuner car with ridiculous calm confidence",
+    settings: ["an empty industrial parking lot at blue hour with two modified cars low in frame and a blank warehouse wall behind"],
+    cameras: ["compact camera flash photo", "cheap 2006 point-and-shoot camera photo"],
+    weather: ["blue hour with a hopeful glow", "clear night with distant city glow"],
+    compositions: ["subject and car low in the frame, blank wall and dark sky above for text"],
+    colors: ["flash-lit subject against dark simple background", "clean early-digital blue and green color"],
+    emotions: ["funny", "momentum", "self-worth"],
+    props: ["nothing"],
+  },
+  {
+    id: "street-race-start-line",
+    vibe: "OG street-race start-line candid",
+    subjectKind: "person",
+    subjects: [
+      "two white friends in loose racing jackets",
+      "a white woman in a tiny denim jacket and sunglasses",
+      "a Black man and a white woman in early-2000s streetwear",
+      "a Latino man and an East Asian woman beside a parked coupe",
+      "three mixed-race friends in thrifted racing jackets",
+    ],
+    action: "laughing beside a parked coupe like the night is about to become legendary",
+    settings: ["a quiet underpass road at night with parked modified cars, sodium streetlights, and a huge dark ceiling above"],
+    cameras: ["compact camera flash photo", "old iPhone camera roll photo"],
+    weather: ["clear night with distant city glow", "blue hour with a hopeful glow"],
+    compositions: ["people and car low in frame, huge dark underpass ceiling and simple streetlight glow above"],
+    colors: ["flash-lit subject against dark simple background", "pastel sunset colors"],
+    emotions: ["momentum", "funny"],
+    props: ["nothing"],
+  },
+  {
+    id: "paparazzi-driveway-flash",
+    vibe: "celebrity-adjacent flash candid",
+    subjectKind: "person",
+    subjects: [
+      "a striking white woman in oversized sunglasses and a vintage coat",
+      "a white young man in a thrifted leather jacket",
+      "a Black woman with model-level presence in a simple black jacket",
+      "a South Asian man in a sharp thrifted blazer",
+      "a mixed-race couple dressed like they accidentally became famous",
+    ],
+    action: "walking past the camera with a half-smile like a flash photo caught them too late",
+    settings: ["a hotel driveway at night with a plain awning, dark street behind, and open black space above"],
+    cameras: ["compact camera flash photo", "old iPhone camera roll photo"],
+    weather: ["clear night with distant city glow", "overcast"],
+    compositions: ["subject low and slightly off-center with a huge dark awning or night sky above"],
+    colors: ["flash-lit subject against dark simple background"],
+    emotions: ["self-worth", "funny"],
+    props: ["nothing"],
+  },
+  {
+    id: "coastal-model-candid",
+    vibe: "accidental model-off-duty beach photo",
+    subjectKind: "person",
+    subjects: [
+      "a white model-looking young woman in sunglasses",
+      "a white young man with sun-bleached hair in a vintage tee",
+      "a Black model-looking young man in a loose white shirt",
+      "an East Asian woman in a thrifted denim jacket",
+      "a mixed-race couple in relaxed beach clothes",
+    ],
+    action: "turning back toward the camera with a huge effortless grin",
+    settings: ["a windy coastal parking pull-off with pale ocean, low guardrail, and huge washed-out sky"],
+    cameras: ["cheap 2006 point-and-shoot camera photo", "old iPhone camera roll photo"],
+    weather: ["windy day with playful movement", "bright midday sun"],
+    compositions: ["subject low in the frame, ocean horizon low, huge pale sky above"],
+    colors: ["washed-out pale beach colors", "clean early-digital blue and green color"],
+    emotions: ["self-worth", "momentum", "gentle"],
     props: ["nothing"],
   },
   {
@@ -704,6 +785,7 @@ export const POSTER_ARCHETYPES = [
       "two South Asian friends",
       "two Indian college friends",
       "two Latino friends",
+      "two white friends in vintage jackets",
       "a Black woman and an East Asian woman",
       "three mixed-race friends",
     ],
@@ -761,6 +843,7 @@ export const POSTER_ARCHETYPES = [
       "two South Asian college friends",
       "two Black college friends",
       "two East Asian friends",
+      "two white college friends",
       "a Latino man and a Black woman",
       "three college friends",
     ],
@@ -781,6 +864,7 @@ export const POSTER_ARCHETYPES = [
       "two siblings",
       "two Black siblings",
       "two South Asian siblings",
+      "two white siblings",
       "a Black brother and a Latina sister",
       "two Indian siblings",
     ],
@@ -801,6 +885,7 @@ export const POSTER_ARCHETYPES = [
       "two Black friends",
       "two South Asian friends",
       "two Latino friends",
+      "two white friends",
       "a Pacific Islander woman and a Black woman",
       "two mixed-race friends",
     ],
@@ -905,6 +990,7 @@ export const POSTER_ARCHETYPES = [
       "two Black friends",
       "two South Asian friends",
       "two Latino friends",
+      "two white friends",
       "a Black woman and a South Asian woman",
       "three mixed-race friends",
     ],
@@ -925,6 +1011,7 @@ export const POSTER_ARCHETYPES = [
       "three college friends",
       "two Black roommates and a Latino roommate",
       "two South Asian roommates and a white roommate",
+      "three white roommates",
       "three East Asian friends",
     ],
     action: "collapsed on a worn couch laughing at something off-camera",
@@ -946,6 +1033,7 @@ export const POSTER_ARCHETYPES = [
       "a Latino grandma and her grandkid",
       "an Indian grandma and her grandkid",
       "a Middle Eastern grandma and her grandkid",
+      "a white grandma and her grandkid",
     ],
     action: "laughing together while baking at a kitchen counter",
     settings: ["a warm home kitchen with mixing bowls and soft overhead light"],
@@ -964,6 +1052,7 @@ export const POSTER_ARCHETYPES = [
       "two Black friends",
       "two South Asian friends",
       "two Latino friends",
+      "two white friends",
       "a Black man and an East Asian man",
     ],
     action: "grinning together under a playground basketball hoop after a casual game",
@@ -1021,6 +1110,7 @@ export const POSTER_ARCHETYPES = [
       "a multigenerational Black family on porch steps",
       "a South Asian family on a front porch",
       "an Indian family gathered on porch steps",
+      "a white family gathered on porch steps",
     ],
     action: "talking and laughing together on porch steps at golden hour",
     settings: ["a front porch with steps, railing, and warm late-afternoon light"],
@@ -1041,6 +1131,7 @@ export const POSTER_ARCHETYPES = [
       "a mixed-race couple",
       "a Latino couple",
       "an East Asian couple",
+      "a white couple",
     ],
     action: "browsing flea market tables together and smiling at a ridiculous find",
     settings: ["an outdoor flea market with folding tables and colorful clutter under open sky"],
@@ -1070,6 +1161,10 @@ export const ICONIC_ENERGY_ARCHETYPE_IDS = new Set([
   "runway-thumbs-up",
   "sled-hill-formalwear",
   "parking-lot-dance-flash",
+  "tuner-car-flash",
+  "street-race-start-line",
+  "paparazzi-driveway-flash",
+  "coastal-model-candid",
   "cockpit-sunset",
   "ferry-deck-wind",
   "county-fair-parking",
@@ -1094,6 +1189,10 @@ export const HIGH_CONCEPT_ARCHETYPE_IDS = new Set([
   "runway-thumbs-up",
   "sled-hill-formalwear",
   "parking-lot-dance-flash",
+  "tuner-car-flash",
+  "street-race-start-line",
+  "paparazzi-driveway-flash",
+  "coastal-model-candid",
   "elderly-skateboard-road",
   "roller-skate-ramp",
   "cockpit-sunset",
@@ -1190,7 +1289,10 @@ Each concept must feel like:
 - weird or deadpan enough to feel internet-native, but visually believable
 - subject low in frame with a huge plain color field above for text later
 - raw early-2000s grainy digital photo energy: flash, fisheye, blown-out sky, cheap sensor noise, accidental framing
+- sometimes conventionally beautiful, model-off-duty, or celebrity-adjacent, but only as a raw candid aura; never reference or resemble a real celebrity
 - less "beautiful lifestyle shoot", more "oddly perfect saved image from the internet"
+- over many outputs, cast a broad mix: people of color, white people, and mixed groups. Do not default exclusively to any one race.
+- early-2000s tuner cars, street-racing-adjacent parking lots, flash-lit hotel driveways, and accidental paparazzi energy are welcome when they stay clean and text-friendly.
 
 Banned overused ideas (do NOT use):
 - fireworks, sparklers, outdoor basketball court at night
@@ -1199,7 +1301,7 @@ Banned overused ideas (do NOT use):
 - cozy coffee/bookshop/diner/window scenes that read like therapy content
 - generic friend groups smiling in a lifestyle ad
 - poetic quiet-curiosity concepts where the prop is the whole idea
-- glossy fashion, cinematic, editorial, premium, commercial, or polished portrait language
+- glossy fashion, cinematic, premium, commercial, polished portrait language, or named celebrity lookalikes
 ${avoidList ? `\nRecently used — avoid similar:\n${avoidList}` : ""}
 
 Return ONLY JSON with these exact fields:

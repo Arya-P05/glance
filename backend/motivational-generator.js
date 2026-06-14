@@ -70,8 +70,9 @@ const ANIMAL_IDEAS = [
   "pony",
 ];
 
-// Explicit ethnicity descriptors so the model varies race, not just defaulting to white
+// Explicit ethnicity descriptors so the model varies race without overcorrecting into one lane.
 const PERSON_ETHNICITIES = [
+  "Black",
   "Black",
   "South Asian",
   "East Asian",
@@ -79,6 +80,8 @@ const PERSON_ETHNICITIES = [
   "Middle Eastern",
   "Southeast Asian",
   "Pacific Islander",
+  "white",
+  "white",
   "white",
   "mixed-race",
 ];
@@ -1120,7 +1123,7 @@ export function finalizeBrief(brief, rng = Math.random) {
 }
 
 function subjectHasExplicitEthnicity(subject) {
-  return /\b(black|south asian|east asian|latino|middle eastern|southeast asian|pacific islander|indian|desi|mixed.?race)\b/i.test(
+  return /\b(black|south asian|east asian|latino|latina|latine|latinx|middle eastern|southeast asian|pacific islander|indian|desi|white|mixed.?race)\b/i.test(
     String(subject)
   );
 }
@@ -1196,6 +1199,7 @@ The final image must feel like:
 - a real forgotten camera-roll photo, not AI art
 - early internet nostalgia: awkward, funny, slightly blown out, imperfect
 - ugly-pretty and iconic because it feels found, not because it feels polished
+- sometimes accidentally model-level beautiful or celebrity-adjacent, like a cool person caught by cheap flash, without resembling any real celebrity
 - happy, positive, and slightly goofy in a believable way
 - the situation may be surreal or staged, but every clothing item, prop, and setting detail must make visual sense together
 - grainy early-2000s digital photography with enough resolution to look good
@@ -1222,7 +1226,8 @@ Hard requirements:
 - keep the subject's face and body comfortably inside the frame; do not crop the face at the edge
 - keep the upper half extremely simple for later text: sky, blank wall, fog, snow, ocean, ceiling, or simple color field
 - use natural light only unless the camera style is flash
-- avoid corporate motivation, fantasy painting, 3D render, studio portrait, glossy ad, cinematic movie still, editorial fashion shoot, shallow-depth product photography, or lifestyle stock photo
+- avoid corporate motivation, fantasy painting, 3D render, studio portrait, glossy ad, cinematic movie still, glossy editorial fashion shoot, shallow-depth product photography, or lifestyle stock photo
+- do not name, copy, or imply a specific real celebrity; "celebrity-level presence" should mean styling, confidence, and aura only
 - avoid clutter and avoid multiple competing subjects; if the scene is messy, keep the mess low in frame and leave the upper half clean
 - avoid sickly green/yellow/cyan color casts; prefer natural early-digital blues, greens, warm sunlight, clean whites, or pastel sunset
 - for people: clothing and accessories must fit the setting (no bike helmets unless cycling/skating, no life jackets away from water, no random safety gear)
@@ -1250,6 +1255,8 @@ Great outcome examples in spirit:
 - a flash-lit cool stranger on an empty subway platform, accidental album-cover energy
 - someone in formalwear jumping off a diving board at a public pool
 - friends dancing badly in a parking lot under cheap flash
+- a white model-looking stranger leaning on a silver tuner car under cheap flash, early-2000s street-racing energy
+- a mixed friend group in thrifted racing jackets laughing beside parked modified cars at blue hour
 - a girl in a fighter jet cockpit with sunset sky outside
 - an elderly man skateboarding on a sunlit road with a vintage car behind him
 - a fluffy cat with daisies on its head sitting on a wooden bench under a huge blue sky
