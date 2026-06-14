@@ -6,9 +6,10 @@
 # Node backend
 backend/node_modules/
 backend/.env
+backend/__pycache__/
+*.pyc
 backend/www.instagram.com_cookies.json
 backend/post-links.json
-backend/motivational_assets/
 backend/content/
 backend/output.png
 backend/reference/

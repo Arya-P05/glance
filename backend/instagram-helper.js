@@ -41,11 +41,6 @@ export function parsePostTargetsFromInput(text) {
   return out;
 }
 
-/** @deprecated use parsePostTargetsFromInput — list of shortcodes only, all use /p/ */
-export function parseShortcodesFromInput(text) {
-  return parsePostTargetsFromInput(text).map((t) => t.shortcode);
-}
-
 export async function downloadImage(url) {
   const res = await fetch(url, {
     headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36" },

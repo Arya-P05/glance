@@ -26,45 +26,41 @@ Single Instagram username (set in env). Run once as bulk to import all posts, th
   `npm run bulk`
 - **Incremental (new posts only, up to 20 by default or `MAX_POSTS`):**  
   `npm run sync`
-- **Generate motivational posters locally:**  
-  `npm run generate-posters -- --count 25`
-- **Generate and add posters to Glance:**  
-  `npm run generate-posters -- --count 10 --upload`
+- **Generate image prompts:**  
+  `npm run gen:prompts -- --count 25`
+- **Generate background images:**  
+  `npm run gen:images -- --count 10`
 
 Schedule `npm run sync` weekly (e.g. cron or GitHub Actions).
 
-## Motivational poster generator
+## Motivational generator
 
-The generator builds a high-variety creative brief from broad subject, age, animal, setting, action, light, weather, camera, color, and composition banks. It then asks a prompt model to write a fresh detailed image prompt for that exact brief, generates a text-free nostalgic image with `gpt-image-2`, then optionally asks a caption model to choose a two-line message. The final caption is composited locally so each output feels less like a repeated template.
+The generator builds a high-variety creative brief, asks a prompt model to write the image prompt, and generates text-free nostalgic backgrounds with `gpt-image-2`. In the dashboard, generated backgrounds are reviewed in **Backgrounds**, where the caption model creates five message options from the actual image. After selecting/editing one and approving the layout, the finished poster moves into **Drafts** for publishing.
 
-Each run saves a final PNG plus matching `.txt` prompt and `.json` metadata under `backend/motivational_assets/`. The metadata includes the scene ingredients, raw image prompt, caption prompt, and selected caption.
+Local output is written under ignored `backend/content/` folders for inspection, while the dashboard uses Supabase tables/storage as the source of truth.
 
 Set `OPENAI_API_KEY` in `.env`, then run:
 
 ```bash
-npm run generate-posters -- --count 25
+npm run gen -- --count 10
 ```
 
 Useful options:
 
 ```bash
-npm run generate-posters -- --count 5 --dry-run
-npm run generate-posters -- --count 10 --prompt-only
-npm run generate-posters -- --count 5 --image-only
-npm run generate-posters -- --count 10 --out motivational_assets
-npm run generate-posters -- --count 10 --prompt-model gpt-4.1-mini
-npm run generate-posters -- --count 10 --caption-model gpt-4.1-mini
-npm run generate-posters -- --count 10 --upload
+npm run gen -- --count 5 --dry-run
+npm run gen:prompts -- --count 10
+npm run gen:images -- --count 10
+npm run gen -- --count 10 --from-prompts
+npm run gen -- --count 10 --prompt-model gpt-4.1-mini
 ```
 
-`--upload` also requires `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`; it resizes the poster for the widget, uploads to `instagram-posts/posts/`, and upserts a matching row in `public.posts`.
-
-During real generation, the CLI shows per-poster progress for prompt writing, image creation, caption writing, text placement, local saves, and optional upload. Use `--prompt-only` to inspect bespoke image prompts before spending image calls. Use `--image-only` while tuning the raw photo style; it skips caption/text rendering and saves clean textless candidates.
+During real generation, the CLI shows progress for prompt writing, image creation, local saves, and Supabase writes. Use `gen:prompts` to inspect bespoke image prompts before spending image calls. Use `gen:images` while tuning raw photo style; it saves clean textless candidates to the Backgrounds queue.
 
 To test typography without generating a new image:
 
 ```bash
-npm run render-caption -- motivational_assets/example.background.png /tmp/poster-text-test.png "take it slow," "no rush."
+npm run render-caption -- content/backgrounds/example.png /tmp/poster-text-test.png "take it slow," "no rush."
 ```
 
 ## Getting `INSTAGRAM_SESSIONID`

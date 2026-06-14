@@ -2,7 +2,7 @@
  * Render reference-style text onto an existing square image.
  *
  * Example:
- *   npm run render-caption -- motivational_assets/example.background.png /tmp/out.png "take it slow," "no rush."
+ *   npm run render-caption -- content/backgrounds/example.png /tmp/out.png "take it slow," "no rush."
  */
 import { readFile, writeFile } from "node:fs/promises";
 import { overlayCaption } from "./motivational-generator.js";
