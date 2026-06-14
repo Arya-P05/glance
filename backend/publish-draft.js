@@ -15,9 +15,27 @@ function postStoragePathForDraft(draft) {
   return `${POST_PREFIX}/${draft.name}.${ext}`;
 }
 
+function mediumDraftStoragePath(draft) {
+  const metadata = draft.metadata && typeof draft.metadata === "object" ? draft.metadata : {};
+  return typeof metadata.mediumStoragePath === "string" && metadata.mediumStoragePath
+    ? metadata.mediumStoragePath
+    : null;
+}
+
+function mediumPostStoragePathForDraft(draft, sourcePath) {
+  const ext = sourcePath?.includes(".")
+    ? sourcePath.split(".").pop().toLowerCase()
+    : "png";
+  return `${POST_PREFIX}/medium/${draft.name}.${ext}`;
+}
+
 /** Fast server-side copy within the same bucket; falls back to download/resize/upload. */
 export async function publishDraftFromDb(supabase, draft, { status = "active" } = {}) {
   const postStoragePath = postStoragePathForDraft(draft);
+  const mediumSourcePath = mediumDraftStoragePath(draft);
+  const mediumPostStoragePath = mediumSourcePath
+    ? mediumPostStoragePathForDraft(draft, mediumSourcePath)
+    : null;
 
   const { error: copyErr } = await supabase.storage
     .from(BUCKET)
@@ -38,19 +56,45 @@ export async function publishDraftFromDb(supabase, draft, { status = "active" } 
       .upload(fallbackPath, resized, { contentType: "image/jpeg", upsert: true });
     if (uploadErr) throw uploadErr;
 
-    await upsertPostAndMarkPublished(supabase, draft, fallbackPath, status);
+    const fallbackMediumPath = mediumSourcePath
+      ? await copyMediumPost(supabase, mediumSourcePath, mediumPostStoragePath)
+      : null;
+    await upsertPostAndMarkPublished(supabase, draft, fallbackPath, fallbackMediumPath, status);
     return fallbackPath;
   }
 
-  await upsertPostAndMarkPublished(supabase, draft, postStoragePath, status);
+  const copiedMediumPath = mediumSourcePath
+    ? await copyMediumPost(supabase, mediumSourcePath, mediumPostStoragePath)
+    : null;
+  await upsertPostAndMarkPublished(supabase, draft, postStoragePath, copiedMediumPath, status);
   return postStoragePath;
 }
 
-async function upsertPostAndMarkPublished(supabase, draft, storagePath, status) {
+async function copyMediumPost(supabase, sourcePath, targetPath) {
+  const { error: copyErr } = await supabase.storage
+    .from(BUCKET)
+    .copy(sourcePath, targetPath);
+  if (!copyErr) return targetPath;
+
+  const { data: blobData, error: downloadErr } = await supabase.storage
+    .from(BUCKET)
+    .download(sourcePath);
+  if (downloadErr) throw downloadErr;
+
+  const imageBytes = Buffer.from(await blobData.arrayBuffer());
+  const { error: uploadErr } = await supabase.storage
+    .from(BUCKET)
+    .upload(targetPath, imageBytes, { contentType: "image/png", upsert: true });
+  if (uploadErr) throw uploadErr;
+  return targetPath;
+}
+
+async function upsertPostAndMarkPublished(supabase, draft, storagePath, mediumStoragePath, status) {
   const { error: insertErr } = await supabase.from("posts").upsert(
     {
       instagram_id: `generated_${draft.name}`,
       storage_path: storagePath,
+      medium_storage_path: mediumStoragePath,
       caption: captionText(draft.caption),
       posted_at: null,
       status,
@@ -69,7 +113,7 @@ async function upsertPostAndMarkPublished(supabase, draft, storagePath, status) 
 export async function getDraftForPublish(supabase, name) {
   const { data, error } = await supabase
     .from("drafts")
-    .select("id, name, storage_path, caption, scene")
+    .select("id, name, storage_path, caption, scene, metadata")
     .eq("name", name)
     .eq("status", "draft")
     .maybeSingle();

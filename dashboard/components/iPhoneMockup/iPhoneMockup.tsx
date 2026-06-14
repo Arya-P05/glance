@@ -9,10 +9,9 @@ type WidgetSize = "small" | "medium" | "large" | "app";
 
 interface Props {
   imageUri?: string;
-  caption?: { smallText: string; bigText: string } | null;
 }
 
-export function IPhoneMockup({ imageUri, caption }: Props) {
+export function IPhoneMockup({ imageUri }: Props) {
   const [size, setSize] = useState<WidgetSize>("medium");
 
   return (
@@ -57,7 +56,7 @@ export function IPhoneMockup({ imageUri, caption }: Props) {
               <Text style={styles.homeClock}>9:41</Text>
               <Text style={styles.homeDate}>Thursday, June 11</Text>
               <View style={styles.widgetArea}>
-                <WidgetSmall imageUri={imageUri} caption={caption} />
+                <WidgetSmall imageUri={imageUri} />
               </View>
             </View>
           )}
@@ -68,7 +67,7 @@ export function IPhoneMockup({ imageUri, caption }: Props) {
               <Text style={styles.homeClock}>9:41</Text>
               <Text style={styles.homeDate}>Thursday, June 11</Text>
               <View style={styles.widgetArea}>
-                <WidgetMedium imageUri={imageUri} caption={caption} />
+                <WidgetMedium imageUri={imageUri} />
               </View>
             </View>
           )}
@@ -79,7 +78,7 @@ export function IPhoneMockup({ imageUri, caption }: Props) {
               <Text style={styles.homeClock}>9:41</Text>
               <Text style={styles.homeDate}>Thursday, June 11</Text>
               <View style={styles.widgetArea}>
-                <WidgetLarge imageUri={imageUri} caption={caption} />
+                <WidgetLarge imageUri={imageUri} />
               </View>
             </ScrollView>
           )}
@@ -129,10 +128,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderWidth: 2,
     borderColor: "#3A3A3A",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 20 },
-    shadowOpacity: 0.6,
-    shadowRadius: 40,
+    boxShadow: "0 20px 40px rgba(0,0,0,0.6)",
   },
   topBar: {
     height: 50,

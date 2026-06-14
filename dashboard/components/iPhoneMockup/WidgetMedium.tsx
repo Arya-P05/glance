@@ -2,26 +2,28 @@ import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { RemoteImage } from "../RemoteImage";
 import { PosterPreview } from "../PosterPreview";
-import { CaptionLayout, CaptionText } from "../../lib/captionLayout";
+import { CaptionLayout, CaptionText, MediumCaptionLayout } from "../../lib/captionLayout";
 
 interface Props {
   imageUri?: string;
-  caption?: CaptionText | null;
   posterPreview?: {
     backgroundUri: string;
     caption: CaptionText;
     layout?: Partial<CaptionLayout> | null;
+    mediumLayout?: Partial<MediumCaptionLayout> | null;
   };
 }
 
-export function WidgetMedium({ imageUri, caption, posterPreview }: Props) {
+export function WidgetMedium({ imageUri, posterPreview }: Props) {
   return (
     <View style={styles.container}>
       {posterPreview ? (
         <PosterPreview
           backgroundUri={posterPreview.backgroundUri}
           caption={posterPreview.caption}
-          layout={posterPreview.layout}
+          layout={posterPreview.mediumLayout ?? posterPreview.layout}
+          cropLayout={posterPreview.mediumLayout}
+          layoutSpace={posterPreview.mediumLayout ? "frame" : "source"}
           width={329}
           height={155}
         />
@@ -46,28 +48,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#1C1C1E",
   },
   image: { width: "100%", height: "100%" },
-  overlay: {
-    position: "absolute",
-    bottom: 12,
-    left: 14,
-    right: 14,
-  },
-  small: {
-    color: "#fff",
-    fontSize: 13,
-    fontWeight: "300",
-    textShadowColor: "rgba(0,0,0,0.8)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-  },
-  big: {
-    color: "#fff",
-    fontSize: 19,
-    fontWeight: "700",
-    textShadowColor: "rgba(0,0,0,0.8)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-  },
   placeholder: {
     flex: 1,
     alignItems: "center",

@@ -15,6 +15,7 @@ import WidgetKit
 struct RandomPostRow: Decodable {
     let id: UUID
     let storage_path: String
+    let medium_storage_path: String?
     let caption: String?
 }
 
@@ -51,8 +52,11 @@ struct RandomPostProvider: TimelineProvider {
         Task {
             let normalRefresh = Date().addingTimeInterval(currentRefreshInterval())
 
-            let useSharedFileOnly = SharedPhotoSnapshot.consumeNextWidgetTimelineUsesSharedSnapshotOnlyIfReady()
+            let canUseSharedSnapshot = context.family != .systemMedium
+            let useSharedFileOnly = canUseSharedSnapshot && (
+                SharedPhotoSnapshot.consumeNextWidgetTimelineUsesSharedSnapshotOnlyIfReady()
                 || SharedPhotoSnapshot.widgetShouldReuseSnapshotInsteadOfRandomFetchIncludingFreshFile()
+            )
             if useSharedFileOnly {
                 let fileData = SharedPhotoSnapshot.loadSnapshotJPEGData()
                 let caption = SharedPhotoSnapshot.loadCaption()
@@ -77,7 +81,10 @@ struct RandomPostProvider: TimelineProvider {
                     return
                 }
 
-                let imageURL = SupabaseConfig.publicImageURL(storagePath: row.storage_path)
+                let storagePath = context.family == .systemMedium
+                    ? (row.medium_storage_path ?? row.storage_path)
+                    : row.storage_path
+                let imageURL = SupabaseConfig.publicImageURL(storagePath: storagePath)
                 let rawData = await loadImageData(from: imageURL)
                 let resizedData: Data?
                 if let rawData,

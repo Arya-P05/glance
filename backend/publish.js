@@ -84,7 +84,7 @@ async function withProgress(label, task) {
 async function getUnpublishedDrafts(supabase, { id, count }) {
   let query = supabase
     .from("drafts")
-    .select("id, name, storage_path, caption, scene")
+    .select("id, name, storage_path, caption, scene, metadata")
     .eq("status", "draft")
     .order("created_at", { ascending: true });
 

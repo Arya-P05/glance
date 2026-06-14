@@ -1,12 +1,13 @@
 import React from "react";
 import { View, StyleSheet, StyleProp, ViewStyle } from "react-native";
 import { RemoteImage } from "./RemoteImage";
-import { CaptionOverlay } from "./CaptionOverlay";
+import { CaptionOverlay, CaptionOverlayFrame } from "./CaptionOverlay";
 import {
   CaptionLayout,
   CaptionText,
   captionPositionInFrame,
   normalizeCaptionLayout,
+  sourceCropInFrame,
 } from "../lib/captionLayout";
 
 type Props = {
@@ -18,6 +19,8 @@ type Props = {
   borderRadius?: number;
   style?: StyleProp<ViewStyle>;
   showCaption?: boolean;
+  cropLayout?: { cropXRatio?: number | null; cropYRatio?: number | null } | null;
+  layoutSpace?: "source" | "frame";
 };
 
 export function PosterPreview({
@@ -29,6 +32,8 @@ export function PosterPreview({
   borderRadius = 0,
   style,
   showCaption = true,
+  cropLayout,
+  layoutSpace = "source",
 }: Props) {
   const frameHeight = height ?? width;
   const normalized = normalizeCaptionLayout(layout);
@@ -45,27 +50,43 @@ export function PosterPreview({
     );
   }
 
-  const pos = captionPositionInFrame(width, frameHeight, normalized, caption);
+  const crop = sourceCropInFrame(
+    width,
+    frameHeight,
+    Number(cropLayout?.cropXRatio ?? 0.5),
+    Number(cropLayout?.cropYRatio ?? 0.5)
+  );
+  const pos = layoutSpace === "frame"
+    ? { ...crop, x: 0, y: 0, smallSize: 0, bigSize: 0 }
+    : captionPositionInFrame(width, frameHeight, normalized, caption);
 
   return (
     <View style={[styles.frame, { width, height: frameHeight, borderRadius }, style]}>
       <View style={[styles.cropWrap, { width, height: frameHeight }]}>
         <View
           style={{
-            width: pos.scaledSize,
-            height: pos.scaledSize,
-            marginLeft: pos.offsetX,
-            marginTop: pos.offsetY,
+            width: crop.scaledSize,
+            height: crop.scaledSize,
+            marginLeft: crop.offsetX,
+            marginTop: crop.offsetY,
           }}
         >
           <RemoteImage
             uri={backgroundUri}
-            style={{ width: pos.scaledSize, height: pos.scaledSize }}
+            style={{ width: crop.scaledSize, height: crop.scaledSize }}
             resizeMode="cover"
             raw
           />
         </View>
-        {showCaption && (
+        {showCaption && layoutSpace === "frame" && (
+          <CaptionOverlayFrame
+            frameWidth={width}
+            frameHeight={frameHeight}
+            layout={normalized}
+            caption={caption}
+          />
+        )}
+        {showCaption && layoutSpace !== "frame" && (
           <CaptionOverlay
             frameSize={pos.scaledSize}
             layout={normalized}

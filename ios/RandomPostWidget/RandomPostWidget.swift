@@ -6,6 +6,7 @@ import Supabase
 struct RandomPostRow: Decodable {
     let id: UUID
     let storage_path: String
+    let medium_storage_path: String?
     let caption: String?
 }
 
@@ -45,7 +46,10 @@ struct RandomPostProvider: TimelineProvider {
                     return
                 }
 
-                let imageURL = SupabaseConfig.publicImageURL(storagePath: row.storage_path)
+                let storagePath = context.family == .systemMedium
+                    ? (row.medium_storage_path ?? row.storage_path)
+                    : row.storage_path
+                let imageURL = SupabaseConfig.publicImageURL(storagePath: storagePath)
                 let imageData = try? Data(contentsOf: imageURL)
 
                 entry = RandomPostEntry(

@@ -6,7 +6,6 @@ import { CaptionLayout, CaptionText } from "../../lib/captionLayout";
 
 interface Props {
   imageUri?: string;
-  caption?: CaptionText | null;
   posterPreview?: {
     backgroundUri: string;
     caption: CaptionText;
@@ -14,7 +13,7 @@ interface Props {
   };
 }
 
-export function WidgetLarge({ imageUri, caption, posterPreview }: Props) {
+export function WidgetLarge({ imageUri, posterPreview }: Props) {
   return (
     <View style={styles.container}>
       {posterPreview ? (
@@ -46,28 +45,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#1C1C1E",
   },
   image: { width: "100%", height: "100%" },
-  overlay: {
-    position: "absolute",
-    bottom: 16,
-    left: 16,
-    right: 16,
-  },
-  small: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "300",
-    textShadowColor: "rgba(0,0,0,0.8)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
-  },
-  big: {
-    color: "#fff",
-    fontSize: 24,
-    fontWeight: "700",
-    textShadowColor: "rgba(0,0,0,0.8)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
-  },
   placeholder: {
     flex: 1,
     alignItems: "center",
