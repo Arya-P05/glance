@@ -118,10 +118,57 @@ export default function DraftsScreen() {
     advance(drafts);
   }
 
+  function previousDraft() {
+    setReviewIdx((i) => Math.max(0, i - 1));
+  }
+
+  function nextDraft() {
+    setReviewIdx((i) => Math.min(drafts.length - 1, i + 1));
+  }
+
   function openEditCurrent() {
     const draft = drafts[reviewIdx];
     if (!draft?.meta?.caption || busy) return;
     setScreen("edit");
+  }
+
+  async function approveBackgroundCurrent() {
+    const draft = drafts[reviewIdx];
+    if (!draft || busy) return;
+
+    setBusy(true);
+    try {
+      const result = await api.approveDraftBackground({ id: draft.id });
+      const imageUrl = `${result.imageUrl}${result.imageUrl.includes("?") ? "&" : "?"}t=${Date.now()}`;
+      const rawImageUrl = `${result.rawImageUrl}${result.rawImageUrl.includes("?") ? "&" : "?"}t=${Date.now()}`;
+      setDrafts((prev) =>
+        prev.map((d) =>
+          d.id === draft.id
+            ? {
+                ...d,
+                imageUrl,
+                rawImageUrl,
+                meta: {
+                  ...d.meta,
+                  kind: "draft",
+                  caption: result.caption,
+                  needsCaption: false,
+                  captionModel: result.captionModel,
+                  captionLayout: {
+                    xRatio: result.captionLayout.xRatio,
+                    yRatio: result.captionLayout.yRatio,
+                    textColor: result.captionLayout.textColor === "#ffffff" ? "#ffffff" : "#050505",
+                  },
+                },
+              }
+            : d
+        )
+      );
+    } catch (e: any) {
+      alert(e?.message ?? "Failed to approve background");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function applyCaptionLayout(layout: CaptionLayout) {
@@ -166,16 +213,27 @@ export default function DraftsScreen() {
     setScreen("review");
   }
 
-  // Keyboard shortcuts for review mode (i=inactive, p=publish, s=skip, d=delete, e=edit)
+  // Keyboard shortcuts for review mode (a=approve image, i=inactive, p=publish, s=skip, d=delete, e=edit)
   useEffect(() => {
     if (screen !== "review" || typeof document === "undefined") return;
     function onKey(e: KeyboardEvent) {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      if (e.key === "i") saveInactiveCurrent();
-      else if (e.key === "p") publishCurrent();
+      const draft = drafts[reviewIdx];
+      const hasCaption = Boolean(draft?.meta?.caption?.smallText && draft?.meta?.caption?.bigText);
+      if (e.key === "a" && !hasCaption) approveBackgroundCurrent();
+      else if (e.key === "i" && hasCaption) saveInactiveCurrent();
+      else if (e.key === "p" && hasCaption) publishCurrent();
+      else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        previousDraft();
+      }
+      else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        nextDraft();
+      }
       else if (e.key === "s") skipCurrent();
       else if (e.key === "d") discardCurrent();
-      else if (e.key === "e") openEditCurrent();
+      else if (e.key === "e" && hasCaption) openEditCurrent();
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -238,6 +296,7 @@ export default function DraftsScreen() {
 
     const imgUri = draftImageUri(draft, 1024);
     const caption = draft.meta?.caption ?? null;
+    const hasCaption = Boolean(caption?.smallText && caption?.bigText);
     const scene = draft.meta?.scene;
 
     return (
@@ -252,14 +311,14 @@ export default function DraftsScreen() {
           </Text>
           <View style={{ flex: 1 }} />
           <Pressable
-            onPress={() => setReviewIdx(i => Math.max(0, i - 1))}
+            onPress={previousDraft}
             style={[styles.navArrow, reviewIdx === 0 && styles.navArrowDisabled]}
             disabled={reviewIdx === 0}
           >
             <NavArrowLeft color={C.textSecondary} width={16} height={16} />
           </Pressable>
           <Pressable
-            onPress={() => setReviewIdx(i => Math.min(drafts.length - 1, i + 1))}
+            onPress={nextDraft}
             style={[styles.navArrow, reviewIdx === drafts.length - 1 && styles.navArrowDisabled]}
             disabled={reviewIdx === drafts.length - 1}
           >
@@ -291,7 +350,7 @@ export default function DraftsScreen() {
           <View style={styles.metaPanel}>
             <Text style={styles.metaTitle}>Metadata</Text>
 
-            {caption ? (
+            {hasCaption && caption ? (
               <View style={styles.metaSection}>
                 <Text style={styles.metaLabel}>Caption</Text>
                 <Text style={styles.captionLine}>{caption.smallText}</Text>
@@ -299,7 +358,11 @@ export default function DraftsScreen() {
                 <Btn label="Edit caption" onPress={openEditCurrent} small variant="outline" />
               </View>
             ) : (
-              <Text style={styles.metaMissing}>No caption</Text>
+              <View style={styles.metaSection}>
+                <Text style={styles.metaLabel}>Status</Text>
+                <Text style={styles.metaMissing}>Image only</Text>
+                <Btn label="Approve background" onPress={approveBackgroundCurrent} loading={busy} small />
+              </View>
             )}
 
             {scene && (
@@ -330,14 +393,21 @@ export default function DraftsScreen() {
           </View>
         </View>
 
-        {/* Action bar — keyboard: e=edit i=inactive p=publish s=skip d=delete */}
+        {/* Action bar — keyboard: a=approve e=edit i=inactive p=publish s=skip d=delete */}
         <View style={styles.actionBar}>
           <View style={{ flex: 1 }} />
-          {caption && (
+          {!hasCaption && (
+            <ActionKey label="Approve background" keyHint="A" onPress={approveBackgroundCurrent} loading={busy} variant="primary" />
+          )}
+          {hasCaption && (
             <ActionKey label="Edit" keyHint="E" onPress={openEditCurrent} variant="outline" />
           )}
-          <ActionKey label="Inactive" keyHint="I" onPress={saveInactiveCurrent} loading={busy} variant="outline" />
-          <ActionKey label="Publish" keyHint="P" onPress={publishCurrent} loading={busy} variant="primary" />
+          {hasCaption && (
+            <ActionKey label="Inactive" keyHint="I" onPress={saveInactiveCurrent} loading={busy} variant="outline" />
+          )}
+          {hasCaption && (
+            <ActionKey label="Publish" keyHint="P" onPress={publishCurrent} loading={busy} variant="primary" />
+          )}
           <ActionKey label="Skip" keyHint="S" onPress={skipCurrent} variant="outline" />
           <ActionKey keyHint="D" onPress={discardCurrent} loading={busy} variant="danger"
             icon={<Trash color="#fff" width={20} height={20} strokeWidth={1.8} />} />
@@ -382,6 +452,7 @@ export default function DraftsScreen() {
         ) : (
           drafts.map((draft, idx) => {
             const imgUri = draftGridImageUri(draft);
+            const hasCaption = Boolean(draft.meta?.caption?.smallText && draft.meta?.caption?.bigText);
             return (
               <Pressable
                 key={draft.id}
@@ -389,6 +460,11 @@ export default function DraftsScreen() {
                 style={styles.cell}
               >
                 <Image source={{ uri: imgUri }} style={styles.thumb} resizeMode="contain" />
+                {!hasCaption && (
+                  <View style={styles.imageOnlyBadge}>
+                    <Text style={styles.imageOnlyBadgeText}>image only</Text>
+                  </View>
+                )}
               </Pressable>
             );
           })
@@ -503,6 +579,24 @@ const styles = StyleSheet.create({
     borderColor: C.border,
   },
   thumb: { width: CELL, height: CELL, backgroundColor: C.bg },
+  imageOnlyBadge: {
+    position: "absolute",
+    left: 8,
+    bottom: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: "rgba(10,10,10,0.78)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.18)",
+  },
+  imageOnlyBadgeText: {
+    color: C.textPrimary,
+    fontSize: 10,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  },
   captionLine: { color: C.textPrimary, fontSize: 13, fontWeight: "500", lineHeight: 19 },
 
   // Review header
