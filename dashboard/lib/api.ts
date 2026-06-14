@@ -60,6 +60,8 @@ export const api = {
       imageUrl: string;
       rawImageUrl: string;
       caption: { smallText: string; bigText: string };
+      captionOptions?: { smallText: string; bigText: string }[];
+      selectedCaptionIndex?: number;
       captionLayout: { xRatio: number; yRatio: number; textColor: string | null };
       captionModel: string;
     }>("/api/drafts/approve-background", { method: "POST", body: JSON.stringify(opts) }),
@@ -128,6 +130,8 @@ export interface DraftMeta {
   kind?: "draft" | "background";
   filename?: string;
   caption?: { smallText: string; bigText: string };
+  captionOptions?: { smallText: string; bigText: string }[];
+  selectedCaptionIndex?: number;
   needsCaption?: boolean;
   captionLayout?: CaptionLayout | null;
   scene?: Record<string, string>;
