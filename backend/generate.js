@@ -267,15 +267,15 @@ async function pickUniqueScene({ client, promptModel, avoidSignatures, preferEne
     const roll = Math.random();
     let scene;
 
-    if (preferEnergy && attempt < 16) {
+    if (preferEnergy && attempt < 20) {
       scene = buildHighConceptScene();
-    } else if (roll < 0.18) {
+    } else if (roll < 0.38) {
       scene = buildHighConceptScene();
-    } else if (roll < 0.42) {
+    } else if (roll < 0.72) {
       scene = buildIconicEnergyScene();
-    } else if (roll < 0.74) {
-      scene = buildSceneFromArchetype();
     } else if (roll < 0.9) {
+      scene = buildSceneFromArchetype();
+    } else if (roll < 0.96) {
       scene = buildScene(Math.random, { avoidSignatures });
     } else if (client) {
       try {
@@ -294,9 +294,9 @@ async function pickUniqueScene({ client, promptModel, avoidSignatures, preferEne
     const scene =
       preferEnergy && attempt < 40
         ? buildHighConceptScene()
-        : attempt % 3 === 0
+        : attempt % 2 === 0
           ? buildIconicEnergyScene()
-          : buildSceneFromArchetype();
+          : buildHighConceptScene();
     if (isAllowedScene(scene, avoidSignatures, { allowFamilyRepeat: true })) return scene;
   }
 

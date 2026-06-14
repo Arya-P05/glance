@@ -1200,7 +1200,9 @@ The final image must feel like:
 - early internet nostalgia: awkward, funny, slightly blown out, imperfect
 - ugly-pretty and iconic because it feels found, not because it feels polished
 - sometimes accidentally model-level beautiful or celebrity-adjacent, like a cool person caught by cheap flash, without resembling any real celebrity
-- happy, positive, and slightly goofy in a believable way
+- emotionally loud: huge grin, scream-laugh, shock, wind-blasted joy, full-body confidence, or unhinged but happy reaction
+- happy, positive, and goofy in a believable way, not mellow wellness content
+- visually eventful: motion, splash, mist, wind, flash, smoke, height, speed, weird scale, huge view, or one absurd peak-frame detail
 - the situation may be surreal or staged, but every clothing item, prop, and setting detail must make visual sense together
 - grainy early-2000s digital photography with enough resolution to look good
 
@@ -1219,21 +1221,21 @@ ${sceneSpecific}
 Hard requirements:
 - no text, no letters, no typography, no logo, no watermark
 - do not include any poster quote inside the image
-- the subject must look happy, goofy, peaceful, proud, or like it is making the most of the moment
+- the subject must look visibly happy, shocked, scream-laughing, goofy, proud, or like the best/wildest second of the moment just happened
 - if the scene has fog, snow, rain, night, or unusual weather, the subject is still visibly happy and positive
-- the subject must sit in the lower third or lower half with 60-85% clean negative space above it
-- the subject should feel close to camera but not centered like a portrait; roughly 25-45% of image height is usually enough
+- keep a clean text-safe zone in the upper third or upper half, but do not make the whole image empty or calm
+- the subject/action can occupy 30-60% of image height when the moment is dramatic; keep the main faces comfortably readable
 - keep the subject's face and body comfortably inside the frame; do not crop the face at the edge
-- keep the upper half extremely simple for later text: sky, blank wall, fog, snow, ocean, ceiling, or simple color field
+- keep the upper text area simple enough for later text: sky, blank wall, fog, snow, ocean, ceiling, smoke, mist, or simple color field
 - use natural light only unless the camera style is flash
 - avoid corporate motivation, fantasy painting, 3D render, studio portrait, glossy ad, cinematic movie still, glossy editorial fashion shoot, shallow-depth product photography, or lifestyle stock photo
 - do not name, copy, or imply a specific real celebrity; "celebrity-level presence" should mean styling, confidence, and aura only
-- avoid clutter and avoid multiple competing subjects; if the scene is messy, keep the mess low in frame and leave the upper half clean
+- avoid random clutter and multiple competing stories; one wild thing may happen, but keep the chaos readable and mostly low/mid frame
 - avoid sickly green/yellow/cyan color casts; prefer natural early-digital blues, greens, warm sunlight, clean whites, or pastel sunset
 - for people: clothing and accessories must fit the setting (no bike helmets unless cycling/skating, no life jackets away from water, no random safety gear)
 - absurd animal behavior is allowed when it looks like a real internet snapshot: headphones, soda bottle, rude little paw pose, sunglasses, gaming desk, or prop comedy can be great
 - if an animal uses a human-like prop or pose, make it look like a real internet meme photo, cheap edit, costume, forced perspective, or lucky candid snapshot, not glossy CGI
-- prioritize aesthetic coherence over random joke props; the image should feel like something someone would save because it looks accidentally cool
+- prioritize an iconic peak moment over safe prettiness; the image should feel like something someone would save because it looks accidentally cool and a little insane
 - if any ingredients feel contradictory, reinterpret them into one coherent happy scene while preserving the core subject, action, and vibe
 
 Style discipline:
@@ -1257,6 +1259,9 @@ Great outcome examples in spirit:
 - friends dancing badly in a parking lot under cheap flash
 - a white model-looking stranger leaning on a silver tuner car under cheap flash, early-2000s street-racing energy
 - a mixed friend group in thrifted racing jackets laughing beside parked modified cars at blue hour
+- someone scream-laughing in waterfall mist with a gigantic white sky above
+- friends sprinting through a puddle splash under a dramatic storm sky
+- a rollercoaster ride-photo face that is funny, terrified, and joyful at once
 - a girl in a fighter jet cockpit with sunset sky outside
 - an elderly man skateboarding on a sunlit road with a vintage car behind him
 - a fluffy cat with daisies on its head sitting on a wooden bench under a huge blue sky
@@ -1277,6 +1282,30 @@ function sceneSpecificPromptNotes(brief) {
   if (id === "diving-board-suit") {
     notes.push(
       "POOL JUMP EXECUTION: the person must be visibly airborne above pool water, with both feet off the diving board. Include a hint of the diving board behind or below them so the action reads instantly. Do not show them crouching, sitting, standing still, or merely posing beside the pool."
+    );
+  }
+
+  if (id === "waterfall-mist-scream") {
+    notes.push(
+      "WATERFALL EXECUTION: the mist should be huge and bright, blasting across the upper frame like white negative space. The subject must be visibly scream-laughing, soaked, and delighted; do not turn it into a calm scenic tourist portrait."
+    );
+  }
+
+  if (id === "rollercoaster-flash-face") {
+    notes.push(
+      "RIDE PHOTO EXECUTION: make the faces big enough to read and emotionally ridiculous: scared-laughing, hair flying, hands gripping the lap bar. Keep the sky or blank track background clean above; do not crop the faces."
+    );
+  }
+
+  if (id === "storm-puddle-sprint") {
+    notes.push(
+      "PUDDLE SPLASH EXECUTION: freeze one huge splash low in frame with legs in motion and delighted faces. The storm sky should dominate the top as text-safe negative space; avoid showing a calm rainy walk."
+    );
+  }
+
+  if (id === "neon-car-smoke-laugh") {
+    notes.push(
+      "CAR-NIGHT EXECUTION: keep the car parked or implied as parked, with low smoke and underglow near the ground. The people should be laughing through cheap flash like a found early-2000s street-racing photo, not a glossy car ad."
     );
   }
 

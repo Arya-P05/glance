@@ -357,6 +357,106 @@ export const POSTER_ARCHETYPES = [
     props: ["nothing"],
   },
   {
+    id: "waterfall-mist-scream",
+    vibe: "waterfall scream-laugh miracle",
+    subjectKind: "person",
+    subjects: [
+      "a white tourist in a cheap plastic poncho",
+      "a Black woman in a windbreaker",
+      "a South Asian young man in a soaked hoodie",
+      "two mixed-race friends in rain jackets",
+      "a Latina woman in oversized sunglasses and a poncho",
+    ],
+    action: "scream-laughing with arms out while waterfall mist blasts sideways",
+    settings: ["a giant waterfall overlook with white mist, dark rock, and huge pale sky swallowing the background"],
+    cameras: ["cheap 2006 point-and-shoot camera photo", "disposable camera photo"],
+    weather: ["warm rain with a happy subject", "misty morning light"],
+    compositions: ["subject tiny-to-medium in the lower third, waterfall mist and pale sky exploding above"],
+    colors: ["bright white negative space with black-text-friendly contrast", "clean early-digital blue and green color"],
+    emotions: ["momentum", "funny"],
+    props: ["nothing"],
+  },
+  {
+    id: "cliff-overlook-freakout",
+    vibe: "huge-view freakout grin",
+    subjectKind: "person",
+    subjects: [
+      "a white young man in a vintage tee",
+      "a Black young man in a windbreaker",
+      "an East Asian woman in a thrifted denim jacket",
+      "a mixed-race couple in road-trip clothes",
+      "three friends in cheap sunglasses",
+    ],
+    action: "laughing in disbelief with arms wide at the edge of a safe overlook railing",
+    settings: ["a canyon overlook with a low guardrail, tiny river far below, and enormous pastel sky above"],
+    cameras: ["wide-angle phone photo", "raw early-2000s digital camera photo"],
+    weather: ["pastel sunset", "windy day with playful movement"],
+    compositions: ["subject low and small against a ridiculous huge canyon view and open sky"],
+    colors: ["pastel sunset colors", "golden sunlight and soft shadows"],
+    emotions: ["momentum", "perspective"],
+    props: ["nothing"],
+  },
+  {
+    id: "rollercoaster-flash-face",
+    vibe: "ride-photo full panic joy",
+    subjectKind: "person",
+    subjects: [
+      "two white friends in windbreakers",
+      "two Black friends in oversized hoodies",
+      "a Latino dad and his teenage kid",
+      "a South Asian woman and her cousin",
+      "three mixed-race friends",
+    ],
+    action: "screaming laughing on a roller coaster drop with faces completely unhinged",
+    settings: ["an old amusement park roller coaster drop with a blank blown-out sky behind the track"],
+    cameras: ["cheap ride-camera flash photo", "disposable camera photo"],
+    weather: ["bright midday sun", "clear blue sky"],
+    compositions: ["faces and front car low in frame, track diagonal, huge blown-out sky above"],
+    colors: ["bright white negative space with black-text-friendly contrast", "saturated blue sky and green grass"],
+    emotions: ["funny", "momentum"],
+    props: ["nothing"],
+  },
+  {
+    id: "storm-puddle-sprint",
+    vibe: "storm puddle victory lap",
+    subjectKind: "person",
+    subjects: [
+      "two white friends in soaked thrifted jackets",
+      "two Black friends in rain jackets",
+      "a Latina woman and a white woman in boots",
+      "a South Asian man and an East Asian man",
+      "three college friends",
+    ],
+    action: "sprinting through a huge puddle splash and laughing like the storm is the whole point",
+    settings: ["an empty parking lot after rain with mirror puddles low in frame and a dramatic grey sky above"],
+    cameras: ["compact camera flash photo", "old iPhone camera roll photo"],
+    weather: ["warm rain with a happy subject", "overcast"],
+    compositions: ["splash and people low in frame, giant storm sky above, motion blur in the legs"],
+    colors: ["bright white negative space with black-text-friendly contrast", "flash-lit subject against dark simple background"],
+    emotions: ["momentum", "funny"],
+    props: ["nothing"],
+  },
+  {
+    id: "neon-car-smoke-laugh",
+    vibe: "street-race smoke-laugh chaos",
+    subjectKind: "person",
+    subjects: [
+      "a white woman in a tiny racing jacket and sunglasses",
+      "a Black man in a vintage racing jacket",
+      "a Latino couple in early-2000s streetwear",
+      "an East Asian young man in a leather jacket",
+      "three mixed-race friends beside a modified coupe",
+    ],
+    action: "laughing through low tire smoke beside a parked neon-lit coupe",
+    settings: ["an empty warehouse street at night with a modified coupe, blue underglow, low smoke, and huge black sky above"],
+    cameras: ["compact camera flash photo", "cheap 2006 point-and-shoot camera photo"],
+    weather: ["clear night with distant city glow", "blue hour with a hopeful glow"],
+    compositions: ["car and people low in frame, smoke hugging the ground, huge dark sky or blank warehouse wall above"],
+    colors: ["flash-lit subject against dark simple background", "clean early-digital blue and green color"],
+    emotions: ["momentum", "funny", "self-worth"],
+    props: ["nothing"],
+  },
+  {
     id: "ocean-bench-moody",
     vibe: "moody ocean reflection",
     subjectKind: "person",
@@ -1165,6 +1265,11 @@ export const ICONIC_ENERGY_ARCHETYPE_IDS = new Set([
   "street-race-start-line",
   "paparazzi-driveway-flash",
   "coastal-model-candid",
+  "waterfall-mist-scream",
+  "cliff-overlook-freakout",
+  "rollercoaster-flash-face",
+  "storm-puddle-sprint",
+  "neon-car-smoke-laugh",
   "cockpit-sunset",
   "ferry-deck-wind",
   "county-fair-parking",
@@ -1193,6 +1298,11 @@ export const HIGH_CONCEPT_ARCHETYPE_IDS = new Set([
   "street-race-start-line",
   "paparazzi-driveway-flash",
   "coastal-model-candid",
+  "waterfall-mist-scream",
+  "cliff-overlook-freakout",
+  "rollercoaster-flash-face",
+  "storm-puddle-sprint",
+  "neon-car-smoke-laugh",
   "elderly-skateboard-road",
   "roller-skate-ramp",
   "cockpit-sunset",
@@ -1212,14 +1322,14 @@ export function settingFamily(setting = "") {
   if (/desk|bedroom|gaming|monitor|wall|laundromat|porch|kitchen|diner|museum|dorm|arcade|bookstore|barbershop|noodle|apartment/.test(s)) return "indoor-wall";
   if (/bodega|corner store|bus shelter|subway|thrift|flea market/.test(s)) return "urban-street";
   if (/parking garage/.test(s)) return "urban-sky";
-  if (/parking|rest stop|gas station|road|highway|fair/.test(s)) return "roadside";
+  if (/parking|rest stop|gas station|road|highway|fair|warehouse street|underpass/.test(s)) return "roadside";
   if (/beach|ocean|lake|dock|ferry|canoe|boat|water/.test(s)) return "water";
   if (/snow|winter|arctic|cabin/.test(s)) return "snow";
   if (/cockpit|fighter/.test(s)) return "cockpit";
-  if (/mountain|overlook|desert|hill|field|grass|sunflower|farm|pasture|picnic|pine/.test(s)) return "outdoor-land";
+  if (/mountain|overlook|desert|hill|field|grass|sunflower|farm|pasture|picnic|pine|canyon|cliff/.test(s)) return "outdoor-land";
   if (/fog|mist/.test(s)) return "fog";
   if (/balcony|rooftop|fire escape/.test(s)) return "urban-sky";
-  if (/festival|street festival/.test(s)) return "festival";
+  if (/festival|street festival|amusement|roller coaster/.test(s)) return "festival";
   return "other";
 }
 
@@ -1286,13 +1396,14 @@ ${exampleBlock}
 Each concept must feel like:
 - one specific old camera-roll upload, not a stock photo category
 - iconic at thumbnail size: one subject, one joke/feeling, one clean background
-- weird or deadpan enough to feel internet-native, but visually believable
+- weird, high-emotion, or peak-action enough to feel internet-native, but visually believable
+- the frame should catch the exact wild second: scream-laughing, midair, splash, wind blast, mist blast, flash hit, huge view reaction, or car-night chaos
 - subject low in frame with a huge plain color field above for text later
 - raw early-2000s grainy digital photo energy: flash, fisheye, blown-out sky, cheap sensor noise, accidental framing
 - sometimes conventionally beautiful, model-off-duty, or celebrity-adjacent, but only as a raw candid aura; never reference or resemble a real celebrity
 - less "beautiful lifestyle shoot", more "oddly perfect saved image from the internet"
 - over many outputs, cast a broad mix: people of color, white people, and mixed groups. Do not default exclusively to any one race.
-- early-2000s tuner cars, street-racing-adjacent parking lots, flash-lit hotel driveways, and accidental paparazzi energy are welcome when they stay clean and text-friendly.
+- early-2000s tuner cars, street-racing-adjacent parking lots, flash-lit hotel driveways, giant waterfalls, canyon overlooks, rollercoaster drops, storm puddles, and accidental paparazzi energy are welcome when they stay clean and text-friendly.
 
 Banned overused ideas (do NOT use):
 - fireworks, sparklers, outdoor basketball court at night
@@ -1301,6 +1412,7 @@ Banned overused ideas (do NOT use):
 - cozy coffee/bookshop/diner/window scenes that read like therapy content
 - generic friend groups smiling in a lifestyle ad
 - poetic quiet-curiosity concepts where the prop is the whole idea
+- low-stakes calm sitting, walking, browsing, waiting, or softly smiling unless the view/action is genuinely huge
 - glossy fashion, cinematic, premium, commercial, polished portrait language, or named celebrity lookalikes
 ${avoidList ? `\nRecently used — avoid similar:\n${avoidList}` : ""}
 
