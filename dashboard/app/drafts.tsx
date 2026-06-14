@@ -152,6 +152,8 @@ export default function DraftsScreen() {
                   ...d.meta,
                   kind: "draft",
                   caption: result.caption,
+                  captionOptions: result.captionOptions,
+                  selectedCaptionIndex: result.selectedCaptionIndex,
                   needsCaption: false,
                   captionModel: result.captionModel,
                   captionLayout: {
