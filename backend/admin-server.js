@@ -6,6 +6,7 @@
  *   open http://127.0.0.1:3847/
  */
 import "dotenv/config";
+import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
 import { spawn } from "node:child_process";
 import { createReadStream, readFileSync } from "node:fs";
@@ -16,13 +17,23 @@ import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import {
   BUCKET as IG_BUCKET,
+  DRAFT_PREFIX,
   downloadImage,
   parsePostTargetsFromInput,
   resizeForPreview,
   resizeForWidget,
 } from "./instagram-helper.js";
 import { getDraftForPublish, publishDraftFromDb } from "./publish-draft.js";
-import { overlayCaption, normalizeCaptionLayout } from "./motivational-generator.js";
+import {
+  DEFAULT_CAPTION_MODEL,
+  buildCaptionPrompt,
+  buildLegacyPromptForMetadata,
+  finalizeCaption,
+  normalizeCaptionLayout,
+  overlayCaption,
+  parseCaption,
+  variedFallbackCaption,
+} from "./motivational-generator.js";
 import { supabaseServiceRoleKey, supabaseUrl } from "./supabase-env.js";
 
 const BUCKET = IG_BUCKET;
@@ -87,10 +98,43 @@ function spawnJob(type, scriptName, args = [], extraEnv = {}) {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+function env(name) {
+  const value = process.env[name];
+  if (!value) throw new Error(`Missing env: ${name}`);
+  return value;
+}
+
 function publicObjectUrl(supaUrl, storagePath) {
   const base = supaUrl.replace(/\/+$/, "");
   const encoded = storagePath.split("/").map(encodeURIComponent).join("/");
   return `${base}/storage/v1/object/public/${BUCKET}/${encoded}`;
+}
+
+function captionedDraftStoragePath(name) {
+  const suffix = `${Date.now()}-${randomUUID().slice(0, 8)}`;
+  return `${DRAFT_PREFIX}/captioned/${name}-${suffix}.png`;
+}
+
+function hasCompleteCaption(caption) {
+  return Boolean(caption?.smallText && caption?.bigText);
+}
+
+async function uploadVerifiedObject(supabase, storagePath, bytes) {
+  const { error: uploadErr } = await supabase.storage
+    .from(BUCKET)
+    .upload(storagePath, bytes, {
+      contentType: "image/png",
+      cacheControl: "0",
+      upsert: false,
+    });
+  if (uploadErr) throw uploadErr;
+
+  const { data: verifyBlob, error: verifyErr } = await supabase.storage.from(BUCKET).download(storagePath);
+  if (verifyErr) throw verifyErr;
+  const verified = Buffer.from(await verifyBlob.arrayBuffer());
+  if (!verified.equals(bytes)) {
+    throw new Error(`Uploaded object failed verification: ${storagePath}`);
+  }
 }
 
 function checkToken(req) {
@@ -134,26 +178,66 @@ async function listAllStoragePaths(supabase) {
 // ─── DB Helpers ───────────────────────────────────────────────────────────────
 
 async function listDrafts(supabase, projectUrl) {
-  const { data, error } = await supabase
-    .from("drafts")
-    .select("id, name, storage_path, raw_storage_path, caption, scene, image_model, caption_model, created_at, metadata")
-    .eq("status", "draft")
-    .order("created_at", { ascending: true });
-  if (error) throw error;
-  return (data ?? []).map(row => ({
-    id: row.name,
-    filename: `${row.name}.png`,
-    imageUrl: publicObjectUrl(projectUrl, row.storage_path),
-    rawImageUrl: row.raw_storage_path ? publicObjectUrl(projectUrl, row.raw_storage_path) : null,
-    meta: {
-      caption: row.caption,
-      captionLayout: row.metadata?.captionLayout ?? null,
-      scene: row.scene,
-      imageModel: row.image_model,
-      captionModel: row.caption_model,
-      generatedAt: row.created_at,
+  const [draftsResult, backgroundsResult] = await Promise.all([
+    supabase
+      .from("drafts")
+      .select("id, name, storage_path, raw_storage_path, caption, scene, image_model, caption_model, created_at, metadata")
+      .eq("status", "draft")
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("backgrounds")
+      .select("id, name, storage_path, scene, image_prompt, image_model, prompt_model, created_at, metadata")
+      .eq("status", "pending")
+      .order("created_at", { ascending: true }),
+  ]);
+  if (draftsResult.error) throw draftsResult.error;
+  if (backgroundsResult.error) throw backgroundsResult.error;
+
+  const drafts = (draftsResult.data ?? [])
+    .filter(row => hasCompleteCaption(row.caption))
+    .map(row => ({
+      sortAt: row.created_at,
+      item: {
+        id: row.name,
+        filename: `${row.name}.png`,
+        imageUrl: publicObjectUrl(projectUrl, row.storage_path),
+        rawImageUrl: row.raw_storage_path ? publicObjectUrl(projectUrl, row.raw_storage_path) : null,
+        meta: {
+          kind: "draft",
+          caption: row.caption,
+          needsCaption: false,
+          captionLayout: row.metadata?.captionLayout ?? null,
+          scene: row.scene,
+          imageModel: row.image_model,
+          captionModel: row.caption_model,
+          generatedAt: row.created_at,
+        },
+      },
+    }));
+
+  const backgrounds = (backgroundsResult.data ?? []).map(row => ({
+    sortAt: row.created_at,
+    item: {
+      id: row.name,
+      filename: `${row.name}.png`,
+      imageUrl: publicObjectUrl(projectUrl, row.storage_path),
+      rawImageUrl: publicObjectUrl(projectUrl, row.storage_path),
+      meta: {
+        kind: "background",
+        caption: null,
+        needsCaption: true,
+        captionLayout: row.metadata?.captionLayout ?? null,
+        scene: row.scene,
+        imageModel: row.image_model,
+        promptModel: row.prompt_model,
+        generatedAt: row.created_at,
+      },
     },
   }));
+
+  return [...drafts, ...backgrounds]
+    .sort((a, b) => String(a.sortAt).localeCompare(String(b.sortAt)))
+    .map(({ item }) => item);
 }
 
 async function renderDraftCaption(supabase, { id, caption, layout }) {
@@ -182,11 +266,8 @@ async function renderDraftCaption(supabase, { id, caption, layout }) {
   const normalizedLayout = normalizeCaptionLayout(layout ?? row.metadata?.captionLayout ?? {});
   const imageBytes = Buffer.from(await blob.arrayBuffer());
   const rendered = await overlayCaption(imageBytes, finalCaption, normalizedLayout);
-
-  const { error: uploadErr } = await supabase.storage
-    .from(BUCKET)
-    .upload(row.storage_path, rendered, { contentType: "image/png", upsert: true });
-  if (uploadErr) throw uploadErr;
+  const finalStoragePath = captionedDraftStoragePath(row.name);
+  await uploadVerifiedObject(supabase, finalStoragePath, rendered);
 
   const metadata = {
     ...(row.metadata && typeof row.metadata === "object" ? row.metadata : {}),
@@ -195,16 +276,201 @@ async function renderDraftCaption(supabase, { id, caption, layout }) {
 
   const { error: updateErr } = await supabase
     .from("drafts")
-    .update({ caption: finalCaption, metadata })
+    .update({ caption: finalCaption, metadata, storage_path: finalStoragePath })
     .eq("name", id)
     .eq("status", "draft");
-  if (updateErr) throw updateErr;
+  if (updateErr) {
+    await supabase.storage.from(BUCKET).remove([finalStoragePath]);
+    throw updateErr;
+  }
 
   return {
     id,
-    imageUrl: publicObjectUrl(supabaseUrl(), row.storage_path),
+    imageUrl: publicObjectUrl(supabaseUrl(), finalStoragePath),
     caption: finalCaption,
     captionLayout: normalizedLayout,
+  };
+}
+
+function responseText(response) {
+  if (typeof response.output_text === "string" && response.output_text.trim()) {
+    return response.output_text;
+  }
+  const chunks = [];
+  for (const item of response.output || []) {
+    for (const content of item.content || []) {
+      if (content.type === "output_text" && content.text) chunks.push(content.text);
+      if (content.type === "text" && content.text) chunks.push(content.text);
+    }
+  }
+  return chunks.join("\n");
+}
+
+async function loadRecentCaptions(supabase, limit = 30) {
+  const recent = [];
+
+  const { data: drafts } = await supabase
+    .from("drafts")
+    .select("caption")
+    .not("caption", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  for (const row of drafts ?? []) {
+    if (row.caption?.smallText && row.caption?.bigText) {
+      recent.push({ smallText: row.caption.smallText, bigText: row.caption.bigText });
+    }
+  }
+
+  const { data: posts } = await supabase
+    .from("posts")
+    .select("caption")
+    .not("caption", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  for (const row of posts ?? []) {
+    const text = String(row.caption || "");
+    const comma = text.indexOf(",");
+    if (comma === -1) continue;
+    recent.push({
+      smallText: text.slice(0, comma + 1).trim(),
+      bigText: text.slice(comma + 1).trim(),
+    });
+  }
+
+  const seen = new Set();
+  return recent.filter((caption) => {
+    const key = `${caption.smallText}|${caption.bigText}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+async function generateCaptionForScene({ client, model, scene, recentCaptions }) {
+  let lastPrompt = buildCaptionPrompt(scene, { recentCaptions });
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    lastPrompt = buildCaptionPrompt(scene, { recentCaptions, attempt });
+    const response = await client.responses.create({
+      model,
+      temperature: 0.7,
+      input: [{ role: "user", content: [{ type: "input_text", text: lastPrompt }] }],
+    });
+    const caption = finalizeCaption(parseCaption(responseText(response)), recentCaptions, scene);
+    if (caption) return { caption, prompt: lastPrompt };
+  }
+
+  return {
+    caption: variedFallbackCaption(scene, recentCaptions),
+    prompt: lastPrompt,
+  };
+}
+
+async function approveDraftBackground(supabase, { id, captionModel, layout }) {
+  const { data: row, error } = await supabase
+    .from("backgrounds")
+    .select("id, name, storage_path, scene, image_prompt, image_model, prompt_model, metadata")
+    .eq("name", id)
+    .eq("status", "pending")
+    .maybeSingle();
+  if (error) throw error;
+  if (!row) throw new Error(`Background not found: ${id}`);
+
+  const metadata = row.metadata && typeof row.metadata === "object" ? row.metadata : {};
+  const scene = row.scene || metadata.scene;
+  if (!scene || typeof scene !== "object") {
+    throw new Error("Background has no saved scene metadata for caption generation");
+  }
+
+  const model = captionModel || process.env.OPENAI_CAPTION_MODEL || DEFAULT_CAPTION_MODEL;
+  const openai = new OpenAI({ apiKey: env("OPENAI_API_KEY") });
+  const recentCaptions = await loadRecentCaptions(supabase);
+  const captionResult = await generateCaptionForScene({
+    client: openai,
+    model,
+    scene,
+    recentCaptions,
+  });
+
+  const { data: blob, error: downloadErr } = await supabase.storage.from(BUCKET).download(row.storage_path);
+  if (downloadErr) throw downloadErr;
+
+  const imageBytes = Buffer.from(await blob.arrayBuffer());
+  const rawStoragePath = row.storage_path;
+
+  const normalizedLayout = normalizeCaptionLayout(layout || metadata.captionLayout || {});
+  const rendered = await overlayCaption(imageBytes, captionResult.caption, normalizedLayout);
+  const finalStoragePath = captionedDraftStoragePath(row.name);
+  await uploadVerifiedObject(supabase, finalStoragePath, rendered);
+
+  const nextMetadata = {
+    ...metadata,
+    caption: captionResult.caption,
+    captionPrompt: captionResult.prompt,
+    captionLayout: normalizedLayout,
+    captionApprovedAt: new Date().toISOString(),
+    captionModel: model,
+    scene,
+    scenePrompt: metadata.scenePrompt ?? row.image_prompt ?? null,
+    posterPrompt: buildLegacyPromptForMetadata(scene, captionResult.caption),
+  };
+
+  const { data: draftRow, error: updateErr } = await supabase
+    .from("drafts")
+    .upsert({
+      name: row.name,
+      storage_path: finalStoragePath,
+      caption: captionResult.caption,
+      scene,
+      image_prompt: row.image_prompt ?? metadata.scenePrompt ?? null,
+      raw_storage_path: rawStoragePath,
+      image_model: row.image_model ?? metadata.imageModel ?? null,
+      prompt_model: row.prompt_model ?? metadata.promptModel ?? null,
+      caption_model: model,
+      metadata: nextMetadata,
+      status: "draft",
+    }, { onConflict: "name" })
+    .select("id")
+    .maybeSingle();
+  if (updateErr) {
+    await supabase.storage.from(BUCKET).remove([finalStoragePath]);
+    throw updateErr;
+  }
+
+  const { error: optionErr } = await supabase
+    .from("caption_options")
+    .insert({
+      background_id: row.id,
+      draft_id: draftRow?.id ?? null,
+      caption: captionResult.caption,
+      caption_model: model,
+      prompt: captionResult.prompt,
+      metadata: {
+        captionLayout: normalizedLayout,
+        scene,
+      },
+      status: "selected",
+    });
+  if (optionErr) throw optionErr;
+
+  const { error: backgroundErr } = await supabase
+    .from("backgrounds")
+    .update({
+      status: "approved",
+      approved_draft_name: row.name,
+      approved_at: new Date().toISOString(),
+    })
+    .eq("id", row.id)
+    .eq("status", "pending");
+  if (backgroundErr) throw backgroundErr;
+
+  return {
+    id,
+    imageUrl: publicObjectUrl(supabaseUrl(), finalStoragePath),
+    rawImageUrl: publicObjectUrl(supabaseUrl(), rawStoragePath),
+    caption: captionResult.caption,
+    captionLayout: normalizedLayout,
+    captionModel: model,
   };
 }
 
@@ -310,22 +576,28 @@ async function main() {
           activeResult,
           storagePaths,
           draftsResult,
+          backgroundsResult,
           promptsResult,
           discardedResult,
         ] = await Promise.all([
           supabase.from("posts").select("*", { count: "exact", head: true }),
           supabase.from("posts").select("*", { count: "exact", head: true }).eq("status", "active"),
           listAllStoragePaths(supabase),
-          supabase.from("drafts").select("*", { count: "exact", head: true }).eq("status", "draft"),
+          supabase.from("drafts").select("id, caption").eq("status", "draft"),
+          supabase.from("backgrounds").select("*", { count: "exact", head: true }).eq("status", "pending"),
           supabase.from("prompts").select("*", { count: "exact", head: true }),
           supabase.from("drafts").select("*", { count: "exact", head: true }).eq("status", "discarded"),
         ]);
         const activePosts = activeResult.error ? (totalPosts ?? 0) : (activeResult.count ?? 0);
+        const captionedDrafts = draftsResult.error
+          ? 0
+          : (draftsResult.data ?? []).filter(row => hasCompleteCaption(row.caption)).length;
+        const pendingBackgrounds = backgroundsResult.error ? 0 : (backgroundsResult.count ?? 0);
         json(res, 200, {
           totalPosts: totalPosts ?? 0,
           activePosts,
           storageFiles: storagePaths.length,
-          drafts: draftsResult.error ? 0 : (draftsResult.count ?? 0),
+          drafts: captionedDrafts + pendingBackgrounds,
           prompts: promptsResult.error ? 0 : (promptsResult.count ?? 0),
           discarded: discardedResult.error ? 0 : (discardedResult.count ?? 0),
         });
@@ -435,26 +707,55 @@ async function main() {
       return;
     }
 
+    if (req.method === "POST" && url.pathname === "/api/drafts/approve-background") {
+      const payload = await readBody(req);
+      if (!payload?.id) { json(res, 400, { error: "id required" }); return; }
+      try {
+        const result = await approveDraftBackground(supabase, {
+          id: payload.id,
+          captionModel: payload.captionModel,
+          layout: payload.layout,
+        });
+        json(res, 200, { success: true, ...result });
+      } catch (e) {
+        json(res, e.message?.startsWith("Draft not found") ? 404 : 500, { error: e.message });
+      }
+      return;
+    }
+
     if (req.method === "POST" && url.pathname === "/api/drafts/discard") {
       const payload = await readBody(req);
       if (!payload) { json(res, 400, { error: "Invalid JSON" }); return; }
 
       try {
-        let query = supabase.from("drafts").update({ status: "discarded" });
+        let backgroundQuery = supabase.from("backgrounds").update({ status: "discarded" });
+        let draftQuery = supabase.from("drafts").update({ status: "discarded" });
         if (payload.all) {
-          query = query.eq("status", "draft");
+          backgroundQuery = backgroundQuery.eq("status", "pending");
+          draftQuery = draftQuery.eq("status", "draft");
         } else if (payload.id) {
-          query = query.eq("name", payload.id).eq("status", "draft");
+          backgroundQuery = backgroundQuery.eq("name", payload.id).eq("status", "pending");
+          draftQuery = draftQuery.eq("name", payload.id).eq("status", "draft");
         } else {
           json(res, 400, { error: "Provide all or id" }); return;
         }
-        const { data, error } = await query.select("name");
-        if (error) throw error;
-        if (!data?.length) {
+        const [backgroundResult, draftResult] = await Promise.all([
+          backgroundQuery.select("name"),
+          draftQuery.select("name"),
+        ]);
+        if (backgroundResult.error) throw backgroundResult.error;
+        if (draftResult.error) throw draftResult.error;
+
+        const ids = [
+          ...(backgroundResult.data ?? []).map(row => row.name),
+          ...(draftResult.data ?? []).filter(row => !backgroundResult.data?.some(bg => bg.name === row.name)).map(row => row.name),
+        ];
+
+        if (!ids.length) {
           json(res, 404, { error: payload.id ? `Draft not found: ${payload.id}` : "No drafts matched" });
           return;
         }
-        json(res, 200, { success: true, updated: data.length, ids: data.map(row => row.name) });
+        json(res, 200, { success: true, updated: ids.length, ids });
       } catch (e) {
         json(res, 500, { error: e.message });
       }
