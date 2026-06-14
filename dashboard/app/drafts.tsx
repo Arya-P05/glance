@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState } from "react";
 import {
-  View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Image,
+  View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Image, Platform, useWindowDimensions,
 } from "react-native";
 import { NavArrowLeft, NavArrowRight, RefreshDouble, Trash } from "iconoir-react-native";
 import { API_BASE, api, Draft } from "../lib/api";
@@ -9,14 +9,17 @@ import { C, S } from "../lib/theme";
 import { WidgetSmall } from "../components/iPhoneMockup/WidgetSmall";
 import { WidgetMedium } from "../components/iPhoneMockup/WidgetMedium";
 import { WidgetLarge } from "../components/iPhoneMockup/WidgetLarge";
-import { RemoteImage, previewImageUrl } from "../components/RemoteImage";
+import { previewImageUrl } from "../components/RemoteImage";
 import { CaptionEditor } from "../components/CaptionEditor";
 import { CaptionLayout, CaptionText, MediumCaptionLayout } from "../lib/captionLayout";
 import { ActionKey } from "../components/ActionKey";
 
 type Screen = "grid" | "review" | "edit";
 
-const CELL = 240;
+const GRID_PADDING = 16;
+const GRID_GAP = 10;
+const MIN_GRID_CELL = 220;
+const MAX_GRID_CELL = 320;
 
 function draftImageUri(draft: Draft, width: number) {
   if (draft.imageUrl) return previewImageUrl(draft.imageUrl, width);
@@ -42,6 +45,7 @@ function normalizeCaption(caption: CaptionText): CaptionText {
 }
 
 export default function DraftsScreen() {
+  const { width } = useWindowDimensions();
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [loading, setLoading] = useState(true);
   const [screen, setScreen] = useState<Screen>("grid");
@@ -49,6 +53,16 @@ export default function DraftsScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draftEditCaption, setDraftEditCaption] = useState<CaptionText | null>(null);
+  const gridViewportWidth = Math.max(
+    320,
+    width - (Platform.OS === "web" && width > 600 ? C.sidebarW : 0) - GRID_PADDING * 2
+  );
+  const maxGridColumns = Math.max(1, Math.floor((gridViewportWidth + GRID_GAP) / (MIN_GRID_CELL + GRID_GAP)));
+  const gridColumns = drafts.length > 0 ? Math.min(drafts.length, maxGridColumns) : maxGridColumns;
+  const gridCell = Math.min(
+    MAX_GRID_CELL,
+    Math.floor((gridViewportWidth - GRID_GAP * (gridColumns - 1)) / gridColumns)
+  );
 
   async function load() {
     try {
@@ -434,7 +448,7 @@ export default function DraftsScreen() {
               <Pressable
                 key={draft.id}
                 onPress={() => openReview(idx)}
-                style={styles.cell}
+                style={[styles.cell, { width: gridCell, height: gridCell }]}
               >
                 <Image source={{ uri: imgUri }} style={styles.thumb} resizeMode="contain" />
               </Pressable>
@@ -475,21 +489,19 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    padding: 16,
-    gap: 10,
+    padding: GRID_PADDING,
+    gap: GRID_GAP,
   },
   empty: { padding: 40, alignItems: "center", gap: 10 },
   emptyTitle: { color: C.textSecondary, fontSize: 18, fontWeight: "700" },
   cell: {
-    width: CELL,
-    height: CELL,
     borderRadius: 10,
     overflow: "hidden",
     backgroundColor: C.bg,
     borderWidth: 1,
     borderColor: C.border,
   },
-  thumb: { width: CELL, height: CELL, backgroundColor: C.bg },
+  thumb: { width: "100%", height: "100%", backgroundColor: C.bg },
   captionLine: { color: C.textPrimary, fontSize: 13, fontWeight: "500", lineHeight: 19 },
 
   // Review header
