@@ -31,11 +31,11 @@ import {
   buildSceneFromArchetype,
   buildSceneFromDirector,
   cleanGeneratedPrompt,
-  finalizeCaption,
+  completeCaptionOptions,
   variedFallbackCaption,
   makeAssetName,
   overlayCaption,
-  parseCaption,
+  parseCaptionOptions,
   saveGeneratedAsset,
   savePromptAsset,
   sceneDedupKeys,
@@ -219,6 +219,17 @@ function responseText(response) {
   return chunks.join("\n");
 }
 
+function captionRequestContent(prompt, imageBytes) {
+  const content = [{ type: "input_text", text: prompt }];
+  if (imageBytes?.length) {
+    content.push({
+      type: "input_image",
+      image_url: `data:image/png;base64,${imageBytes.toString("base64")}`,
+    });
+  }
+  return content;
+}
+
 async function loadRecentScenesFromDb(supabase, limit = 40) {
   if (!supabase) return new Set();
   const keys = new Set();
@@ -348,22 +359,32 @@ async function loadRecentCaptionsFromDb(supabase, limit = 30) {
   });
 }
 
-async function generateCaption({ client, model, scene, recentCaptions = [] }) {
-  let lastPrompt = buildCaptionPrompt(scene, { recentCaptions });
+async function generateCaption({ client, model, scene, imageBytes = null, recentCaptions = [] }) {
+  let lastPrompt = buildCaptionPrompt(scene, { recentCaptions, hasImage: Boolean(imageBytes?.length) });
 
   for (let attempt = 0; attempt < 5; attempt++) {
-    lastPrompt = buildCaptionPrompt(scene, { recentCaptions, attempt });
+    lastPrompt = buildCaptionPrompt(scene, { recentCaptions, attempt, hasImage: Boolean(imageBytes?.length) });
     const response = await client.responses.create({
       model,
       temperature: 0.7,
-      input: [{ role: "user", content: [{ type: "input_text", text: lastPrompt }] }],
+      input: [{ role: "user", content: captionRequestContent(lastPrompt, imageBytes) }],
     });
-    const caption = finalizeCaption(parseCaption(responseText(response)), recentCaptions, scene);
-    if (caption) return { caption, prompt: lastPrompt };
+    const options = completeCaptionOptions(parseCaptionOptions(responseText(response)), scene, recentCaptions, 5, {
+      requireSeed: true,
+    });
+    if (options.length) {
+      return {
+        caption: options[Math.floor(Math.random() * options.length)],
+        options,
+        prompt: lastPrompt,
+      };
+    }
   }
 
+  const fallbackOptions = completeCaptionOptions([], scene, recentCaptions);
   return {
-    caption: variedFallbackCaption(scene, recentCaptions),
+    caption: fallbackOptions[0] || variedFallbackCaption(scene, recentCaptions),
+    options: fallbackOptions,
     prompt: lastPrompt,
   };
 }
@@ -677,6 +698,7 @@ async function main() {
 
       let caption = null;
       let captionPrompt = null;
+      let captionOptions = [];
       let finalImageBytes = rawImageBytes;
 
       if (args.mode === "full") {
@@ -685,11 +707,13 @@ async function main() {
             client: openai,
             model: args.captionModel,
             scene,
+            imageBytes: rawImageBytes,
             recentCaptions,
           })
         );
         caption = captionResult.caption;
         captionPrompt = captionResult.prompt;
+        captionOptions = captionResult.options || [];
         recentCaptions.unshift(caption);
         if (recentCaptions.length > 40) recentCaptions.length = 40;
         finalImageBytes = await withProgress(`${prefix} placing text`, () =>
@@ -709,6 +733,7 @@ async function main() {
         promptWriterPrompt,
         captionPrompt,
         caption,
+        captionOptions,
       };
       const paths = await withProgress(`${prefix} saving draft`, () =>
         saveGeneratedAsset({
