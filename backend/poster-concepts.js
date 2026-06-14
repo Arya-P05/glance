@@ -557,6 +557,106 @@ export const POSTER_ARCHETYPES = [
     props: ["nothing"],
   },
   {
+    id: "rainbow-after-rain-yell",
+    vibe: "rainbow after-rain freakout",
+    subjectKind: "person",
+    subjects: [
+      "two white friends in soaked summer clothes",
+      "two Black friends in rain jackets",
+      "a Latina woman and an East Asian woman",
+      "three mixed-race friends",
+      "a South Asian young man in a wet hoodie",
+    ],
+    action: "pointing at a giant rainbow and scream-laughing like they won the weather",
+    settings: ["a wet open field after warm rain with mirror puddles low in frame and a huge rainbow across pale sky"],
+    cameras: ["grainy high-contrast 2000s digital camera photo", "cheap 2006 point-and-shoot camera photo"],
+    weather: ["rainbow after warm rain", "high-contrast sunset after rain"],
+    compositions: ["people low and small, puddles near their feet, rainbow and pale sky dominating the upper frame"],
+    colors: ["rainbow-after-rain color against a pale sky", "high-contrast 2000s digital color with crushed shadows"],
+    emotions: ["momentum", "funny"],
+    props: ["nothing"],
+  },
+  {
+    id: "night-out-singalong-flash",
+    vibe: "night-out singalong flash",
+    subjectKind: "person",
+    subjects: [
+      "two white friends in going-out clothes",
+      "three Black friends in vintage jackets",
+      "two South Asian friends in night-out clothes",
+      "a Latino couple in leather jackets",
+      "three mixed-race friends in shiny thrifted tops",
+    ],
+    action: "singing their heart out with eyes closed and arms around each other",
+    settings: ["a wet city street outside a tiny bar at night with neon reflections and a blank dark awning above"],
+    cameras: ["high-contrast 2004 pocket camera flash photo", "compact camera flash photo"],
+    weather: ["happy warm rain with cheap flash", "clear night with distant city glow"],
+    compositions: ["friends low and close to camera, flash faces readable, dark awning and black sky above for text"],
+    colors: ["flash-lit subject against dark simple background", "high-contrast 2000s digital color with crushed shadows"],
+    emotions: ["funny", "momentum"],
+    props: ["nothing"],
+  },
+  {
+    id: "beach-swim-sprint",
+    vibe: "swim-clothes beach sprint",
+    subjectKind: "person",
+    subjects: [
+      "two white friends in swim clothes",
+      "two Black friends in swimsuits",
+      "a Pacific Islander woman and a white woman in swim clothes",
+      "two Latino friends in swim trunks",
+      "three mixed-race friends in swim clothes",
+    ],
+    action: "running toward the water in swim clothes and laughing with arms flying",
+    settings: ["an empty beach at golden hour with wet sand, low shoreline, and huge pastel sunset sky above"],
+    cameras: ["grainy high-contrast 2000s digital camera photo", "disposable camera photo"],
+    weather: ["pastel sunset", "high-contrast sunset after rain"],
+    compositions: ["runners low in frame with motion-blurred legs, shoreline low, huge sunset sky above"],
+    colors: ["pastel sunset colors", "washed-out pale beach colors"],
+    emotions: ["momentum", "funny"],
+    props: ["nothing"],
+  },
+  {
+    id: "ridge-hike-victory",
+    vibe: "hiking ridge victory yell",
+    subjectKind: "person",
+    subjects: [
+      "a white woman in hiking clothes",
+      "a Black man with a tiny hiking backpack",
+      "two East Asian friends in fleece jackets",
+      "a South Asian woman in trail shorts",
+      "three mixed-race friends in hiking clothes",
+    ],
+    action: "yelling happily at the view with arms up after a hard hike",
+    settings: ["a hiking ridge with layered mountains below, wind-tossed hair, and a massive high-contrast sunset sky"],
+    cameras: ["grainy high-contrast 2000s digital camera photo", "wide-angle phone photo"],
+    weather: ["high-contrast sunset after rain", "windy day with playful movement"],
+    compositions: ["hikers small and low on the ridge, huge dramatic sunset sky and mountain layers above"],
+    colors: ["high-contrast 2000s digital color with crushed shadows", "pastel sunset colors"],
+    emotions: ["momentum", "perspective"],
+    props: ["nothing"],
+  },
+  {
+    id: "rain-dance-flash",
+    vibe: "happy rain flash dance",
+    subjectKind: "person",
+    subjects: [
+      "two white roommates in soaked hoodies",
+      "two Black friends in rain jackets",
+      "a South Asian woman and a Black woman",
+      "three Latino friends",
+      "three mixed-race friends in casual night-out clothes",
+    ],
+    action: "dancing in warm rain under flash with huge open-mouth laughs",
+    settings: ["a wet parking lot at night with puddle reflections low in frame and a blank dark wall above"],
+    cameras: ["high-contrast 2004 pocket camera flash photo", "compact camera flash photo"],
+    weather: ["happy warm rain with cheap flash", "clear night with distant city glow"],
+    compositions: ["people and puddle splashes low in frame, flash-lit faces, huge dark simple wall above"],
+    colors: ["flash-lit subject against dark simple background", "high-contrast 2000s digital color with crushed shadows"],
+    emotions: ["momentum", "funny"],
+    props: ["nothing"],
+  },
+  {
     id: "ocean-bench-moody",
     vibe: "moody ocean reflection",
     subjectKind: "person",
@@ -1375,6 +1475,11 @@ export const ICONIC_ENERGY_ARCHETYPE_IDS = new Set([
   "rollercoaster-flash-face",
   "storm-puddle-sprint",
   "neon-car-smoke-laugh",
+  "rainbow-after-rain-yell",
+  "night-out-singalong-flash",
+  "beach-swim-sprint",
+  "ridge-hike-victory",
+  "rain-dance-flash",
   "cockpit-sunset",
   "ferry-deck-wind",
   "county-fair-parking",
@@ -1413,6 +1518,11 @@ export const HIGH_CONCEPT_ARCHETYPE_IDS = new Set([
   "rollercoaster-flash-face",
   "storm-puddle-sprint",
   "neon-car-smoke-laugh",
+  "rainbow-after-rain-yell",
+  "night-out-singalong-flash",
+  "beach-swim-sprint",
+  "ridge-hike-victory",
+  "rain-dance-flash",
   "elderly-skateboard-road",
   "roller-skate-ramp",
   "cockpit-sunset",
@@ -1442,7 +1552,7 @@ export function settingFamily(setting = "") {
   const s = String(setting).toLowerCase();
   if (/fireworks|night court|sparkler/.test(s)) return "fireworks-night";
   if (/desk|bedroom|gaming|monitor|wall|laundromat|porch|kitchen|diner|museum|dorm|arcade|bookstore|barbershop|noodle|apartment|laundry room/.test(s)) return "indoor-wall";
-  if (/bodega|corner store|bus shelter|subway|thrift|flea market/.test(s)) return "urban-street";
+  if (/bodega|corner store|bus shelter|subway|thrift|flea market|city street|tiny bar/.test(s)) return "urban-street";
   if (/parking garage/.test(s)) return "urban-sky";
   if (/parking|rest stop|gas station|road|highway|fair|warehouse street|underpass/.test(s)) return "roadside";
   if (/beach|ocean|lake|dock|ferry|canoe|boat|water/.test(s)) return "water";
@@ -1519,14 +1629,14 @@ Each concept must feel like:
 - one specific old camera-roll upload, not a stock photo category
 - iconic at thumbnail size: one subject or one tight little animal cluster, one joke/feeling, one clean background
 - weird, high-emotion, or peak-action enough to feel internet-native, but visually believable
-- the frame should catch the exact wild second: scream-laughing, midair, splash, wind blast, mist blast, flash hit, huge view reaction, or car-night chaos
+- the frame should catch the exact wild second: scream-laughing, midair, splash, wind blast, mist blast, flash hit, huge view reaction, singing-heart-out, rainbow freakout, or car-night chaos
 - subject low in frame with a huge plain color field above for text later
-- raw early-2000s grainy digital photo energy: flash, fisheye, blown-out sky, cheap sensor noise, accidental framing
+- raw early-2000s grainy digital photo energy: high contrast, cheap flash, fisheye, blown-out sky, crushed shadows, sensor noise, accidental framing
 - sometimes conventionally beautiful, model-off-duty, or celebrity-adjacent, but only as a raw candid aura; never reference or resemble a real celebrity
 - less "beautiful lifestyle shoot", more "oddly perfect saved image from the internet"
 - over many outputs, cast a broad mix: people of color, white people, and mixed groups. Do not default exclusively to any one race.
 - baby animals and playful multi-animal frames are welcome: puppies, kittens, ducklings, baby goats, bunnies, lambs, tiny paws, zoomies, puddles, baskets, and one clear chaotic cluster.
-- early-2000s tuner cars, street-racing-adjacent parking lots, flash-lit hotel driveways, giant waterfalls, canyon overlooks, rollercoaster drops, storm puddles, and accidental paparazzi energy are welcome when they stay clean and text-friendly.
+- early-2000s tuner cars, street-racing-adjacent parking lots, flash-lit hotel driveways, giant waterfalls, canyon overlooks, rollercoaster drops, rainbows after rain, happy rain flash, night-out singalongs, ridge hikes, beach sprints in swim clothes, storm puddles, and accidental paparazzi energy are welcome when they stay clean and text-friendly.
 
 Banned overused ideas (do NOT use):
 - fireworks, sparklers, outdoor basketball court at night

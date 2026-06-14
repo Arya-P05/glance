@@ -131,6 +131,9 @@ const PERSON_ROLES = [
   "with a tiny backpack",
   "holding a skateboard",
   "wearing headphones",
+  "wearing swim clothes",
+  "in hiking clothes",
+  "in night-out clothes",
 ];
 
 // Actions describe pose/behavior only — location lives in `setting`, never here.
@@ -149,6 +152,10 @@ const WILD_ACTIONS = [
   "raising one paw like it has attitude",
   "leaning toward the camera with a ridiculous grin",
   "walking through warm rain and smiling",
+  "singing their heart out with eyes closed",
+  "running down the beach in swim clothes and laughing",
+  "hiking uphill with a giant triumphant grin",
+  "dancing in warm rain under flash",
   "making the most of a snowy day",
   "posing like it owns the place",
   "wearing sunglasses with complete confidence",
@@ -181,6 +188,7 @@ const MOODBOARD_SETTINGS = [
   "a rooftop with open sky",
   "a sunflower field",
   "a mountain overlook with hazy hills",
+  "a hiking ridge with a giant sunset view",
   "a snowy field with bright white negative space",
   "a front porch with blank siding behind it",
   "a sunny bedroom corner with a plain wall",
@@ -193,6 +201,7 @@ const MOODBOARD_SETTINGS = [
   "a roadside ditch full of wildflowers",
   "a playground with a giant empty sky",
   "a ferry deck with ocean behind it",
+  "a wet city street after rain with neon reflections",
   "a canoe in a quiet lake",
   "a small airplane runway at sunset",
   "a county fair parking lot",
@@ -209,12 +218,15 @@ const POSITIVE_WEATHER = [
   "warm golden hour",
   "soft sunrise",
   "pastel sunset",
+  "high-contrast sunset after rain",
+  "rainbow after warm rain",
   "blue hour with a hopeful glow",
   "sun peeking through clouds",
   "light fog with warm sun behind it",
   "misty morning light",
   "gentle snowfall with a happy subject",
   "warm rain with sunlight",
+  "happy warm rain with cheap flash",
   "windy day with playful movement",
   "bright white winter light",
   "dreamy summer haze",
@@ -222,7 +234,9 @@ const POSITIVE_WEATHER = [
 
 const CAMERA_TEXTURES = [
   "raw early-2000s digital camera photo",
+  "grainy high-contrast 2000s digital camera photo",
   "cheap 2006 point-and-shoot camera photo",
+  "high-contrast 2004 pocket camera flash photo",
   "old iPhone camera roll photo",
   "disposable camera photo",
   "wide-angle fisheye snapshot",
@@ -245,6 +259,8 @@ const COLOR_DIRECTIONS = [
   "washed-out pale beach colors",
   "golden sunlight and soft shadows",
   "pastel sunset colors",
+  "high-contrast 2000s digital color with crushed shadows",
+  "rainbow-after-rain color against a pale sky",
   "flash-lit subject against dark simple background",
   "bright white negative space with black-text-friendly contrast",
   "clean early-digital blue and green color",
@@ -314,10 +330,13 @@ const FIELD_SETTINGS_NO_FIREWORKS = [
 const ACTION_SETTING_HINTS = [
   { pattern: /headphones|soda bottle|gaming desk/, settings: DESK_SETTINGS },
   { pattern: /skateboard|tiny ramp/, settings: SKATE_SETTINGS },
-  { pattern: /canoe|horizon|ocean/, settings: BEACH_WATER_SETTINGS },
+  { pattern: /canoe|horizon|ocean|beach|swim clothes/, settings: BEACH_WATER_SETTINGS },
   { pattern: /fireworks|sparkler/, settings: FIREWORKS_SETTINGS },
   { pattern: /cockpit|fighter jet/, settings: ["inside a fighter jet cockpit with sunset sky outside"] },
   { pattern: /road trip|rest stop|parked car/, settings: ROAD_TRIP_SETTINGS },
+  { pattern: /singing|night-out/, settings: ["a wet city street after rain with neon reflections", "a gas station at sunset"] },
+  { pattern: /hiking|triumphant/, settings: ["a hiking ridge with a giant sunset view", "a mountain overlook with hazy hills"] },
+  { pattern: /warm rain|dancing in warm rain/, settings: ["a wet city street after rain with neon reflections", "a backyard with harsh afternoon sun"] },
   { pattern: /flower|pure joy|running with/, settings: FIELD_SETTINGS_NO_FIREWORKS },
   { pattern: /kiddie pool|splashing/, settings: ["a backyard with harsh afternoon sun", "a front porch with blank siding behind it"] },
   { pattern: /downhill|grassy/, settings: ["a huge green hill under a bright blue sky", "a farm field with a low horizon", "a sunflower field"] },
@@ -912,6 +931,12 @@ function assignCoherentWardrobe(brief, rng = Math.random) {
       ],
       rng
     );
+  } else if (/singing|night-out|neon reflections|city street after rain/.test(ctx)) {
+    wardrobe = pick(["in casual night-out clothes", "in a shiny going-out top and jeans", "in a vintage leather jacket"], rng);
+  } else if (/swim clothes|shoreline|empty beach/.test(ctx)) {
+    wardrobe = pick(["in swim clothes", "in a swimsuit and open linen shirt", "barefoot in swim trunks"], rng);
+  } else if (/hiking|trail|ridge|mountain overlook/.test(ctx)) {
+    wardrobe = pick(["in hiking clothes", "in a fleece and trail shorts", "with a tiny hiking backpack"], rng);
   } else if (/fireworks|sparkler|clear night/.test(ctx)) {
     wardrobe = pick(
       ["with a cozy blanket draped around the shoulders", "in an oversized hoodie", "in casual night-out clothes"],
@@ -1223,11 +1248,12 @@ You are not generating the image. You are writing the final prompt that will be 
 The final image must feel like:
 - a real forgotten camera-roll photo, not AI art
 - early internet nostalgia: awkward, funny, slightly blown out, imperfect
+- grainy high-contrast 2000s digital camera energy: crushed shadows, cheap flash, blown highlights, saturated color, visible sensor noise
 - ugly-pretty and iconic because it feels found, not because it feels polished
 - sometimes accidentally model-level beautiful or celebrity-adjacent, like a cool person caught by cheap flash, without resembling any real celebrity
 - emotionally loud: huge grin, scream-laugh, shock, wind-blasted joy, full-body confidence, or unhinged but happy reaction
 - happy, positive, and goofy in a believable way, not mellow wellness content
-- visually eventful: motion, splash, mist, wind, flash, smoke, height, speed, weird scale, huge view, or one absurd peak-frame detail
+- visually eventful: motion, splash, mist, wind, flash, smoke, height, speed, weird scale, huge view, rainbow, sunset, warm rain, night-out singing, hiking victory, or one absurd peak-frame detail
 - for animals, favor baby animals, tiny paws, playful piles, zoomies, and tight multi-animal chaos when it still reads instantly
 - the situation may be surreal or staged, but every clothing item, prop, and setting detail must make visual sense together
 - grainy early-2000s digital photography with enough resolution to look good
@@ -1292,6 +1318,10 @@ Great outcome examples in spirit:
 - a mixed friend group in thrifted racing jackets laughing beside parked modified cars at blue hour
 - someone scream-laughing in waterfall mist with a gigantic white sky above
 - friends sprinting through a puddle splash under a dramatic storm sky
+- people scream-laughing under a huge rainbow after warm rain, wet pavement and high contrast
+- friends singing their heart out outside a tiny bar at night under cheap flash
+- beach friends running in swim clothes toward the water at sunset
+- hikers yelling happily at a huge ridge view after a hard climb
 - a rollercoaster ride-photo face that is funny, terrified, and joyful at once
 - a girl in a fighter jet cockpit with sunset sky outside
 - an elderly man skateboarding on a sunlit road with a vintage car behind him
@@ -1337,6 +1367,36 @@ function sceneSpecificPromptNotes(brief) {
   if (id === "neon-car-smoke-laugh") {
     notes.push(
       "CAR-NIGHT EXECUTION: keep the car parked or implied as parked, with low smoke and underglow near the ground. The people should be laughing through cheap flash like a found early-2000s street-racing photo, not a glossy car ad."
+    );
+  }
+
+  if (id === "rainbow-after-rain-yell") {
+    notes.push(
+      "RAINBOW EXECUTION: make the rainbow huge and readable across the upper frame, with wet ground and happy soaked people low in frame. Keep it high-contrast and camera-roll ugly-pretty, not a polished nature wallpaper."
+    );
+  }
+
+  if (id === "night-out-singalong-flash") {
+    notes.push(
+      "SINGALONG EXECUTION: the friends should look mid-chorus with open mouths, eyes closed, arms around each other, and cheap flash. Keep the background dark and simple above; avoid a concert stage or professional nightlife photo."
+    );
+  }
+
+  if (id === "beach-swim-sprint") {
+    notes.push(
+      "BEACH SPRINT EXECUTION: show swim clothes, bare feet, motion-blurred legs, and huge sunset sky. Make it feel like a messy vacation-camera photo, not a swimwear ad."
+    );
+  }
+
+  if (id === "ridge-hike-victory") {
+    notes.push(
+      "HIKING EXECUTION: show hiking clothes or a tiny backpack, wind, and a huge ridge view. The people should be yelling happily or laughing after the climb, not quietly posing for a scenic landscape."
+    );
+  }
+
+  if (id === "rain-dance-flash") {
+    notes.push(
+      "RAIN FLASH EXECUTION: keep the people visibly happy in the rain, with flash-lit raindrops, puddle reflections, and huge laughs. Do not make it gloomy, romantic, or calm."
     );
   }
 
