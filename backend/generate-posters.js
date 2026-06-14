@@ -24,11 +24,11 @@ import {
   buildSceneFromArchetype,
   sceneDedupKeys,
   cleanGeneratedPrompt,
-  finalizeCaption,
+  completeCaptionOptions,
   variedFallbackCaption,
   makeAssetName,
   overlayCaption,
-  parseCaption,
+  parseCaptionOptions,
   saveGeneratedAsset,
   savePromptAsset,
 } from "./motivational-generator.js";
@@ -220,22 +220,43 @@ function responseText(response) {
   return chunks.join("\n");
 }
 
-async function generateCaption({ client, model, scene, recentCaptions = [] }) {
-  let lastPrompt = buildCaptionPrompt(scene, { recentCaptions });
+function captionRequestContent(prompt, imageBytes) {
+  const content = [{ type: "input_text", text: prompt }];
+  if (imageBytes?.length) {
+    content.push({
+      type: "input_image",
+      image_url: `data:image/png;base64,${imageBytes.toString("base64")}`,
+    });
+  }
+  return content;
+}
+
+async function generateCaption({ client, model, scene, imageBytes = null, recentCaptions = [] }) {
+  let lastPrompt = buildCaptionPrompt(scene, { recentCaptions, hasImage: Boolean(imageBytes?.length) });
 
   for (let attempt = 0; attempt < 5; attempt++) {
-    lastPrompt = buildCaptionPrompt(scene, { recentCaptions, attempt });
+    lastPrompt = buildCaptionPrompt(scene, { recentCaptions, attempt, hasImage: Boolean(imageBytes?.length) });
     const response = await client.responses.create({
       model,
       temperature: 0.7,
-      input: [{ role: "user", content: [{ type: "input_text", text: lastPrompt }] }],
+      input: [{ role: "user", content: captionRequestContent(lastPrompt, imageBytes) }],
     });
-    const caption = finalizeCaption(parseCaption(responseText(response)), recentCaptions, scene);
-    if (caption) return { caption, prompt: lastPrompt };
+    const options = completeCaptionOptions(parseCaptionOptions(responseText(response)), scene, recentCaptions, 5, {
+      requireSeed: true,
+    });
+    if (options.length) {
+      return {
+        caption: options[Math.floor(Math.random() * options.length)],
+        options,
+        prompt: lastPrompt,
+      };
+    }
   }
 
+  const fallbackOptions = completeCaptionOptions([], scene, recentCaptions);
   return {
-    caption: variedFallbackCaption(scene, recentCaptions),
+    caption: fallbackOptions[0] || variedFallbackCaption(scene, recentCaptions),
+    options: fallbackOptions,
     prompt: lastPrompt,
   };
 }
@@ -363,6 +384,7 @@ async function main() {
       );
       let caption = null;
       let captionPrompt = null;
+      let captionOptions = [];
       let finalImageBytes = rawImageBytes;
       if (!args.imageOnly) {
         const captionResult = await withProgress(`${prefix} writing caption`, () =>
@@ -370,11 +392,13 @@ async function main() {
             client: openai,
             model: args.captionModel,
             scene,
+            imageBytes: rawImageBytes,
             recentCaptions,
           })
         );
         caption = captionResult.caption;
         captionPrompt = captionResult.prompt;
+        captionOptions = captionResult.options || [];
         recentCaptions.unshift(caption);
         if (recentCaptions.length > 40) recentCaptions.length = 40;
         finalImageBytes = await withProgress(`${prefix} placing text`, () => overlayCaption(rawImageBytes, caption));
@@ -398,6 +422,7 @@ async function main() {
             promptWriterPrompt: promptResult.promptWriterPrompt,
             captionPrompt,
             caption,
+            captionOptions,
           },
         })
       );
