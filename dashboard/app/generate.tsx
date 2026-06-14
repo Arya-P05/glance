@@ -4,6 +4,7 @@ import { api, GenerateOptions } from "../lib/api";
 import { JobLog } from "../components/JobLog";
 import { Btn } from "../components/Btn";
 import { C, S } from "../lib/theme";
+import { clearCachedJob } from "../lib/useJobStream";
 
 type Mode = "images" | "prompts";
 type Size = "1024x1024" | "1536x1024" | "1024x1536";
@@ -77,10 +78,15 @@ export default function GenerateScreen() {
           const job = await api.job(saved.id);
           if (cancelled) return;
           if (job.type === "generate") {
-            setJobId(job.id);
-            if (saved.mode) setMode(saved.mode);
-            if (job.status !== "running") setLastResult(resultMessage(saved.mode ?? mode, job.exitCode));
-            return;
+            if (job.status === "running") {
+              setJobId(job.id);
+              if (saved.mode) setMode(saved.mode);
+              saveGenerateJob(job.id, saved.mode ?? mode);
+              return;
+            }
+            clearCachedJob(job.id);
+            clearSavedGenerateJob();
+            if (saved.mode) setLastResult(resultMessage(saved.mode, job.exitCode));
           }
         } catch {
           clearSavedGenerateJob();
@@ -235,7 +241,8 @@ export default function GenerateScreen() {
       )}
 
       <JobLog jobId={jobId} onDone={(code) => {
-        if (jobId) saveGenerateJob(jobId, mode);
+        if (jobId) clearCachedJob(jobId);
+        clearSavedGenerateJob();
         setLastResult(resultMessage(mode, code));
       }} />
     </ScrollView>

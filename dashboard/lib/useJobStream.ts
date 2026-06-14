@@ -58,6 +58,15 @@ function writeCachedJob(jobId: string, cached: CachedJob) {
   }
 }
 
+export function clearCachedJob(jobId: string) {
+  if (!canUseStorage()) return;
+  try {
+    window.localStorage.removeItem(cacheKey(jobId));
+  } catch {
+    // Best-effort cleanup only.
+  }
+}
+
 export function useJobStream(jobId: string | null): JobStreamState {
   const [lines, setLines] = useState<string[]>([]);
   const [done, setDone] = useState(false);
