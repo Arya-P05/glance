@@ -10,7 +10,7 @@
  *   npm run migrate -- --dry-run
  */
 import "dotenv/config";
-import { execSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { supabaseUrl } from "./supabase-env.js";
@@ -30,22 +30,33 @@ function projectRef(supabaseUrl) {
   return match[1];
 }
 
+function run(command, args) {
+  const result = spawnSync(command, args, { stdio: "inherit", cwd: PROJECT_DIR });
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    throw new Error(`${command} ${args.slice(0, 3).join(" ")} failed`);
+  }
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const dryRun = args.includes("--dry-run");
 
   const password = env("SUPABASE_DB_PASSWORD");
   const ref = projectRef(supabaseUrl());
-
-  const dbUrl = `postgresql://postgres:${password}@db.${ref}.supabase.co:5432/postgres`;
+  const explicitDbUrl = process.env.SUPABASE_DB_URL;
 
   console.log(`Project: ${ref}\n`);
 
-  const cmd = dryRun
-    ? `supabase db push --db-url "${dbUrl}" --dry-run`
-    : `supabase db push --db-url "${dbUrl}"`;
+  if (explicitDbUrl) {
+    run("supabase", ["db", "push", "--db-url", explicitDbUrl, ...(dryRun ? ["--dry-run"] : ["--yes"])]);
+    return;
+  }
 
-  execSync(cmd, { stdio: "inherit", cwd: PROJECT_DIR });
+  const pushArgs = ["db", "push", "--linked", "--password", password];
+  if (dryRun) pushArgs.push("--dry-run");
+  else pushArgs.push("--yes");
+  run("supabase", pushArgs);
 }
 
 main().catch((err) => {

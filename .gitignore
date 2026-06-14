@@ -18,6 +18,10 @@ dashboard/node_modules/
 dashboard/.expo/
 dashboard/dist/
 
+# Supabase local CLI metadata
+supabase/.temp/*
+!supabase/.temp/cli-latest
+
 # iOS / Xcode
 ios/DailyWidgets.xcodeproj/project.xcworkspace/
 ios/DailyWidgets.xcodeproj/xcuserdata/
