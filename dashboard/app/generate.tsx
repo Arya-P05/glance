@@ -5,13 +5,12 @@ import { JobLog } from "../components/JobLog";
 import { Btn } from "../components/Btn";
 import { C, S } from "../lib/theme";
 
-type Mode = "full" | "prompts" | "images";
+type Mode = "images" | "prompts";
 type Size = "1024x1024" | "1536x1024" | "1024x1536";
 
 const MODES: { id: Mode; label: string; desc: string }[] = [
-  { id: "full", label: "Full Pipeline", desc: "Prompt → Image → Caption → Poster" },
+  { id: "images", label: "Backgrounds", desc: "Stage clean images for review" },
   { id: "prompts", label: "Prompts Only", desc: "Save scene prompts for later use" },
-  { id: "images", label: "Images Only", desc: "Stage backgrounds for Drafts approval" },
 ];
 
 const SIZES: Size[] = ["1024x1024", "1536x1024", "1024x1536"];
@@ -20,11 +19,10 @@ const SESSION_KEY = "generate_jobId";
 
 export default function GenerateScreen() {
   const [count, setCount] = useState("5");
-  const [mode, setMode] = useState<Mode>("full");
+  const [mode, setMode] = useState<Mode>("images");
   const [size, setSize] = useState<Size>("1024x1024");
   const [model, setModel] = useState("gpt-image-2");
   const [promptModel, setPromptModel] = useState("gpt-4.1-mini");
-  const [captionModel, setCaptionModel] = useState("gpt-4.1-mini");
   const [dryRun, setDryRun] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -49,7 +47,6 @@ export default function GenerateScreen() {
         mode,
         model,
         promptModel,
-        captionModel,
         size,
         dryRun,
       };
@@ -67,7 +64,7 @@ export default function GenerateScreen() {
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
       <Text style={S.h1}>Generate</Text>
       <Text style={[S.body, { marginTop: 4, marginBottom: 24 }]}>
-        Create motivational posters using OpenAI
+        Create background candidates using OpenAI
       </Text>
 
       {/* Mode selector */}
@@ -137,15 +134,6 @@ export default function GenerateScreen() {
             placeholderTextColor={C.textMuted}
           />
         </View>
-        <View style={styles.field}>
-          <Text style={styles.fieldLabel}>Caption Model</Text>
-          <TextInput
-            style={styles.input}
-            value={captionModel}
-            onChangeText={setCaptionModel}
-            placeholderTextColor={C.textMuted}
-          />
-        </View>
       </View>
 
       {/* Dry Run */}
@@ -167,8 +155,7 @@ export default function GenerateScreen() {
             const s = n !== 1 ? "s" : "";
             if (dryRun) return `Preview ${n} Scene${s}`;
             if (mode === "prompts") return `Generate ${n} Prompt${s}`;
-            if (mode === "images") return `Generate ${n} Image${s}`;
-            return `Generate ${n} Poster${s}`;
+            return `Generate ${n} Background${s}`;
           })()}
           onPress={run}
           loading={loading}
@@ -183,7 +170,10 @@ export default function GenerateScreen() {
 
       <JobLog jobId={jobId} onDone={(code) => {
         if (typeof window !== "undefined") sessionStorage.removeItem(SESSION_KEY);
-        setLastResult(code === 0 ? "✓ Done! Check Drafts to review." : "✗ Job failed — check log above.");
+        setLastResult(code === 0
+          ? (mode === "prompts" ? "Done. Check Prompts." : "Done. Check Backgrounds.")
+          : "Job failed. Check the log above."
+        );
       }} />
     </ScrollView>
   );

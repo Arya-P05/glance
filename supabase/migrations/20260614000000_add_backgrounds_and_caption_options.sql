@@ -68,8 +68,8 @@ create index if not exists caption_options_status_created_idx     on public.capt
 
 alter table public.caption_options enable row level security;
 
--- Move legacy image-only draft rows into the new background pipeline without
--- deleting the old rows. The API now hides those legacy rows from draft review.
+-- Move older image-only draft rows into the background pipeline without
+-- deleting the original draft rows.
 insert into public.backgrounds (
   name,
   storage_path,

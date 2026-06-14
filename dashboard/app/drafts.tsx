@@ -11,7 +11,8 @@ import { WidgetMedium } from "../components/iPhoneMockup/WidgetMedium";
 import { WidgetLarge } from "../components/iPhoneMockup/WidgetLarge";
 import { RemoteImage, previewImageUrl } from "../components/RemoteImage";
 import { CaptionEditor } from "../components/CaptionEditor";
-import { CaptionLayout } from "../lib/captionLayout";
+import { CaptionLayout, CaptionText, MediumCaptionLayout } from "../lib/captionLayout";
+import { ActionKey } from "../components/ActionKey";
 
 type Screen = "grid" | "review" | "edit";
 
@@ -33,6 +34,13 @@ function draftBackgroundUri(draft: Draft) {
   return `${API_BASE}/content/backgrounds/${base}.png`;
 }
 
+function normalizeCaption(caption: CaptionText): CaptionText {
+  return {
+    smallText: caption.smallText.trim().toLowerCase(),
+    bigText: caption.bigText.trim().toLowerCase(),
+  };
+}
+
 export default function DraftsScreen() {
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,6 +48,7 @@ export default function DraftsScreen() {
   const [reviewIdx, setReviewIdx] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [draftEditCaption, setDraftEditCaption] = useState<CaptionText | null>(null);
 
   async function load() {
     try {
@@ -129,60 +138,22 @@ export default function DraftsScreen() {
   function openEditCurrent() {
     const draft = drafts[reviewIdx];
     if (!draft?.meta?.caption || busy) return;
+    setDraftEditCaption(draft.meta.caption);
     setScreen("edit");
   }
 
-  async function approveBackgroundCurrent() {
-    const draft = drafts[reviewIdx];
-    if (!draft || busy) return;
-
-    setBusy(true);
-    try {
-      const result = await api.approveDraftBackground({ id: draft.id });
-      const imageUrl = `${result.imageUrl}${result.imageUrl.includes("?") ? "&" : "?"}t=${Date.now()}`;
-      const rawImageUrl = `${result.rawImageUrl}${result.rawImageUrl.includes("?") ? "&" : "?"}t=${Date.now()}`;
-      setDrafts((prev) =>
-        prev.map((d) =>
-          d.id === draft.id
-            ? {
-                ...d,
-                imageUrl,
-                rawImageUrl,
-                meta: {
-                  ...d.meta,
-                  kind: "draft",
-                  caption: result.caption,
-                  captionOptions: result.captionOptions,
-                  selectedCaptionIndex: result.selectedCaptionIndex,
-                  needsCaption: false,
-                  captionModel: result.captionModel,
-                  captionLayout: {
-                    xRatio: result.captionLayout.xRatio,
-                    yRatio: result.captionLayout.yRatio,
-                    textColor: result.captionLayout.textColor === "#ffffff" ? "#ffffff" : "#050505",
-                  },
-                },
-              }
-            : d
-        )
-      );
-    } catch (e: any) {
-      alert(e?.message ?? "Failed to approve background");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function applyCaptionLayout(layout: CaptionLayout) {
+  async function applyCaptionLayout(layout: CaptionLayout, mediumLayout: MediumCaptionLayout) {
     const draft = drafts[reviewIdx];
     if (!draft?.meta?.caption) return;
+    const nextCaption = normalizeCaption(draftEditCaption ?? draft.meta.caption);
 
     let result;
     try {
       result = await api.renderDraftCaption({
         id: draft.id,
         layout,
-        caption: draft.meta.caption,
+        mediumLayout,
+        caption: nextCaption,
       });
     } catch (e: any) {
       const msg = e?.message === "Not found"
@@ -206,24 +177,27 @@ export default function DraftsScreen() {
                   xRatio: result.captionLayout.xRatio,
                   yRatio: result.captionLayout.yRatio,
                   textColor: result.captionLayout.textColor === "#ffffff" ? "#ffffff" : "#050505",
+                  fontScale: result.captionLayout.fontScale,
                 },
+                mediumCaptionLayout: result.mediumCaptionLayout,
+                mediumImageUrl: result.mediumImageUrl,
               },
             }
           : d
       )
     );
+    setDraftEditCaption(null);
     setScreen("review");
   }
 
-  // Keyboard shortcuts for review mode (a=approve image, i=inactive, p=publish, s=skip, d=delete, e=edit)
+  // Keyboard shortcuts for review mode (i=inactive, p=publish, s=skip, d=delete, e=edit)
   useEffect(() => {
     if (screen !== "review" || typeof document === "undefined") return;
     function onKey(e: KeyboardEvent) {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       const draft = drafts[reviewIdx];
       const hasCaption = Boolean(draft?.meta?.caption?.smallText && draft?.meta?.caption?.bigText);
-      if (e.key === "a" && !hasCaption) approveBackgroundCurrent();
-      else if (e.key === "i" && hasCaption) saveInactiveCurrent();
+      if (e.key === "i" && hasCaption) saveInactiveCurrent();
       else if (e.key === "p" && hasCaption) publishCurrent();
       else if (e.key === "ArrowLeft") {
         e.preventDefault();
@@ -244,7 +218,7 @@ export default function DraftsScreen() {
   // ── Caption editor ─────────────────────────────────────────────────────────
   if (screen === "edit") {
     const draft = drafts[reviewIdx];
-    const caption = draft?.meta?.caption;
+    const caption = draftEditCaption ?? draft?.meta?.caption;
     if (!draft || !caption) {
       return (
         <View style={styles.root}>
@@ -273,8 +247,13 @@ export default function DraftsScreen() {
           backgroundUri={draftBackgroundUri(draft)}
           caption={caption}
           initialLayout={draft.meta?.captionLayout}
+          initialMediumLayout={draft.meta?.mediumCaptionLayout}
+          onCaptionChange={(next) => setDraftEditCaption(normalizeCaption(next))}
           onApply={applyCaptionLayout}
-          onCancel={() => setScreen("review")}
+          onCancel={() => {
+            setDraftEditCaption(null);
+            setScreen("review");
+          }}
         />
       </View>
     );
@@ -297,6 +276,9 @@ export default function DraftsScreen() {
     }
 
     const imgUri = draftImageUri(draft, 1024);
+    const mediumImgUri = draft.meta?.mediumImageUrl
+      ? previewImageUrl(draft.meta.mediumImageUrl, 1024)
+      : imgUri;
     const caption = draft.meta?.caption ?? null;
     const hasCaption = Boolean(caption?.smallText && caption?.bigText);
     const scene = draft.meta?.scene;
@@ -343,7 +325,7 @@ export default function DraftsScreen() {
               </View>
               <View style={styles.previewBlock}>
                 <Text style={styles.previewLabel}>Medium</Text>
-                <WidgetMedium imageUri={imgUri} />
+                <WidgetMedium imageUri={mediumImgUri} />
               </View>
             </View>
           </View>
@@ -362,8 +344,7 @@ export default function DraftsScreen() {
             ) : (
               <View style={styles.metaSection}>
                 <Text style={styles.metaLabel}>Status</Text>
-                <Text style={styles.metaMissing}>Image only</Text>
-                <Btn label="Approve background" onPress={approveBackgroundCurrent} loading={busy} small />
+                <Text style={styles.metaMissing}>No caption</Text>
               </View>
             )}
 
@@ -395,12 +376,9 @@ export default function DraftsScreen() {
           </View>
         </View>
 
-        {/* Action bar — keyboard: a=approve e=edit i=inactive p=publish s=skip d=delete */}
+        {/* Action bar — keyboard: e=edit i=inactive p=publish s=skip d=delete */}
         <View style={styles.actionBar}>
           <View style={{ flex: 1 }} />
-          {!hasCaption && (
-            <ActionKey label="Approve background" keyHint="A" onPress={approveBackgroundCurrent} loading={busy} variant="primary" />
-          )}
           {hasCaption && (
             <ActionKey label="Edit" keyHint="E" onPress={openEditCurrent} variant="outline" />
           )}
@@ -448,13 +426,12 @@ export default function DraftsScreen() {
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>No drafts</Text>
             <Text style={[S.body, { textAlign: "center" }]}>
-              Run Generate to create posters.
+              Approved backgrounds will appear here.
             </Text>
           </View>
         ) : (
           drafts.map((draft, idx) => {
             const imgUri = draftGridImageUri(draft);
-            const hasCaption = Boolean(draft.meta?.caption?.smallText && draft.meta?.caption?.bigText);
             return (
               <Pressable
                 key={draft.id}
@@ -462,11 +439,6 @@ export default function DraftsScreen() {
                 style={styles.cell}
               >
                 <Image source={{ uri: imgUri }} style={styles.thumb} resizeMode="contain" />
-                {!hasCaption && (
-                  <View style={styles.imageOnlyBadge}>
-                    <Text style={styles.imageOnlyBadgeText}>image only</Text>
-                  </View>
-                )}
               </Pressable>
             );
           })
@@ -475,66 +447,6 @@ export default function DraftsScreen() {
     </View>
   );
 }
-
-// Large action button with a keyboard hint badge
-function ActionKey({
-  label, keyHint, onPress, loading, variant = "outline", icon,
-}: {
-  label?: string; keyHint: string; onPress: () => void;
-  loading?: boolean; variant?: "primary" | "outline" | "ghost" | "danger";
-  icon?: React.ReactNode;
-}) {
-  const bg =
-    variant === "primary" ? C.accent :
-    variant === "danger"  ? C.danger :
-    C.surface;
-  const textColor =
-    variant === "primary" ? C.bg :
-    variant === "danger"  ? "#fff" :
-    C.textSecondary;
-  const borderColor =
-    variant === "primary" ? C.accent :
-    variant === "danger"  ? C.danger :
-    C.border;
-
-  // On light backgrounds (primary/lime), use dark hint; on dark/colored, use light
-  const hintBg = variant === "primary" ? "rgba(0,0,0,0.18)" : "rgba(255,255,255,0.18)";
-  const hintColor = variant === "primary" ? "rgba(0,0,0,0.65)" : "rgba(255,255,255,0.8)";
-
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={loading}
-      style={[akStyles.btn, { backgroundColor: bg, borderColor, opacity: loading ? 0.5 : 1 }]}
-    >
-      {icon ?? <Text style={[akStyles.label, { color: textColor }]}>{label}</Text>}
-      <View style={[akStyles.hint, { backgroundColor: hintBg }]}>
-        <Text style={[akStyles.hintText, { color: hintColor }]}>{keyHint}</Text>
-      </View>
-    </Pressable>
-  );
-}
-
-const akStyles = StyleSheet.create({
-  btn: {
-    paddingHorizontal: 28,
-    paddingVertical: 16,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-    gap: 10,
-  },
-  label: { fontWeight: "700", letterSpacing: 0.3 },
-  hint: {
-    backgroundColor: "rgba(255,255,255,0.18)",
-    borderRadius: 5,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  hintText: { color: "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: "700", fontFamily: "monospace" },
-});
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
@@ -559,7 +471,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.border,
   },
-  refreshIcon: { color: C.textSecondary, fontSize: 16 }, // kept as fallback
   error: { color: C.danger, padding: 16 },
 
   // Grid
@@ -581,24 +492,6 @@ const styles = StyleSheet.create({
     borderColor: C.border,
   },
   thumb: { width: CELL, height: CELL, backgroundColor: C.bg },
-  imageOnlyBadge: {
-    position: "absolute",
-    left: 8,
-    bottom: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    backgroundColor: "rgba(10,10,10,0.78)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
-  },
-  imageOnlyBadgeText: {
-    color: C.textPrimary,
-    fontSize: 10,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-  },
   captionLine: { color: C.textPrimary, fontSize: 13, fontWeight: "500", lineHeight: 19 },
 
   // Review header

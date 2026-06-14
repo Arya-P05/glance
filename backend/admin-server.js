@@ -27,11 +27,12 @@ import { getDraftForPublish, publishDraftFromDb } from "./publish-draft.js";
 import {
   DEFAULT_CAPTION_MODEL,
   buildCaptionPrompt,
-  buildLegacyPromptForMetadata,
   captionSignature,
   completeCaptionOptions,
   normalizeCaptionLayout,
+  normalizeMediumCaptionLayout,
   overlayCaption,
+  overlayMediumCaption,
   parseCaptionOptions,
   variedFallbackCaption,
 } from "./motivational-generator.js";
@@ -116,6 +117,11 @@ function captionedDraftStoragePath(name) {
   return `${DRAFT_PREFIX}/captioned/${name}-${suffix}.png`;
 }
 
+function mediumDraftStoragePath(name) {
+  const suffix = `${Date.now()}-${randomUUID().slice(0, 8)}`;
+  return `${DRAFT_PREFIX}/medium/${name}-${suffix}.png`;
+}
+
 function hasCompleteCaption(caption) {
   return Boolean(caption?.smallText && caption?.bigText);
 }
@@ -179,71 +185,73 @@ async function listAllStoragePaths(supabase) {
 // ─── DB Helpers ───────────────────────────────────────────────────────────────
 
 async function listDrafts(supabase, projectUrl) {
-  const [draftsResult, backgroundsResult] = await Promise.all([
-    supabase
-      .from("drafts")
-      .select("id, name, storage_path, raw_storage_path, caption, scene, image_model, caption_model, created_at, metadata")
-      .eq("status", "draft")
-      .order("created_at", { ascending: true }),
-    supabase
-      .from("backgrounds")
-      .select("id, name, storage_path, scene, image_prompt, image_model, prompt_model, created_at, metadata")
-      .eq("status", "pending")
-      .order("created_at", { ascending: true }),
-  ]);
+  const draftsResult = await supabase
+    .from("drafts")
+    .select("id, name, storage_path, raw_storage_path, caption, scene, image_model, caption_model, created_at, metadata")
+    .eq("status", "draft")
+    .order("created_at", { ascending: true });
   if (draftsResult.error) throw draftsResult.error;
-  if (backgroundsResult.error) throw backgroundsResult.error;
 
-  const drafts = (draftsResult.data ?? [])
+  return (draftsResult.data ?? [])
     .filter(row => hasCompleteCaption(row.caption))
     .map(row => ({
-      sortAt: row.created_at,
-      item: {
-        id: row.name,
-        filename: `${row.name}.png`,
-        imageUrl: publicObjectUrl(projectUrl, row.storage_path),
-        rawImageUrl: row.raw_storage_path ? publicObjectUrl(projectUrl, row.raw_storage_path) : null,
-        meta: {
-          kind: "draft",
-          caption: row.caption,
-          captionOptions: row.metadata?.captionOptions ?? null,
-          selectedCaptionIndex: row.metadata?.selectedCaptionIndex ?? null,
-          needsCaption: false,
-          captionLayout: row.metadata?.captionLayout ?? null,
-          scene: row.scene,
-          imageModel: row.image_model,
-          captionModel: row.caption_model,
-          generatedAt: row.created_at,
-        },
-      },
-    }));
-
-  const backgrounds = (backgroundsResult.data ?? []).map(row => ({
-    sortAt: row.created_at,
-    item: {
       id: row.name,
       filename: `${row.name}.png`,
       imageUrl: publicObjectUrl(projectUrl, row.storage_path),
-      rawImageUrl: publicObjectUrl(projectUrl, row.storage_path),
+      rawImageUrl: row.raw_storage_path ? publicObjectUrl(projectUrl, row.raw_storage_path) : null,
       meta: {
-        kind: "background",
-        caption: null,
-        needsCaption: true,
+        caption: row.caption,
+        captionOptions: row.metadata?.captionOptions ?? null,
+        selectedCaptionIndex: row.metadata?.selectedCaptionIndex ?? null,
+        captionPrompt: row.metadata?.captionPrompt ?? null,
         captionLayout: row.metadata?.captionLayout ?? null,
+        mediumCaptionLayout: row.metadata?.mediumCaptionLayout ?? null,
+        mediumStoragePath: row.metadata?.mediumStoragePath ?? null,
+        mediumImageUrl: row.metadata?.mediumStoragePath
+          ? publicObjectUrl(projectUrl, row.metadata.mediumStoragePath)
+          : null,
         scene: row.scene,
         imageModel: row.image_model,
-        promptModel: row.prompt_model,
+        captionModel: row.caption_model,
         generatedAt: row.created_at,
       },
-    },
-  }));
-
-  return [...drafts, ...backgrounds]
-    .sort((a, b) => String(a.sortAt).localeCompare(String(b.sortAt)))
-    .map(({ item }) => item);
+    }));
 }
 
-async function renderDraftCaption(supabase, { id, caption, layout }) {
+async function listBackgrounds(supabase, projectUrl) {
+  const backgroundsResult = await supabase
+    .from("backgrounds")
+    .select("id, name, storage_path, scene, image_prompt, image_model, prompt_model, created_at, metadata")
+    .eq("status", "pending")
+    .order("created_at", { ascending: true });
+  if (backgroundsResult.error) throw backgroundsResult.error;
+
+  return (backgroundsResult.data ?? []).map(row => ({
+    id: row.name,
+    filename: `${row.name}.png`,
+    imageUrl: publicObjectUrl(projectUrl, row.storage_path),
+    rawImageUrl: publicObjectUrl(projectUrl, row.storage_path),
+    meta: {
+      caption: null,
+      captionOptions: row.metadata?.captionOptions ?? null,
+      selectedCaptionIndex: row.metadata?.selectedCaptionIndex ?? null,
+      captionPrompt: row.metadata?.captionPrompt ?? null,
+      captionLayout: row.metadata?.captionLayout ?? null,
+      mediumCaptionLayout: row.metadata?.mediumCaptionLayout ?? null,
+      mediumStoragePath: row.metadata?.mediumStoragePath ?? null,
+      mediumImageUrl: row.metadata?.mediumStoragePath
+        ? publicObjectUrl(projectUrl, row.metadata.mediumStoragePath)
+        : null,
+      scene: row.scene,
+      imageModel: row.image_model,
+      captionModel: row.metadata?.captionModel ?? null,
+      promptModel: row.prompt_model,
+      generatedAt: row.created_at,
+    },
+  }));
+}
+
+async function renderDraftCaption(supabase, { id, caption, layout, mediumLayout }) {
   const { data: row, error } = await supabase
     .from("drafts")
     .select("name, storage_path, raw_storage_path, caption, metadata")
@@ -267,14 +275,23 @@ async function renderDraftCaption(supabase, { id, caption, layout }) {
   }
 
   const normalizedLayout = normalizeCaptionLayout(layout ?? row.metadata?.captionLayout ?? {});
+  const normalizedMediumLayout = normalizeMediumCaptionLayout(
+    mediumLayout ?? row.metadata?.mediumCaptionLayout ?? {},
+    row.metadata?.mediumCaptionLayout ?? normalizedLayout
+  );
   const imageBytes = Buffer.from(await blob.arrayBuffer());
   const rendered = await overlayCaption(imageBytes, finalCaption, normalizedLayout);
+  const renderedMedium = await overlayMediumCaption(imageBytes, finalCaption, normalizedMediumLayout);
   const finalStoragePath = captionedDraftStoragePath(row.name);
+  const finalMediumStoragePath = mediumDraftStoragePath(row.name);
   await uploadVerifiedObject(supabase, finalStoragePath, rendered);
+  await uploadVerifiedObject(supabase, finalMediumStoragePath, renderedMedium);
 
   const metadata = {
     ...(row.metadata && typeof row.metadata === "object" ? row.metadata : {}),
     captionLayout: normalizedLayout,
+    mediumCaptionLayout: normalizedMediumLayout,
+    mediumStoragePath: finalMediumStoragePath,
   };
 
   const { error: updateErr } = await supabase
@@ -283,15 +300,17 @@ async function renderDraftCaption(supabase, { id, caption, layout }) {
     .eq("name", id)
     .eq("status", "draft");
   if (updateErr) {
-    await supabase.storage.from(BUCKET).remove([finalStoragePath]);
+    await supabase.storage.from(BUCKET).remove([finalStoragePath, finalMediumStoragePath]);
     throw updateErr;
   }
 
   return {
     id,
     imageUrl: publicObjectUrl(supabaseUrl(), finalStoragePath),
+    mediumImageUrl: publicObjectUrl(supabaseUrl(), finalMediumStoragePath),
     caption: finalCaption,
     captionLayout: normalizedLayout,
+    mediumCaptionLayout: normalizedMediumLayout,
   };
 }
 
@@ -390,7 +409,24 @@ async function generateCaptionForScene({ client, model, scene, imageBytes = null
   };
 }
 
-async function approveDraftBackground(supabase, { id, captionModel, layout }) {
+function normalizeSelectedCaption(caption) {
+  const smallText = String(caption?.smallText || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[—–]/g, " ")
+    .replace(/\s+/g, " ")
+    .slice(0, 36);
+  const bigText = String(caption?.bigText || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[—–]/g, " ")
+    .replace(/\s+/g, " ")
+    .slice(0, 44);
+  if (!smallText || !bigText) throw new Error("Caption must include both lines");
+  return { smallText, bigText };
+}
+
+async function loadPendingBackground(supabase, id) {
   const { data: row, error } = await supabase
     .from("backgrounds")
     .select("id, name, storage_path, scene, image_prompt, image_model, prompt_model, metadata")
@@ -399,19 +435,27 @@ async function approveDraftBackground(supabase, { id, captionModel, layout }) {
     .maybeSingle();
   if (error) throw error;
   if (!row) throw new Error(`Background not found: ${id}`);
+  return row;
+}
 
+function sceneForBackground(row) {
   const metadata = row.metadata && typeof row.metadata === "object" ? row.metadata : {};
   const scene = row.scene || metadata.scene;
   if (!scene || typeof scene !== "object") {
     throw new Error("Background has no saved scene metadata for caption generation");
   }
+  return { scene, metadata };
+}
+
+async function generateCaptionOptionsForBackground(supabase, { id, captionModel }) {
+  const row = await loadPendingBackground(supabase, id);
+  const { scene, metadata } = sceneForBackground(row);
 
   const model = captionModel || process.env.OPENAI_CAPTION_MODEL || DEFAULT_CAPTION_MODEL;
   const { data: blob, error: downloadErr } = await supabase.storage.from(BUCKET).download(row.storage_path);
   if (downloadErr) throw downloadErr;
 
   const imageBytes = Buffer.from(await blob.arrayBuffer());
-  const rawStoragePath = row.storage_path;
   const openai = new OpenAI({ apiKey: env("OPENAI_API_KEY") });
   const recentCaptions = await loadRecentCaptions(supabase);
   const captionResult = await generateCaptionForScene({
@@ -428,23 +472,110 @@ async function approveDraftBackground(supabase, { id, captionModel, layout }) {
   }
   const selectedCaptionIndex = captionOptions.findIndex((caption) => captionSignature(caption) === selectedCaptionSig);
 
-  const normalizedLayout = normalizeCaptionLayout(layout || metadata.captionLayout || {});
-  const rendered = await overlayCaption(imageBytes, captionResult.caption, normalizedLayout);
-  const finalStoragePath = captionedDraftStoragePath(row.name);
-  await uploadVerifiedObject(supabase, finalStoragePath, rendered);
-
   const nextMetadata = {
     ...metadata,
-    caption: captionResult.caption,
     captionOptions,
     selectedCaptionIndex,
     captionPrompt: captionResult.prompt,
+    captionModel: model,
+    captionGeneratedAt: new Date().toISOString(),
+    scene,
+  };
+
+  const { error: updateErr } = await supabase
+    .from("backgrounds")
+    .update({ metadata: nextMetadata })
+    .eq("id", row.id)
+    .eq("status", "pending");
+  if (updateErr) throw updateErr;
+
+  const { error: optionErr } = await supabase
+    .from("caption_options")
+    .insert(captionOptions.map((caption, optionIndex) => ({
+      background_id: row.id,
+      caption,
+      caption_model: model,
+      prompt: captionResult.prompt,
+      metadata: {
+        optionIndex,
+        selectedCaptionIndex,
+        scene,
+      },
+      status: "candidate",
+    })));
+  if (optionErr) throw optionErr;
+
+  return {
+    id,
+    rawImageUrl: publicObjectUrl(supabaseUrl(), row.storage_path),
+    captionOptions,
+    selectedCaptionIndex,
+    captionPrompt: captionResult.prompt,
+    captionModel: model,
+  };
+}
+
+async function approveBackgroundWithCaption(supabase, {
+  id,
+  caption,
+  captionOptions,
+  selectedCaptionIndex,
+  captionModel,
+  captionPrompt,
+  layout,
+  mediumLayout,
+}) {
+  const row = await loadPendingBackground(supabase, id);
+  const { scene, metadata } = sceneForBackground(row);
+  const finalCaption = normalizeSelectedCaption(caption);
+  let finalCaptionOptions = Array.isArray(captionOptions) && captionOptions.length
+    ? captionOptions.map((option) =>
+        captionSignature(option) === captionSignature(caption) ? finalCaption : normalizeSelectedCaption(option)
+      )
+    : (metadata.captionOptions ?? [finalCaption]).map((option) =>
+        captionSignature(option) === captionSignature(caption) ? finalCaption : normalizeSelectedCaption(option)
+      );
+  const selectedCaptionSig = captionSignature(finalCaption);
+  if (!finalCaptionOptions.some((option) => captionSignature(option) === selectedCaptionSig)) {
+    finalCaptionOptions = [finalCaption, ...finalCaptionOptions].slice(0, 5);
+  }
+  const finalSelectedCaptionIndex = Number.isInteger(selectedCaptionIndex)
+    ? Math.max(0, Math.min(finalCaptionOptions.length - 1, selectedCaptionIndex))
+    : finalCaptionOptions.findIndex((option) => captionSignature(option) === selectedCaptionSig);
+  const selectedIndex = finalSelectedCaptionIndex < 0 ? 0 : finalSelectedCaptionIndex;
+  finalCaptionOptions[selectedIndex] = finalCaption;
+
+  const model = captionModel || metadata.captionModel || process.env.OPENAI_CAPTION_MODEL || DEFAULT_CAPTION_MODEL;
+  const { data: blob, error: downloadErr } = await supabase.storage.from(BUCKET).download(row.storage_path);
+  if (downloadErr) throw downloadErr;
+
+  const imageBytes = Buffer.from(await blob.arrayBuffer());
+  const rawStoragePath = row.storage_path;
+  const normalizedLayout = normalizeCaptionLayout(layout || metadata.captionLayout || {});
+  const normalizedMediumLayout = normalizeMediumCaptionLayout(
+    mediumLayout || metadata.mediumCaptionLayout || {},
+    metadata.mediumCaptionLayout || normalizedLayout
+  );
+  const rendered = await overlayCaption(imageBytes, finalCaption, normalizedLayout);
+  const renderedMedium = await overlayMediumCaption(imageBytes, finalCaption, normalizedMediumLayout);
+  const finalStoragePath = captionedDraftStoragePath(row.name);
+  const finalMediumStoragePath = mediumDraftStoragePath(row.name);
+  await uploadVerifiedObject(supabase, finalStoragePath, rendered);
+  await uploadVerifiedObject(supabase, finalMediumStoragePath, renderedMedium);
+
+  const nextMetadata = {
+    ...metadata,
+    caption: finalCaption,
+    captionOptions: finalCaptionOptions,
+    selectedCaptionIndex: selectedIndex,
+    captionPrompt: captionPrompt ?? metadata.captionPrompt ?? null,
     captionLayout: normalizedLayout,
+    mediumCaptionLayout: normalizedMediumLayout,
+    mediumStoragePath: finalMediumStoragePath,
     captionApprovedAt: new Date().toISOString(),
     captionModel: model,
     scene,
     scenePrompt: metadata.scenePrompt ?? row.image_prompt ?? null,
-    posterPrompt: buildLegacyPromptForMetadata(scene, captionResult.caption),
   };
 
   const { data: draftRow, error: updateErr } = await supabase
@@ -452,7 +583,7 @@ async function approveDraftBackground(supabase, { id, captionModel, layout }) {
     .upsert({
       name: row.name,
       storage_path: finalStoragePath,
-      caption: captionResult.caption,
+      caption: finalCaption,
       scene,
       image_prompt: row.image_prompt ?? metadata.scenePrompt ?? null,
       raw_storage_path: rawStoragePath,
@@ -465,26 +596,28 @@ async function approveDraftBackground(supabase, { id, captionModel, layout }) {
     .select("id")
     .maybeSingle();
   if (updateErr) {
-    await supabase.storage.from(BUCKET).remove([finalStoragePath]);
+    await supabase.storage.from(BUCKET).remove([finalStoragePath, finalMediumStoragePath]);
     throw updateErr;
   }
 
   const { error: optionErr } = await supabase
     .from("caption_options")
-    .insert(captionOptions.map((caption, optionIndex) => ({
+    .insert({
       background_id: row.id,
       draft_id: draftRow?.id ?? null,
-      caption,
+      caption: finalCaption,
       caption_model: model,
-      prompt: captionResult.prompt,
+      prompt: nextMetadata.captionPrompt,
       metadata: {
         captionLayout: normalizedLayout,
-        optionIndex,
-        selectedCaptionIndex,
+        mediumCaptionLayout: normalizedMediumLayout,
+        mediumStoragePath: finalMediumStoragePath,
+        optionIndex: selectedIndex,
+        selectedCaptionIndex: selectedIndex,
         scene,
       },
-      status: optionIndex === selectedCaptionIndex ? "selected" : "candidate",
-    })));
+      status: "selected",
+    });
   if (optionErr) throw optionErr;
 
   const { error: backgroundErr } = await supabase
@@ -501,11 +634,13 @@ async function approveDraftBackground(supabase, { id, captionModel, layout }) {
   return {
     id,
     imageUrl: publicObjectUrl(supabaseUrl(), finalStoragePath),
+    mediumImageUrl: publicObjectUrl(supabaseUrl(), finalMediumStoragePath),
     rawImageUrl: publicObjectUrl(supabaseUrl(), rawStoragePath),
-    caption: captionResult.caption,
-    captionOptions,
-    selectedCaptionIndex,
+    caption: finalCaption,
+    captionOptions: finalCaptionOptions,
+    selectedCaptionIndex: selectedIndex,
     captionLayout: normalizedLayout,
+    mediumCaptionLayout: normalizedMediumLayout,
     captionModel: model,
   };
 }
@@ -567,7 +702,7 @@ async function main() {
       return;
     }
 
-    // Static legacy admin UI
+    // Static admin UI
     if (req.method === "GET" && url.pathname === "/") {
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", ...CORS });
       res.end(indexHtml);
@@ -614,7 +749,8 @@ async function main() {
           draftsResult,
           backgroundsResult,
           promptsResult,
-          discardedResult,
+          discardedDraftsResult,
+          discardedBackgroundsResult,
         ] = await Promise.all([
           supabase.from("posts").select("*", { count: "exact", head: true }),
           supabase.from("posts").select("*", { count: "exact", head: true }).eq("status", "active"),
@@ -623,6 +759,7 @@ async function main() {
           supabase.from("backgrounds").select("*", { count: "exact", head: true }).eq("status", "pending"),
           supabase.from("prompts").select("*", { count: "exact", head: true }),
           supabase.from("drafts").select("*", { count: "exact", head: true }).eq("status", "discarded"),
+          supabase.from("backgrounds").select("*", { count: "exact", head: true }).eq("status", "discarded"),
         ]);
         const activePosts = activeResult.error ? (totalPosts ?? 0) : (activeResult.count ?? 0);
         const captionedDrafts = draftsResult.error
@@ -633,9 +770,12 @@ async function main() {
           totalPosts: totalPosts ?? 0,
           activePosts,
           storageFiles: storagePaths.length,
-          drafts: captionedDrafts + pendingBackgrounds,
+          drafts: captionedDrafts,
+          backgrounds: pendingBackgrounds,
           prompts: promptsResult.error ? 0 : (promptsResult.count ?? 0),
-          discarded: discardedResult.error ? 0 : (discardedResult.count ?? 0),
+          discarded:
+            (discardedDraftsResult.error ? 0 : (discardedDraftsResult.count ?? 0)) +
+            (discardedBackgroundsResult.error ? 0 : (discardedBackgroundsResult.count ?? 0)),
         });
       } catch (e) {
         json(res, 500, { error: e.message });
@@ -698,6 +838,84 @@ async function main() {
       return;
     }
 
+    // ── Backgrounds ────────────────────────────────────────────────────────
+
+    if (req.method === "GET" && url.pathname === "/api/backgrounds") {
+      try {
+        json(res, 200, { backgrounds: await listBackgrounds(supabase, projectUrl) });
+      } catch (e) {
+        json(res, 500, { error: e.message });
+      }
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/backgrounds/message-options") {
+      const payload = await readBody(req);
+      if (!payload?.id) { json(res, 400, { error: "id required" }); return; }
+      try {
+        const result = await generateCaptionOptionsForBackground(supabase, {
+          id: payload.id,
+          captionModel: payload.captionModel,
+        });
+        json(res, 200, { success: true, ...result });
+      } catch (e) {
+        json(res, e.message?.startsWith("Background not found") ? 404 : 500, { error: e.message });
+      }
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/backgrounds/approve") {
+      const payload = await readBody(req);
+      if (!payload?.id) { json(res, 400, { error: "id required" }); return; }
+      if (!payload?.caption?.smallText || !payload?.caption?.bigText) {
+        json(res, 400, { error: "caption with smallText and bigText required" });
+        return;
+      }
+      try {
+        const result = await approveBackgroundWithCaption(supabase, {
+          id: payload.id,
+          caption: payload.caption,
+          captionOptions: payload.captionOptions,
+          selectedCaptionIndex: payload.selectedCaptionIndex,
+          captionModel: payload.captionModel,
+          captionPrompt: payload.captionPrompt,
+          layout: payload.layout,
+          mediumLayout: payload.mediumLayout,
+        });
+        json(res, 200, { success: true, ...result });
+      } catch (e) {
+        json(res, e.message?.startsWith("Background not found") ? 404 : 500, { error: e.message });
+      }
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/backgrounds/discard") {
+      const payload = await readBody(req);
+      if (!payload) { json(res, 400, { error: "Invalid JSON" }); return; }
+
+      try {
+        let query = supabase.from("backgrounds").update({ status: "discarded" });
+        if (payload.all) {
+          query = query.eq("status", "pending");
+        } else if (payload.id) {
+          query = query.eq("name", payload.id).eq("status", "pending");
+        } else {
+          json(res, 400, { error: "Provide all or id" }); return;
+        }
+
+        const { data, error } = await query.select("name");
+        if (error) throw error;
+        if (!data?.length) {
+          json(res, 404, { error: payload.id ? `Background not found: ${payload.id}` : "No backgrounds matched" });
+          return;
+        }
+        json(res, 200, { success: true, updated: data.length, ids: data.map(row => row.name) });
+      } catch (e) {
+        json(res, 500, { error: e.message });
+      }
+      return;
+    }
+
     if (req.method === "POST" && url.pathname === "/api/drafts/publish") {
       const payload = await readBody(req);
       if (!payload) { json(res, 400, { error: "Invalid JSON" }); return; }
@@ -735,22 +953,7 @@ async function main() {
           id: payload.id,
           caption: payload.caption,
           layout: payload.layout,
-        });
-        json(res, 200, { success: true, ...result });
-      } catch (e) {
-        json(res, e.message?.startsWith("Draft not found") ? 404 : 500, { error: e.message });
-      }
-      return;
-    }
-
-    if (req.method === "POST" && url.pathname === "/api/drafts/approve-background") {
-      const payload = await readBody(req);
-      if (!payload?.id) { json(res, 400, { error: "id required" }); return; }
-      try {
-        const result = await approveDraftBackground(supabase, {
-          id: payload.id,
-          captionModel: payload.captionModel,
-          layout: payload.layout,
+          mediumLayout: payload.mediumLayout,
         });
         json(res, 200, { success: true, ...result });
       } catch (e) {
@@ -764,34 +967,22 @@ async function main() {
       if (!payload) { json(res, 400, { error: "Invalid JSON" }); return; }
 
       try {
-        let backgroundQuery = supabase.from("backgrounds").update({ status: "discarded" });
-        let draftQuery = supabase.from("drafts").update({ status: "discarded" });
+        let query = supabase.from("drafts").update({ status: "discarded" });
         if (payload.all) {
-          backgroundQuery = backgroundQuery.eq("status", "pending");
-          draftQuery = draftQuery.eq("status", "draft");
+          query = query.eq("status", "draft");
         } else if (payload.id) {
-          backgroundQuery = backgroundQuery.eq("name", payload.id).eq("status", "pending");
-          draftQuery = draftQuery.eq("name", payload.id).eq("status", "draft");
+          query = query.eq("name", payload.id).eq("status", "draft");
         } else {
           json(res, 400, { error: "Provide all or id" }); return;
         }
-        const [backgroundResult, draftResult] = await Promise.all([
-          backgroundQuery.select("name"),
-          draftQuery.select("name"),
-        ]);
-        if (backgroundResult.error) throw backgroundResult.error;
-        if (draftResult.error) throw draftResult.error;
 
-        const ids = [
-          ...(backgroundResult.data ?? []).map(row => row.name),
-          ...(draftResult.data ?? []).filter(row => !backgroundResult.data?.some(bg => bg.name === row.name)).map(row => row.name),
-        ];
-
-        if (!ids.length) {
+        const { data, error } = await query.select("name");
+        if (error) throw error;
+        if (!data?.length) {
           json(res, 404, { error: payload.id ? `Draft not found: ${payload.id}` : "No drafts matched" });
           return;
         }
-        json(res, 200, { success: true, updated: ids.length, ids });
+        json(res, 200, { success: true, updated: data.length, ids: data.map(row => row.name) });
       } catch (e) {
         json(res, 500, { error: e.message });
       }
@@ -847,7 +1038,6 @@ async function main() {
       if (payload.mode) args.push("--mode", payload.mode);
       if (payload.model) args.push("--model", payload.model);
       if (payload.promptModel) args.push("--prompt-model", payload.promptModel);
-      if (payload.captionModel) args.push("--caption-model", payload.captionModel);
       if (payload.size) args.push("--size", payload.size);
       if (payload.dryRun) args.push("--dry-run");
       if (Array.isArray(payload.promptIds) && payload.promptIds.length) {
@@ -956,7 +1146,7 @@ async function main() {
       return;
     }
 
-    // ── Instagram Import (legacy + dashboard) ──────────────────────────────
+    // ── Instagram Import ───────────────────────────────────────────────────
 
     if (req.method === "POST" && url.pathname === "/api/preview") {
       const payload = await readBody(req);

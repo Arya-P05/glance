@@ -33,39 +33,61 @@ export const api = {
     }),
 
   drafts: () => request<{ drafts: Draft[] }>("/api/drafts"),
+  backgrounds: () => request<{ backgrounds: Draft[] }>("/api/backgrounds"),
   publishDraft: (opts: { id?: string; all?: boolean; count?: number; status?: "active" | "inactive" }) =>
     request<PublishDraftResult>("/api/drafts/publish", { method: "POST", body: JSON.stringify(opts) }),
   discardDraft: (opts: { id?: string; all?: boolean }) =>
     request<{ success: boolean; updated: number; ids: string[] }>("/api/drafts/discard", { method: "POST", body: JSON.stringify(opts) }),
+  discardBackground: (opts: { id?: string; all?: boolean }) =>
+    request<{ success: boolean; updated: number; ids: string[] }>("/api/backgrounds/discard", { method: "POST", body: JSON.stringify(opts) }),
+  generateBackgroundMessages: (opts: { id: string; captionModel?: string }) =>
+    request<{
+      success: boolean;
+      id: string;
+      rawImageUrl: string;
+      captionOptions: CaptionText[];
+      selectedCaptionIndex: number;
+      captionPrompt: string;
+      captionModel: string;
+    }>("/api/backgrounds/message-options", { method: "POST", body: JSON.stringify(opts) }),
+  approveBackground: (opts: {
+    id: string;
+    caption: CaptionText;
+    captionOptions?: CaptionText[];
+    selectedCaptionIndex?: number;
+    captionModel?: string;
+    captionPrompt?: string;
+    layout: { xRatio: number; yRatio: number; textColor: "#050505" | "#ffffff"; fontScale: number };
+    mediumLayout: MediumCaptionLayout;
+  }) =>
+    request<{
+      success: boolean;
+      id: string;
+      imageUrl: string;
+      mediumImageUrl: string;
+      rawImageUrl: string;
+      caption: CaptionText;
+      captionOptions?: CaptionText[];
+      selectedCaptionIndex?: number;
+      captionLayout: { xRatio: number; yRatio: number; textColor: string | null; fontScale: number };
+      mediumCaptionLayout: MediumCaptionLayout;
+      captionModel: string;
+    }>("/api/backgrounds/approve", { method: "POST", body: JSON.stringify(opts) }),
   renderDraftCaption: (opts: {
     id: string;
-    layout: { xRatio: number; yRatio: number; textColor: "#050505" | "#ffffff" };
-    caption?: { smallText: string; bigText: string };
+    layout: { xRatio: number; yRatio: number; textColor: "#050505" | "#ffffff"; fontScale: number };
+    mediumLayout: MediumCaptionLayout;
+    caption?: CaptionText;
   }) =>
     request<{
       success: boolean;
       id: string;
       imageUrl: string;
-      caption: { smallText: string; bigText: string };
-      captionLayout: { xRatio: number; yRatio: number; textColor: string | null };
+      mediumImageUrl: string;
+      caption: CaptionText;
+      captionLayout: { xRatio: number; yRatio: number; textColor: string | null; fontScale: number };
+      mediumCaptionLayout: MediumCaptionLayout;
     }>("/api/drafts/render-caption", { method: "POST", body: JSON.stringify(opts) }),
-  approveDraftBackground: (opts: {
-    id: string;
-    captionModel?: string;
-    layout?: { xRatio: number; yRatio: number; textColor: "#050505" | "#ffffff" };
-  }) =>
-    request<{
-      success: boolean;
-      id: string;
-      imageUrl: string;
-      rawImageUrl: string;
-      caption: { smallText: string; bigText: string };
-      captionOptions?: { smallText: string; bigText: string }[];
-      selectedCaptionIndex?: number;
-      captionLayout: { xRatio: number; yRatio: number; textColor: string | null };
-      captionModel: string;
-    }>("/api/drafts/approve-background", { method: "POST", body: JSON.stringify(opts) }),
-
   prompts: () => request<{ prompts: Prompt[] }>("/api/prompts"),
   deletePrompts: (ids: string[]) =>
     request<{ success: boolean; deleted: number; ids: string[] }>("/api/prompts/delete", {
@@ -106,6 +128,7 @@ export interface Stats {
   activePosts: number;
   storageFiles: number;
   drafts: number;
+  backgrounds: number;
   prompts: number;
   discarded: number;
 }
@@ -124,16 +147,29 @@ export interface CaptionLayout {
   xRatio: number;
   yRatio: number;
   textColor: "#050505" | "#ffffff" | null;
+  fontScale?: number;
+}
+
+export interface MediumCaptionLayout extends CaptionLayout {
+  cropXRatio: number;
+  cropYRatio: number;
+}
+
+export interface CaptionText {
+  smallText: string;
+  bigText: string;
 }
 
 export interface DraftMeta {
-  kind?: "draft" | "background";
   filename?: string;
-  caption?: { smallText: string; bigText: string };
-  captionOptions?: { smallText: string; bigText: string }[];
+  caption?: CaptionText;
+  captionOptions?: CaptionText[] | null;
   selectedCaptionIndex?: number;
-  needsCaption?: boolean;
+  captionPrompt?: string | null;
   captionLayout?: CaptionLayout | null;
+  mediumCaptionLayout?: MediumCaptionLayout | null;
+  mediumStoragePath?: string | null;
+  mediumImageUrl?: string | null;
   scene?: Record<string, string>;
   generatedAt?: string;
   imageModel?: string;
@@ -168,10 +204,9 @@ export interface Prompt {
 
 export interface GenerateOptions {
   count?: number;
-  mode?: "full" | "prompts" | "images";
+  mode?: "prompts" | "images";
   model?: string;
   promptModel?: string;
-  captionModel?: string;
   size?: string;
   dryRun?: boolean;
   promptIds?: string[];

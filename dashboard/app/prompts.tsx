@@ -54,7 +54,7 @@ export default function PromptsScreen() {
     setBusy(true);
     try {
       const { jobId: id } = await api.generate({
-        mode: "full",
+        mode: "images",
         promptIds: [...selected],
         count: selected.size,
       });
@@ -70,7 +70,7 @@ export default function PromptsScreen() {
     setBusy(true);
     try {
       const { jobId: id } = await api.generate({
-        mode: "full",
+        mode: "images",
         promptIds: [promptId],
         count: 1,
       });

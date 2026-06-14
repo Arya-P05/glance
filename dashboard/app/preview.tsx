@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { View, Text, ScrollView, StyleSheet, Image, Pressable, ActivityIndicator, useWindowDimensions } from "react-native";
 import { useFocusEffect } from "expo-router";
-import { api, StorageImage, DraftMeta, Draft } from "../lib/api";
+import { api, StorageImage, Draft } from "../lib/api";
 import { IPhoneMockup } from "../components/iPhoneMockup/iPhoneMockup";
 import { API_BASE } from "../lib/api";
 import { Btn } from "../components/Btn";
@@ -15,7 +15,6 @@ export default function PreviewScreen() {
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [loadingImages, setLoadingImages] = useState(false);
   const [selectedUri, setSelectedUri] = useState<string | undefined>();
-  const [selectedCaption, setSelectedCaption] = useState<{ smallText: string; bigText: string } | null>(null);
   const [activeTab, setActiveTab] = useState<"library" | "drafts">("library");
   const [randomLoading, setRandomLoading] = useState(false);
 
@@ -55,7 +54,6 @@ export default function PreviewScreen() {
       if (images.length > 0) {
         const pick = images[Math.floor(Math.random() * images.length)];
         setSelectedUri(pick.publicUrl);
-        setSelectedCaption(null);
       }
     } catch {}
     setRandomLoading(false);
@@ -63,11 +61,11 @@ export default function PreviewScreen() {
 
   const mockupSection = (
     <View style={styles.mockupSection}>
-      <IPhoneMockup imageUri={selectedUri} caption={selectedCaption} />
+      <IPhoneMockup imageUri={selectedUri} />
       <View style={styles.randomRow}>
         <Btn label="Random from Library" onPress={pickRandom} loading={randomLoading} small variant="outline" />
         {selectedUri && (
-          <Btn label="Clear" onPress={() => { setSelectedUri(undefined); setSelectedCaption(null); }} small variant="ghost" />
+          <Btn label="Clear" onPress={() => setSelectedUri(undefined)} small variant="ghost" />
         )}
       </View>
     </View>
@@ -88,7 +86,7 @@ export default function PreviewScreen() {
         <ScrollView contentContainerStyle={styles.pickerGrid}>
           {loadingImages && <ActivityIndicator color={C.accent} style={{ margin: 20 }} />}
           {images.map(img => (
-            <Pressable key={img.storagePath} onPress={() => { setSelectedUri(img.publicUrl); setSelectedCaption(null); }}>
+            <Pressable key={img.storagePath} onPress={() => setSelectedUri(img.publicUrl)}>
               <Image
                 source={{ uri: img.publicUrl }}
                 style={[styles.pickerThumb, selectedUri === img.publicUrl && styles.pickerThumbSel]}
@@ -106,7 +104,6 @@ export default function PreviewScreen() {
             return (
               <Pressable key={d.id} onPress={() => {
                 setSelectedUri(uri);
-                setSelectedCaption(d.meta?.caption ?? null);
               }}>
                 <Image
                   source={{ uri }}

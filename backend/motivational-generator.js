@@ -18,8 +18,12 @@ const APPROVED_CAPTION_EXAMPLES_CSV = join(__dirname, "extract-post-text.manual.
 const DEFAULT_CAPTION_OPTION_COUNT = 5;
 const MAX_SMALL_TEXT_LENGTH = 36;
 const MAX_BIG_TEXT_LENGTH = 44;
+const CAPTION_LINE_GAP_RATIO = 0.12;
+const CAPTION_SMALL_FONT_RATIO = 0.032;
+const CAPTION_BIG_FONT_RATIO = 0.06;
+const MEDIUM_WIDGET_WIDTH = 1024;
+const MEDIUM_WIDGET_HEIGHT = Math.round(MEDIUM_WIDGET_WIDTH * 155 / 329);
 
-export const DEFAULT_OUTPUT_DIR = "motivational_assets";
 export const DEFAULT_IMAGE_MODEL = "gpt-image-2";
 /** Fast + strong instruction following for detailed image prompts */
 export const DEFAULT_PROMPT_MODEL = "gpt-4.1-mini";
@@ -1518,6 +1522,7 @@ function approvedCaptionExamplesForPrompt() {
       seen.add(key);
       return true;
     })
+    .slice(0, 120)
     .map((example) => `- "${example.smallText}" / "${example.bigText}"`)
     .join("\n");
 }
@@ -1529,16 +1534,16 @@ function formatRecentCaptionsForPrompt(recentCaptions) {
     .join("\n")}\n`;
 }
 
-function formatSceneForCaptionPrompt(scene) {
-  if (!scene || typeof scene !== "object") return "No reliable scene metadata; use the attached image.";
-  return [
-    scene.vibe && `vibe: ${scene.vibe}`,
-    scene.emotion && `mood: ${scene.emotion}`,
-    scene.subject && `subject: ${scene.subject}`,
-    scene.action && `action: ${scene.action}`,
-    scene.setting && `setting: ${scene.setting}`,
-    scene.weather && `light/weather: ${scene.weather}`,
-  ].filter(Boolean).join("\n") || "No reliable scene metadata; use the attached image.";
+function captionMoodLane(scene) {
+  const emotion = scene?.emotion || scene?.vibe || "goofy";
+  const lanes = {
+    gentle: "gentle, calm, loyal, quietly hopeful",
+    funny: "goofy, iconic, unserious, group-chat confident",
+    momentum: "defiant, moving forward, still in it",
+    "self-worth": "warm, loyal, lightly affirming",
+    perspective: "clear-headed, grateful, no-drama",
+  };
+  return lanes[emotion] || String(emotion);
 }
 
 export function buildCaptionPrompt(scene, {
@@ -1554,18 +1559,21 @@ export function buildCaptionPrompt(scene, {
 
   return `Write ${count} candidate two-line messages for a square Glance background image.
 
-${hasImage ? "Use the attached background image first." : "No image is attached in this call, so use the scene metadata."} The image is only for mood, emotional temperature, and broad fit. The message should usually NOT describe the literal subject, animal, outfit, prop, or location.
+${hasImage ? "Use the attached background image only for broad emotional temperature." : "No image is attached in this call, so use only the mood lane below."} Do not personalize the message to the literal scene. Do not mention the subject, action, setting, season, weather, clothing, object, sport, animal, pose, or location. Translate the image only into an approved-message feeling like "stay goofy", "stay weird", "stay cold", "stay fresh", "it's iconic", "it's goated", "clear mind", or "we're so back".
 
 This is a new message generator. Treat the approved examples below as the taste library. Match what they do:
-- tiny two-line internet-poster copy, not a polished quote
+- most options should look like a near-neighbor of the CSV examples, not like newly invented caption writing
+- use tiny two-line internet-poster copy, not a polished quote
 - lowercase, casual, human, a little imperfect
 - friend voice: warm, sincere, defiant, funny, loyal, or gently reflective
-- simple phrase architecture: opener/framing line, then small payoff
-- slang is allowed when it feels native to the examples: bro, twin, homie, sis, u, ur, im, af, fr, goated, gangsta
+- simple phrase architecture: opener/framing line, then tiny payoff
+- prefer proven openers: stay, smile, remember, quick reminder, daily reminder, life update, keep, take it slow, breathe deep, spread love, heads up
+- prefer proven payoffs: it's iconic, it's goated, it's gangsta, life's awesome, you're alive, no rush, clear mind, we're so back, hate's lame af, it gets better
+- slang is good when it feels native to the examples: bro, twin, homie, sis, u, ur, im, af, fr, goated, gangsta, tho
 - punctuation can be loose; commas/colons are common, but punctuation-free approved shapes are allowed
-- one option may be more reflective if the image supports it, but most options should stay short and punchy
 
 Do not do the stuff the rejected generated poster messages tended to do:
+- no "no chill mode", "laughing through the chaos", "suit up", "slide down", "making winter ours", "cool fit", "like a boss", "good times rolling", or "rough day, still worthy"
 - no "hey you", "look at you", "captain floof", "night owl", "big heart energy", "chill vibes", "making magic quietly", or image-specific nicknames
 - no literal animal/place/outfit/weather captions
 - no therapist voice, brand voice, corporate motivation, hustle language, or self-care jargon
@@ -1577,10 +1585,10 @@ Line rules:
 - smallText: usually 1-5 words, maximum ${MAX_SMALL_TEXT_LENGTH} characters
 - bigText: usually 2-6 words, maximum ${MAX_BIG_TEXT_LENGTH} characters
 - lowercase only
-- return five meaningfully different options, not the same caption with synonyms
+- return five meaningfully different options, but all five must feel like they came from the approved CSV
 
-Background context, secondary to the image:
-${formatSceneForCaptionPrompt(scene)}
+Mood lane only:
+${captionMoodLane(scene)}
 ${formatRecentCaptionsForPrompt(recentCaptions)}${retryNote}
 Approved examples from the CSV, excluding every poster_ image:
 ${approvedCaptionExamplesForPrompt()}
@@ -1614,7 +1622,21 @@ const BANNED_CAPTION_PHRASES = [
   /on your side/i,
   /look easy/i,
   /making chaos/i,
+  /\bchaos\b/i,
   /making magic/i,
+  /no chill mode/i,
+  /laughing through/i,
+  /suit up/i,
+  /slide down/i,
+  /good times rolling/i,
+  /making winter/i,
+  /cool fit/i,
+  /\bfit\b/i,
+  /sledding/i,
+  /like a boss/i,
+  /\bboss\b/i,
+  /rough day/i,
+  /still worthy/i,
   /listen up/i,
   /pause here/i,
   /just so you know/i,
@@ -1657,7 +1679,48 @@ const BANNED_CAPTION_PHRASES = [
 ];
 
 const IMAGE_DESC_WORDS =
-  /\b(cat|cats|dog|dogs|cow|cows|bird|birds|floof|pup|pups|kitten|kitty|bunny|rabbit|horse|bear|swan|duck|goose|alpaca|llama|goat|sheep|donkey|capybara|penguin|seal|otter|frog|parrot|cockatoo|turtle|hedgehog|ferret|pony|hamster|retriever|chihuahua|tabby|siamese|animal|owl|waves|ocean|beach|campsite|skateboard)\b/i;
+  /\b(cat|cats|dog|dogs|cow|cows|bird|birds|floof|pup|pups|kitten|kitty|bunny|rabbit|horse|bear|swan|duck|goose|alpaca|llama|goat|sheep|donkey|capybara|penguin|seal|otter|frog|parrot|cockatoo|turtle|hedgehog|ferret|pony|hamster|retriever|chihuahua|tabby|siamese|animal|owl|waves|ocean|beach|campsite|skateboard|snow|snowy|winter|sled|sledding|suit|tie|hill|mountain|field|parking|sunset|sunrise|flowers|camera|music)\b/i;
+
+const APPROVED_TONE_OPENERS = [
+  /^(stay|smile|remember|keep|take|breathe|spread|unlearn|enjoy|choose|ignore|trust|hold|love|be)\b/i,
+  /^quick reminder\b/i,
+  /^daily reminder\b/i,
+  /^daily reminder:/i,
+  /^life update:/i,
+  /^heads up\b/i,
+  /^through thick/i,
+  /^f\*ck 'em/i,
+  /^we stay/i,
+  /^i'?m weird/i,
+  /^a weirdo/i,
+  /^cold air/i,
+  /^soft days/i,
+  /^no time/i,
+  /^haters hate/i,
+  /^the world/i,
+  /^still here/i,
+  /^go outside/i,
+  /^go out/i,
+  /^smell the flowers/i,
+];
+
+const APPROVED_TONE_PAYOFFS = [
+  /\bit'?s (iconic|goated|gangsta|cool af|magic|a flex|powerful)\b/i,
+  /\b(life'?s awesome|life'?s beautiful|life gets better|it gets better|gets better)\b/i,
+  /\b(you'?re alive|u'?re still in it|u are awesome|u woke up|you woke up|u are on fire)\b/i,
+  /\b(no rush|clear mind|reset slowly|we'?re so back|hate'?s lame|stay true|stay real|forever twin|forever homie)\b/i,
+  /\b(f\* their opinion|dreams to chase|things twin|things homie|enjoy ur life|enjoy life)\b/i,
+];
+
+const APPROVED_SLANG_WORDS =
+  /\b(bro|twin|homie|sis|u|ur|im|tho|af|fr|goated|gangsta|gng)\b/i;
+
+const LITERAL_SCENE_ALLOWLIST = new Set([
+  "awesome", "better", "breathe", "bright", "clear", "cold", "cool", "dream",
+  "dreams", "fire", "fresh", "funny", "gentle", "goated", "goofy", "grateful",
+  "happy", "hard", "iconic", "kind", "life", "love", "magic", "real", "soft",
+  "stay", "strong", "true", "weird",
+]);
 
 const VAGUE_SMALL_OPENERS = [
   /^quiet\b/i,
@@ -1682,9 +1745,55 @@ function escapeRegex(text) {
   return String(text).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function sceneLiteralWords(scene) {
+  if (!scene || typeof scene !== "object") return [];
+  const raw = [
+    scene.subject,
+    scene.action,
+    scene.setting,
+    scene.weather,
+    scene.timeOfDay,
+    scene.prop,
+    scene.camera,
+    scene.cameraAngle,
+  ].filter(Boolean).join(" ");
+  const words = raw
+    .toLowerCase()
+    .match(/[a-z][a-z'-]{3,}/g) || [];
+  return [...new Set(words.map((word) => word.replace(/'s$/, "")))].filter((word) =>
+    !LITERAL_SCENE_ALLOWLIST.has(word)
+  );
+}
+
+function captionUsesSceneLiteralWords({ smallText, bigText }, scene) {
+  const text = `${smallText} ${bigText}`.toLowerCase();
+  return sceneLiteralWords(scene).some((word) =>
+    new RegExp(`\\b${escapeRegex(word)}s?\\b`, "i").test(text)
+  );
+}
+
+function looksLikeApprovedTone({ smallText, bigText }) {
+  const text = `${smallText} ${bigText}`;
+  const opener = APPROVED_TONE_OPENERS.some((pattern) => pattern.test(smallText));
+  const payoff = APPROVED_TONE_PAYOFFS.some((pattern) => pattern.test(bigText) || pattern.test(text));
+  const slang = APPROVED_SLANG_WORDS.test(text);
+  const csvExact = loadApprovedCaptionExamples().some((example) =>
+    captionSignature(example) === captionSignature({ smallText, bigText })
+  );
+  const smallWords = smallText.split(/\s+/).filter(Boolean).length;
+  const bigWords = bigText.split(/\s+/).filter(Boolean).length;
+  const compact = smallWords <= 5 && bigWords <= 6;
+
+  if (csvExact) return true;
+  if (opener && (payoff || slang || compact)) return true;
+  if (payoff && slang && compact) return true;
+  return false;
+}
+
 function captionDescribesImage({ smallText, bigText }, scene) {
   const text = `${smallText} ${bigText}`;
   if (IMAGE_DESC_WORDS.test(text)) return true;
+  if (captionUsesSceneLiteralWords({ smallText, bigText }, scene)) return true;
   if (/\b\w+\s+vibes?\b/i.test(text) && !/\b(it'?s|good|bad|main)\s+vibes?\b/i.test(text)) return true;
   if (scene?.subject) {
     const subjectNoun = scene.subject
@@ -1705,6 +1814,7 @@ function isOffToneCaption({ smallText, bigText }, scene) {
   if (BANNED_CAPTION_PHRASES.some((pattern) => pattern.test(text))) return true;
   if (VAGUE_SMALL_OPENERS.some((pattern) => pattern.test(smallText))) return true;
   if (!hasReferenceCaptionShape({ smallText, bigText })) return true;
+  if (!looksLikeApprovedTone({ smallText, bigText })) return true;
   if (AFFIRMATION_TODAY.test(bigText) || AFFIRMATION_TODAY.test(text)) return true;
   if (/\benough\b/i.test(smallText) && /\benough\b/i.test(bigText)) return true;
   if (captionDescribesImage({ smallText, bigText }, scene)) return true;
@@ -1752,42 +1862,90 @@ export function finalizeCaptionOptions(captions, recentCaptions = [], scene = nu
   return accepted;
 }
 
-export function variedFallbackCaption(scene, recentCaptions = [], rng = Math.random) {
-  const recentSigs = new Set(recentCaptions.map((c) => captionSignature(c)));
+const CURATED_APPROVED_NEIGHBORS = [
+  ["stay cold,", "stay fresh."],
+  ["stay cold twin,", "it's iconic."],
+  ["stay fresh,", "it's goated twin."],
+  ["stay fresh sis,", "it's iconic."],
+  ["stay goofy,", "it's iconic sis"],
+  ["stay goofy twin,", "it's goated."],
+  ["stay weird,", "it's iconic."],
+  ["stay weird sis,", "it's gangsta."],
+  ["smile twin,", "we're so back."],
+  ["smile bro,", "u woke up."],
+  ["quick reminder:", "you're goated."],
+  ["daily reminder:", "we're so back."],
+  ["life update:", "still iconic."],
+  ["heads up twin,", "it gets better."],
+  ["keep going bro,", "it gets better."],
+  ["keep moving,", "stay steady."],
+  ["take it slow,", "no rush."],
+  ["breathe deep,", "reset slowly."],
+  ["cold air,", "clear mind."],
+  ["spread love,", "hate's lame af."],
+  ["remember to", "f* their opinion."],
+  ["remember twin,", "stay real."],
+  ["unlearn the hate sis,", "it's lame af."],
+  ["through thick & thin,", "i got you sis"],
+];
+
+function approvedFallbackPool(scene, { broad = false } = {}) {
+  const approved = loadApprovedCaptionExamples().map((example) => [example.smallText, example.bigText]);
   const emotionPool = {
     gentle: [
-      ["smile homie,", "life's awesome"],
+      ["breathe deep,", "reset slowly."],
       ["take it slow,", "no rush."],
+      ["stay calm,", "you're learning."],
       ["through thick & thin,", "i got you sis"],
     ],
     funny: [
-      ["stay weird sis,", "it's iconic af"],
-      ["smile twin,", "it's gangsta"],
-      ["i'm weird", "but i'm real tho."],
+      ["stay goofy,", "it's iconic sis"],
+      ["stay weird sis,", "it's gangsta."],
+      ["stay fresh,", "it's goated twin."],
+      ["smile twin,", "it's gangsta."],
     ],
     momentum: [
+      ["life update:", "we're so back."],
       ["f*ck 'em,", "got dreams to chase"],
-      ["life update:", "we're so back"],
       ["keep moving,", "it adds up."],
+      ["smile bro,", "u're still in it."],
     ],
     "self-worth": [
-      ["quick reminder,", "u are awesome"],
-      ["smile bro,", "u're still in it"],
-      ["unlearn the hate sis,", "it's lame af"],
+      ["quick reminder", "u are awesome"],
+      ["stay real,", "stay true twin."],
+      ["remember,", "you've come far."],
+      ["smile twin,", "you're alive."],
     ],
     perspective: [
-      ["spread love,", "hate's lame af"],
-      ["remember,", "u've come far."],
-      ["still here,", "that's everything."],
+      ["cold air,", "clear mind."],
+      ["spread love,", "hate's lame af."],
+      ["ignore the noise &", "keep going bro."],
+      ["trust the pace,", "not the noise."],
     ],
   };
+  const priority = [
+    ...(emotionPool[scene?.emotion] || []),
+    ...CURATED_APPROVED_NEIGHBORS,
+  ];
+  return broad ? [...priority, ...approved] : priority;
+}
 
-  const pool = [...(emotionPool[scene.emotion] || []), ...QUOTE_BANK].filter(
-    ([smallText, bigText]) => !recentSigs.has(captionSignature({ smallText, bigText }))
-  );
+export function variedFallbackCaption(scene, recentCaptions = [], rng = Math.random) {
+  const recentSigs = new Set(recentCaptions.map((c) => captionSignature(c)));
+  const priorityPool = approvedFallbackPool(scene)
+    .map(([smallText, bigText]) => captionFromPair([smallText, bigText]))
+    .filter((caption) => !recentSigs.has(captionSignature(caption)))
+    .filter((caption) => finalizeCaption(caption, recentCaptions, scene));
 
-  if (pool.length === 0) return captionFromPair(pick(QUOTE_BANK, rng));
-  return captionFromPair(pick(pool, rng));
+  if (priorityPool.length) return pick(priorityPool, rng);
+
+  const broadPool = approvedFallbackPool(scene, { broad: true })
+    .map(([smallText, bigText]) => captionFromPair([smallText, bigText]))
+    .filter((caption) => !recentSigs.has(captionSignature(caption)))
+    .filter((caption) => finalizeCaption(caption, recentCaptions, scene));
+
+  if (broadPool.length) return pick(broadPool, rng);
+  return captionFromPair(pick(CURATED_APPROVED_NEIGHBORS, rng));
 }
 
 export function variedFallbackCaptionOptions(scene, recentCaptions = [], count = DEFAULT_CAPTION_OPTION_COUNT, rng = Math.random) {
@@ -1822,33 +1980,6 @@ export function completeCaptionOptions(
     count - options.length
   );
   return [...options, ...fallbackOptions].slice(0, count);
-}
-
-export function referenceCaptionForScene(scene) {
-  const subject = scene.subject;
-  const weather = scene.weather;
-  const action = scene.action;
-  const emotion = scene.emotion;
-
-  if (/snow|fog|mist|blue hour/.test(`${weather} ${scene.setting}`)) {
-    return captionFromPair(["smile homie,", "life's awesome"]);
-  }
-  if (/sunglasses|skateboard|skateboarding|birthday hat/.test(`${scene.prop} ${action}`)) {
-    return captionFromPair(["stay goofy twin,", "it's iconic af"]);
-  }
-  if (/smiling|standing slightly too close|golden retriever|cow|cat|highland cow/.test(`${action} ${subject}`)) {
-    return captionFromPair(["smile twin,", "it's gangsta"]);
-  }
-  if (emotion === "momentum") return captionFromPair(["life update:", "we're so back"]);
-  if (emotion === "self-worth") return captionFromPair(["quick reminder,", "u are awesome"]);
-  if (emotion === "gentle") return captionFromPair(["through thick & thin,", "i got you bro"]);
-  if (emotion === "perspective") return captionFromPair(["spread love,", "hate's lame af"]);
-  return captionFromPair(["stay weird sis,", "it's iconic af"]);
-}
-
-/** @deprecated Use finalizeCaption instead — kept for older scripts */
-export function coerceReferenceCaption(caption, scene, recentCaptions = []) {
-  return finalizeCaption(caption, recentCaptions, scene) ?? variedFallbackCaption(scene, recentCaptions);
 }
 
 function captionFromPair([smallText, bigText]) {
@@ -1945,29 +2076,12 @@ export function parseCaptionOptions(text) {
   return [];
 }
 
-export function parseCaption(text) {
-  const options = parseCaptionOptions(text);
-  if (options[0]) return options[0];
-
-  const lines = String(text || "")
-    .trim()
-    .split(/\r?\n/)
-    .map((line) => line.replace(/^["'\s-]+|["'\s]+$/g, "").trim())
-    .filter(Boolean);
-  const fallback = pick(QUOTE_BANK);
-  return {
-    smallText: normalizeCaptionLine(lines[0] || fallback[0], MAX_SMALL_TEXT_LENGTH),
-    bigText: normalizeCaptionLine(lines[1] || fallback[1], MAX_BIG_TEXT_LENGTH),
-  };
-}
-
 function normalizeCaptionLine(line, maxLength) {
   return String(line)
     .trim()
     .replace(/^["']+|["']+$/g, "")
     .replace(/[“”]/g, '"')
     .replace(/[‘’]/g, "'")
-    .replace(/^["']+|["']+$/g, "")
     .replace(/\s+/g, " ")
     .toLowerCase()
     .replace(/[—–]/g, " ")
@@ -1987,29 +2101,79 @@ export const DEFAULT_CAPTION_LAYOUT = {
   xRatio: 0.5,
   yRatio: 0.3,
   textColor: null,
+  fontScale: 1,
+};
+
+export const DEFAULT_MEDIUM_CAPTION_LAYOUT = {
+  ...DEFAULT_CAPTION_LAYOUT,
+  yRatio: 0.26,
+  cropXRatio: 0.5,
+  cropYRatio: 0.5,
 };
 
 export function normalizeCaptionLayout(layout = {}) {
   const xRatio = Number(layout.xRatio);
   const yRatio = Number(layout.yRatio);
+  const fontScale = Number(layout.fontScale);
   const textColor = layout.textColor === "#ffffff" || layout.textColor === "#050505" ? layout.textColor : null;
   return {
     xRatio: Number.isFinite(xRatio) ? Math.min(0.92, Math.max(0.08, xRatio)) : DEFAULT_CAPTION_LAYOUT.xRatio,
     yRatio: Number.isFinite(yRatio) ? Math.min(0.88, Math.max(0.08, yRatio)) : DEFAULT_CAPTION_LAYOUT.yRatio,
     textColor,
+    fontScale: Number.isFinite(fontScale) ? Math.min(1.45, Math.max(0.7, fontScale)) : DEFAULT_CAPTION_LAYOUT.fontScale,
   };
 }
 
-export function captionFontSizes(width, caption) {
+export function normalizeMediumCaptionLayout(layout = {}, fallback = DEFAULT_MEDIUM_CAPTION_LAYOUT) {
+  const normalizedText = normalizeCaptionLayout({ ...fallback, ...layout });
+  const cropXRatio = Number(layout.cropXRatio);
+  const cropYRatio = Number(layout.cropYRatio);
+  return {
+    ...normalizedText,
+    cropXRatio: Number.isFinite(cropXRatio) ? Math.min(1, Math.max(0, cropXRatio)) : DEFAULT_MEDIUM_CAPTION_LAYOUT.cropXRatio,
+    cropYRatio: Number.isFinite(cropYRatio) ? Math.min(1, Math.max(0, cropYRatio)) : DEFAULT_MEDIUM_CAPTION_LAYOUT.cropYRatio,
+  };
+}
+
+export function captionFontSizes(width, caption, fontScale = 1) {
   const maxTextWidth = width * 0.66;
   return {
-    smallSize: fitTextSize(caption.smallText, Math.round(width * 0.024), maxTextWidth),
-    bigSize: fitTextSize(caption.bigText, Math.round(width * 0.058), maxTextWidth),
+    smallSize: fitTextSize(caption.smallText, Math.round(width * CAPTION_SMALL_FONT_RATIO * fontScale), maxTextWidth),
+    bigSize: fitTextSize(caption.bigText, Math.round(width * CAPTION_BIG_FONT_RATIO * fontScale), maxTextWidth),
   };
 }
 
 export async function overlayCaption(imageBytes, caption, layout = {}) {
   const normalizedLayout = normalizeCaptionLayout(layout);
+  const { basePng, width, height } = await squareBaseImage(imageBytes);
+  return overlayCaptionOnFrame(basePng, width, height, caption, normalizedLayout);
+}
+
+export async function overlayMediumCaption(imageBytes, caption, layout = {}) {
+  const normalizedLayout = normalizeMediumCaptionLayout(layout);
+  const { basePng, width: baseSize } = await squareBaseImage(imageBytes);
+  const scale = Math.max(MEDIUM_WIDGET_WIDTH / baseSize, MEDIUM_WIDGET_HEIGHT / baseSize);
+  const scaledSize = Math.ceil(baseSize * scale);
+  const overflowX = Math.max(0, scaledSize - MEDIUM_WIDGET_WIDTH);
+  const overflowY = Math.max(0, scaledSize - MEDIUM_WIDGET_HEIGHT);
+  const left = Math.min(overflowX, Math.max(0, Math.round(overflowX * normalizedLayout.cropXRatio)));
+  const top = Math.min(overflowY, Math.max(0, Math.round(overflowY * normalizedLayout.cropYRatio)));
+  const mediumBase = await sharp(basePng)
+    .resize(scaledSize, scaledSize, { fit: "fill", kernel: sharp.kernel.lanczos3 })
+    .extract({ left, top, width: MEDIUM_WIDGET_WIDTH, height: MEDIUM_WIDGET_HEIGHT })
+    .png()
+    .toBuffer();
+
+  return overlayCaptionOnFrame(
+    mediumBase,
+    MEDIUM_WIDGET_WIDTH,
+    MEDIUM_WIDGET_HEIGHT,
+    caption,
+    normalizedLayout
+  );
+}
+
+async function squareBaseImage(imageBytes) {
   const metadata = await sharp(imageBytes).metadata();
   const baseSize = Math.min(metadata.width || 1024, metadata.height || 1024);
   const image = sharp(imageBytes)
@@ -2018,17 +2182,24 @@ export async function overlayCaption(imageBytes, caption, layout = {}) {
     .sharpen({ sigma: 0.35, m1: 0.4, m2: 0.2 });
   const width = baseSize;
   const height = baseSize;
-  const { smallSize, bigSize } = captionFontSizes(width, caption);
+  return {
+    basePng: await image.png().toBuffer(),
+    width,
+    height,
+  };
+}
+
+async function overlayCaptionOnFrame(basePng, width, height, caption, normalizedLayout) {
+  const { smallSize, bigSize } = captionFontSizes(width, caption, normalizedLayout.fontScale);
   const x = Math.round(width * normalizedLayout.xRatio);
   const yTop = Math.round(height * normalizedLayout.yRatio);
-  const lineGap = Math.round(bigSize * 0.02);
+  const lineGap = Math.round(bigSize * CAPTION_LINE_GAP_RATIO);
   // Sharp/librsvg ignores dominant-baseline:hanging — use alphabetic baseline + ascent
   // so baked text matches the dashboard editor (yRatio = top of small line).
   const SMALL_ASCENT = 0.88;
   const BIG_ASCENT = 0.88;
   const ySmall = yTop + Math.round(smallSize * SMALL_ASCENT);
   const yBig = yTop + smallSize + lineGap + Math.round(bigSize * BIG_ASCENT);
-  const basePng = await image.png().toBuffer();
   const textColor =
     normalizedLayout.textColor ?? (await pickTextColor(basePng, width, height, x, yTop + Math.round(smallSize * 0.5)));
 
@@ -2036,12 +2207,12 @@ export async function overlayCaption(imageBytes, caption, layout = {}) {
 <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
   <style>
     text {
-      font-family: "Arial Black", Arial, Helvetica, sans-serif;
+      font-family: Arial, Helvetica, sans-serif;
       text-anchor: middle;
       fill: ${textColor};
     }
-    .small { font-size: ${smallSize}px; font-weight: 900; letter-spacing: -0.018em; }
-    .big { font-size: ${bigSize}px; font-weight: 900; letter-spacing: -0.032em; }
+    .small { font-size: ${smallSize}px; font-weight: 800; letter-spacing: 0; }
+    .big { font-size: ${bigSize}px; font-weight: 800; letter-spacing: 0; }
   </style>
   <text class="small" x="${x}" y="${ySmall}">${escapeXml(caption.smallText)}</text>
   <text class="big" x="${x}" y="${yBig}">${escapeXml(caption.bigText)}</text>
@@ -2106,65 +2277,9 @@ async function addFilmGrain(imageBytes, width, height) {
     .toBuffer();
 }
 
-export function buildLegacyPromptForMetadata(scene, caption) {
-  const smallText = caption?.smallText || "";
-  const bigText = caption?.bigText || "";
-  return `Create a square motivational poster that feels like a forgotten photo from someone's camera roll.
-
-SCENE:
-${scene.subject}, ${scene.action}, in ${scene.setting}.
-
-STYLE:
-Raw ${scene.camera}.
-Heavy film grain.
-Visible sensor noise.
-Slight motion blur.
-Soft focus.
-Overexposed highlights.
-Natural lighting only.
-No studio lighting.
-No commercial polish.
-Authentic and imperfect.
-Dreamy internet nostalgia.
-
-COMPOSITION:
-Square 1:1 image.
-Large negative space, 50-80% of the frame.
-Subject positioned low in the frame.
-Text floating in the open space above the subject.
-Simple candid composition.
-Low camera angle.
-Wide-angle or fisheye feeling.
-The subject should feel wholesome, slightly goofy, and unintentionally beautiful.
-
-TYPOGRAPHY:
-Minimal bold sans-serif.
-Lowercase.
-Modern grotesk font.
-Text centered or slightly left-weighted in the negative space.
-
-Small top line:
-"${smallText}"
-
-Large bold line below:
-"${bigText}"
-
-COPY FEEL:
-Supportive internet friend.
-Funny but sincere.
-Anti-hustle.
-No corporate motivation.
-No LinkedIn energy.
-
-FINAL LOOK:
-Calm, hopeful, playful, gentle.
-Life is weird but things are okay.
-`;
-}
-
-export function makeAssetName(index, date = new Date()) {
+export function makeBackgroundName(index, date = new Date()) {
   const stamp = date.toISOString().replace(/\D/g, "").slice(0, 14);
-  return `poster_${stamp}_${String(index).padStart(3, "0")}`;
+  return `background_${stamp}_${String(index).padStart(3, "0")}`;
 }
 
 export async function saveGeneratedAsset({ outputDir, backgroundDir, metaDir, name, imageBytes, rawImageBytes, prompt, metadata }) {

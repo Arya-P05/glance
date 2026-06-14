@@ -11,13 +11,14 @@ type NavIcon = React.ComponentType<{ color?: string; width?: number; height?: nu
 
 const NAV: { href: string; label: string; Icon: NavIcon }[] = [
   { href: "/",           label: "Overview",    Icon: Home },
-  { href: "/library",    label: "Library",     Icon: MediaImage },
-  { href: "/drafts",     label: "Drafts",      Icon: Frame },
-  { href: "/prompts",    label: "Prompts",     Icon: List },
   { href: "/generate",   label: "Generate",    Icon: Sparks },
+  { href: "/prompts",    label: "Prompts",     Icon: List },
+  { href: "/backgrounds",label: "Backgrounds", Icon: MediaImage },
+  { href: "/drafts",     label: "Drafts",      Icon: Frame },
+  { href: "/library",    label: "Library",     Icon: MediaImage },
+  { href: "/preview",    label: "Preview",     Icon: Eye },
   { href: "/scrape",     label: "Scrape",      Icon: Download },
   { href: "/import",     label: "Import",      Icon: Import },
-  { href: "/preview",    label: "Preview",     Icon: Eye },
   { href: "/maintenance",label: "Maintenance", Icon: Settings },
 ];
 

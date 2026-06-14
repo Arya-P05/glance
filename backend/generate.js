@@ -1,10 +1,9 @@
 /**
- * Content generator — prompts, raw images, or finished posters.
+ * Content generator — prompts or raw background images.
  *
  * Modes:
  *   --mode prompts   Write image prompts only → content/prompts/
- *   --mode images    Generate raw background images (no caption) → content/drafts/
- *   --mode full      Full pipeline: image + caption overlay → content/drafts/  [default]
+ *   --mode images    Generate raw background images → content/backgrounds/  [default]
  *
  * Examples:
  *   npm run gen -- --count 10 --mode prompts
@@ -18,11 +17,8 @@ import { createClient } from "@supabase/supabase-js";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
-  DEFAULT_CAPTION_MODEL,
   DEFAULT_IMAGE_MODEL,
   DEFAULT_PROMPT_MODEL,
-  buildCaptionPrompt,
-  buildLegacyPromptForMetadata,
   buildHighConceptScene,
   buildIconicEnergyScene,
   buildMotivationalPrompt,
@@ -31,11 +27,7 @@ import {
   buildSceneFromArchetype,
   buildSceneFromDirector,
   cleanGeneratedPrompt,
-  completeCaptionOptions,
-  variedFallbackCaption,
-  makeAssetName,
-  overlayCaption,
-  parseCaptionOptions,
+  makeBackgroundName,
   saveGeneratedAsset,
   savePromptAsset,
   sceneDedupKeys,
@@ -48,21 +40,19 @@ import { BUCKET, DRAFT_PREFIX } from "./instagram-helper.js";
 import { supabaseUrl, supabaseServiceRoleKey } from "./supabase-env.js";
 
 const PROMPTS_DIR = "content/prompts";
-const DRAFTS_DIR = "content/drafts";
 const BACKGROUNDS_DIR = "content/backgrounds";
 const META_DIR = "content/meta";
 
 function parseArgs(argv) {
   const out = {
     count: Number(process.env.POSTER_COUNT || "10"),
-    mode: "full",
+    mode: "images",
     fromPrompts: false,
     fromPromptsDir: PROMPTS_DIR,
     promptIds: null, // comma-separated list of prompt IDs to use
     outDir: null,
     model: process.env.OPENAI_IMAGE_MODEL || DEFAULT_IMAGE_MODEL,
     promptModel: process.env.OPENAI_PROMPT_MODEL || DEFAULT_PROMPT_MODEL,
-    captionModel: process.env.OPENAI_CAPTION_MODEL || DEFAULT_CAPTION_MODEL,
     size: process.env.OPENAI_IMAGE_SIZE || "1024x1024",
     dryRun: false,
   };
@@ -81,15 +71,14 @@ function parseArgs(argv) {
     } else if (arg === "--out") out.outDir = next();
     else if (arg === "--model") out.model = next();
     else if (arg === "--prompt-model") out.promptModel = next();
-    else if (arg === "--caption-model") out.captionModel = next();
     else if (arg === "--size") out.size = next();
     else if (arg === "--dry-run") out.dryRun = true;
     else if (arg === "--help" || arg === "-h") out.help = true;
     else throw new Error(`Unknown argument: ${arg}`);
   }
 
-  if (!["prompts", "images", "full"].includes(out.mode)) {
-    throw new Error(`--mode must be one of: prompts, images, full`);
+  if (!["prompts", "images"].includes(out.mode)) {
+    throw new Error(`--mode must be one of: prompts, images`);
   }
   if (!Number.isInteger(out.count) || out.count < 1 || out.count > 200) {
     throw new Error("--count must be an integer from 1 to 200");
@@ -99,9 +88,8 @@ function parseArgs(argv) {
   }
 
   if (!out.outDir) {
-    out.outDir = out.mode === "prompts" ? PROMPTS_DIR : DRAFTS_DIR;
+    out.outDir = out.mode === "prompts" ? PROMPTS_DIR : BACKGROUNDS_DIR;
   }
-  out.backgroundDir = BACKGROUNDS_DIR;
   out.metaDir = out.mode === "prompts" ? out.outDir : META_DIR;
 
   return out;
@@ -109,20 +97,19 @@ function parseArgs(argv) {
 
 function usage() {
   return `Usage:
-  npm run gen -- --count 10                         full pipeline → content/drafts/
+  npm run gen -- --count 10                         backgrounds   → content/backgrounds/
   npm run gen -- --count 10 --mode prompts          prompts only  → content/prompts/
-  npm run gen -- --count 10 --mode images           raw images    → content/drafts/
+  npm run gen -- --count 10 --mode images           backgrounds   → content/backgrounds/
   npm run gen -- --count 10 --from-prompts          images from existing prompts
   npm run publish                                   push drafts   → Supabase
 
 Options:
   --count, -n <n>      Number to generate. Default: 10
-  --mode <mode>        prompts | images | full. Default: full
+  --mode <mode>        prompts | images. Default: images
   --from-prompts [dir] Load scene+prompt from content/prompts/ instead of generating
   --out <dir>          Override output directory
   --model <model>      Image model. Default: ${DEFAULT_IMAGE_MODEL}
   --prompt-model       Prompt writer model. Default: ${DEFAULT_PROMPT_MODEL}
-  --caption-model      Caption model. Default: ${DEFAULT_CAPTION_MODEL}
   --size <size>        Image size. Default: 1024x1024
   --dry-run            Print scenes/prompts only; no API calls
 `;
@@ -219,17 +206,6 @@ function responseText(response) {
   return chunks.join("\n");
 }
 
-function captionRequestContent(prompt, imageBytes) {
-  const content = [{ type: "input_text", text: prompt }];
-  if (imageBytes?.length) {
-    content.push({
-      type: "input_image",
-      image_url: `data:image/png;base64,${imageBytes.toString("base64")}`,
-    });
-  }
-  return content;
-}
-
 async function loadRecentScenesFromDb(supabase, limit = 40) {
   if (!supabase) return new Set();
   const keys = new Set();
@@ -242,6 +218,19 @@ async function loadRecentScenesFromDb(supabase, limit = 40) {
     .limit(limit);
 
   for (const row of drafts ?? []) {
+    if (row.scene && typeof row.scene === "object") {
+      for (const key of sceneDedupKeys(row.scene)) keys.add(key);
+    }
+  }
+
+  const { data: backgrounds } = await supabase
+    .from("backgrounds")
+    .select("scene")
+    .not("scene", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  for (const row of backgrounds ?? []) {
     if (row.scene && typeof row.scene === "object") {
       for (const key of sceneDedupKeys(row.scene)) keys.add(key);
     }
@@ -316,77 +305,6 @@ async function pickUniqueScene({ client, promptModel, avoidSignatures, preferEne
 
 function rememberScene(scene, avoidSignatures) {
   for (const key of sceneDedupKeys(scene)) avoidSignatures.add(key);
-}
-
-async function loadRecentCaptionsFromDb(supabase, limit = 30) {
-  if (!supabase) return [];
-  const recent = [];
-
-  const { data: drafts } = await supabase
-    .from("drafts")
-    .select("caption")
-    .not("caption", "is", null)
-    .order("created_at", { ascending: false })
-    .limit(limit);
-  for (const row of drafts ?? []) {
-    if (row.caption?.smallText && row.caption?.bigText) {
-      recent.push({ smallText: row.caption.smallText, bigText: row.caption.bigText });
-    }
-  }
-
-  const { data: posts } = await supabase
-    .from("posts")
-    .select("caption")
-    .not("caption", "is", null)
-    .order("created_at", { ascending: false })
-    .limit(limit);
-  for (const row of posts ?? []) {
-    const text = String(row.caption || "");
-    const comma = text.indexOf(",");
-    if (comma === -1) continue;
-    recent.push({
-      smallText: text.slice(0, comma + 1).trim(),
-      bigText: text.slice(comma + 1).trim(),
-    });
-  }
-
-  const seen = new Set();
-  return recent.filter((c) => {
-    const key = `${c.smallText}|${c.bigText}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
-async function generateCaption({ client, model, scene, imageBytes = null, recentCaptions = [] }) {
-  let lastPrompt = buildCaptionPrompt(scene, { recentCaptions, hasImage: Boolean(imageBytes?.length) });
-
-  for (let attempt = 0; attempt < 5; attempt++) {
-    lastPrompt = buildCaptionPrompt(scene, { recentCaptions, attempt, hasImage: Boolean(imageBytes?.length) });
-    const response = await client.responses.create({
-      model,
-      temperature: 0.7,
-      input: [{ role: "user", content: captionRequestContent(lastPrompt, imageBytes) }],
-    });
-    const options = completeCaptionOptions(parseCaptionOptions(responseText(response)), scene, recentCaptions, 5, {
-      requireSeed: true,
-    });
-    if (options.length) {
-      return {
-        caption: options[Math.floor(Math.random() * options.length)],
-        options,
-        prompt: lastPrompt,
-      };
-    }
-  }
-
-  const fallbackOptions = completeCaptionOptions([], scene, recentCaptions);
-  return {
-    caption: fallbackOptions[0] || variedFallbackCaption(scene, recentCaptions),
-    options: fallbackOptions,
-    prompt: lastPrompt,
-  };
 }
 
 async function loadFromPromptsDir(dir, count, filterIds = null) {
@@ -498,40 +416,6 @@ async function upsertWithSchemaFallback(supabase, table, row, { onConflict, opti
   }
 }
 
-async function uploadDraftToDb(supabase, { name, imageBytes, rawImageBytes = null, metadata }) {
-  const storagePath = `${DRAFT_PREFIX}/${name}.png`;
-  const { error: uploadErr } = await supabase.storage
-    .from(BUCKET)
-    .upload(storagePath, imageBytes, { contentType: "image/png", upsert: true });
-  if (uploadErr) throw uploadErr;
-
-  let rawStoragePath = null;
-  if (rawImageBytes) {
-    rawStoragePath = `${DRAFT_PREFIX}/backgrounds/${name}.png`;
-    const { error: rawUploadErr } = await supabase.storage
-      .from(BUCKET)
-      .upload(rawStoragePath, rawImageBytes, { contentType: "image/png", upsert: true });
-    if (rawUploadErr) throw rawUploadErr;
-  }
-
-  await upsertWithSchemaFallback(supabase, "drafts",
-    {
-      name,
-      storage_path: storagePath,
-      caption: metadata.caption ?? null,
-      scene: metadata.scene ?? null,
-      image_prompt: metadata.scenePrompt ?? null,
-      metadata,
-      raw_storage_path: rawStoragePath,
-      image_model: metadata.imageModel ?? null,
-      caption_model: metadata.captionModel ?? null,
-      prompt_model: metadata.promptModel ?? null,
-      status: "draft",
-    },
-    { onConflict: "name", optionalColumns: ["metadata", "raw_storage_path"] }
-  );
-}
-
 async function uploadBackgroundToDb(supabase, { name, imageBytes, metadata }) {
   const storagePath = `${DRAFT_PREFIX}/backgrounds/${name}.png`;
   const { error: uploadErr } = await supabase.storage
@@ -592,10 +476,10 @@ async function main() {
   let failed = 0;
 
   if (!args.dryRun) {
-    const modeLabel = { prompts: "prompts only", images: "raw images", full: "full posters" }[args.mode];
+    const modeLabel = { prompts: "prompts only", images: "background images" }[args.mode];
     console.log(`Generating ${args.count} × ${modeLabel} → ${args.outDir}/`);
     if (args.fromPrompts) console.log(`Using prompts from: ${args.fromPromptsDir}/`);
-    console.log(`Models: prompt=${args.promptModel}  image=${args.model}  caption=${args.captionModel}`);
+    console.log(`Models: prompt=${args.promptModel}  image=${args.model}`);
     console.log("");
   }
 
@@ -614,7 +498,6 @@ async function main() {
   }
 
   const avoidSceneSignatures = supabase ? await loadRecentScenesFromDb(supabase) : new Set();
-  const recentCaptions = supabase ? await loadRecentCaptionsFromDb(supabase) : [];
 
   let completed = 0;
   let attempted = 0;
@@ -634,7 +517,7 @@ async function main() {
       if (!source) break;
       ({ scene, prompt: scenePrompt, promptWriterPrompt, name } = source);
     } else {
-      name = makeAssetName(attempted);
+      name = makeBackgroundName(attempted);
       scene = await pickUniqueScene({
         client: openai,
         promptModel: args.promptModel,
@@ -696,76 +579,34 @@ async function main() {
         generateImage({ client: openai, model: args.model, prompt: scenePrompt, size: args.size })
       );
 
-      let caption = null;
-      let captionPrompt = null;
-      let captionOptions = [];
-      let finalImageBytes = rawImageBytes;
-
-      if (args.mode === "full") {
-        const captionResult = await withProgress(`${prefix} writing caption`, () =>
-          generateCaption({
-            client: openai,
-            model: args.captionModel,
-            scene,
-            imageBytes: rawImageBytes,
-            recentCaptions,
-          })
-        );
-        caption = captionResult.caption;
-        captionPrompt = captionResult.prompt;
-        captionOptions = captionResult.options || [];
-        recentCaptions.unshift(caption);
-        if (recentCaptions.length > 40) recentCaptions.length = 40;
-        finalImageBytes = await withProgress(`${prefix} placing text`, () =>
-          overlayCaption(rawImageBytes, caption)
-        );
-      }
-
-      const posterPrompt = buildLegacyPromptForMetadata(scene, caption);
       const draftMetadata = {
         imageModel: args.model,
-        captionModel: args.mode === "full" ? args.captionModel : null,
         promptModel: args.promptModel,
         size: args.size,
         generatedAt: new Date().toISOString(),
         scene,
         scenePrompt,
         promptWriterPrompt,
-        captionPrompt,
-        caption,
-        captionOptions,
       };
-      const paths = await withProgress(`${prefix} saving draft`, () =>
+      const paths = await withProgress(`${prefix} saving background`, () =>
         saveGeneratedAsset({
           outputDir: args.outDir,
-          backgroundDir: args.backgroundDir,
           metaDir: args.metaDir,
           name,
-          imageBytes: finalImageBytes,
-          rawImageBytes: args.mode === "full" ? rawImageBytes : null,
-          prompt: posterPrompt,
+          imageBytes: rawImageBytes,
+          rawImageBytes: null,
+          prompt: scenePrompt,
           metadata: draftMetadata,
         })
       );
       if (supabase) {
-        if (args.mode === "images") {
-          await withProgress(`${prefix} saving background to DB`, () =>
-            uploadBackgroundToDb(supabase, {
-              name,
-              imageBytes: rawImageBytes,
-              metadata: draftMetadata,
-            })
-          );
-        } else {
-          await withProgress(`${prefix} saving draft to DB`, () =>
-            uploadDraftToDb(supabase, {
-              name,
-              imageBytes: finalImageBytes,
-              rawImageBytes,
-              metadata: draftMetadata,
-            })
-          );
-        }
+        await withProgress(`${prefix} saving background to DB`, () =>
+          uploadBackgroundToDb(supabase, {
+            name,
+            imageBytes: rawImageBytes,
+            metadata: draftMetadata,
+          })
+        );
         if (promptSources) {
           await withProgress(`${prefix} removing used prompt`, () =>
             removePromptFromDb(supabase, name)
@@ -776,7 +617,6 @@ async function main() {
       saved++;
       completed++;
       console.log(`${prefix} → ${paths.imagePath}`);
-      if (caption) console.log(`${prefix}   caption: "${caption.smallText} ${caption.bigText}"`);
       console.log("");
     } catch (e) {
       failed++;
@@ -790,7 +630,7 @@ async function main() {
       console.log(`Stopped after ${attempted} attempt${attempted === 1 ? "" : "s"} before reaching ${args.count} saved item${args.count === 1 ? "" : "s"}.`);
     }
     if (saved > 0 && args.mode !== "prompts") {
-      console.log(`\nReady to publish? Run: npm run publish`);
+      console.log(`\nReview generated backgrounds in the dashboard Backgrounds tab.`);
     }
     if (saved > 0 && args.mode === "prompts") {
       console.log(`\nGenerate images from these prompts? Run: npm run gen -- --from-prompts`);
