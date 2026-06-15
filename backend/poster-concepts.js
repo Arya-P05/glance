@@ -117,7 +117,7 @@ export const POSTER_ARCHETYPES = [
     settings: ["a bright backyard lawn with toys, garden chairs, fence edges low behind them, and a huge clean blue sky above"],
     cameras: ["wide-angle phone photo", "cheap 2006 point-and-shoot camera photo"],
     weather: ["bright midday sun", "clear blue sky"],
-    compositions: ["puppies clustered low in frame, tiny paws and motion blur, massive open sky above"],
+    compositions: ["two or three puppies clustered low in frame, tiny paws and motion blur, massive open sky above"],
     colors: ["saturated blue sky and green grass", "clean early-digital blue and green color"],
     emotions: ["funny", "momentum"],
     props: ["nothing"],
@@ -130,14 +130,14 @@ export const POSTER_ARCHETYPES = [
       "three tiny kittens",
       "two orange tabby kittens",
       "a black kitten and a cream kitten",
-      "four sleepy foster kittens",
+      "two sleepy foster kittens",
       "two tiny kittens with huge eyes",
     ],
     action: "climbing out of a cardboard box with tiny paws everywhere",
     settings: ["a messy foster-kitten bedroom corner with rumpled blankets, a cardboard box, toy mice, plants, and window light"],
     cameras: ["compact camera flash photo", "old iPhone camera roll photo"],
     weather: ["warm golden hour", "bright midday sun"],
-    compositions: ["kittens and box low in frame, cheap flash shadows, lamp glow and window light above"],
+    compositions: ["two or three kittens and box low in frame, cheap flash shadows, lamp glow and window light above"],
     colors: ["bright white negative space with black-text-friendly contrast", "golden sunlight and soft shadows"],
     emotions: ["funny", "gentle"],
     props: ["nothing"],
@@ -147,17 +147,17 @@ export const POSTER_ARCHETYPES = [
     vibe: "tiny duckling parade",
     subjectKind: "animal",
     subjects: [
-      "five tiny ducklings",
-      "a cluster of baby ducklings",
+      "two tiny ducklings",
+      "three tiny ducklings",
       "three yellow ducklings",
-      "four ducklings and one very proud duck",
-      "a tiny line of ducklings",
+      "two ducklings and one very proud duck",
+      "a duckling duo",
     ],
     action: "charging through a shallow puddle like a very serious little parade",
     settings: ["a wet park path after rain with mirror puddles low in frame and pale grey sky above"],
     cameras: ["raw early-2000s digital camera photo", "wide-angle phone photo"],
     weather: ["warm rain with a happy subject", "overcast"],
-    compositions: ["ducklings small and low in frame, splash ripples at their feet, huge pale sky above"],
+    compositions: ["two or three ducklings small and low in frame, splash ripples at their feet, huge pale sky above"],
     colors: ["bright white negative space with black-text-friendly contrast", "clean early-digital blue and green color"],
     emotions: ["funny", "momentum"],
     props: ["nothing"],
@@ -177,7 +177,7 @@ export const POSTER_ARCHETYPES = [
     settings: ["a sunny farmyard with short grass, a low wooden bench, and wide empty sky above"],
     cameras: ["wide-angle fisheye snapshot", "cheap 2006 point-and-shoot camera photo"],
     weather: ["clear blue sky", "warm golden hour"],
-    compositions: ["baby animals low and mid-jump, bench low in frame, giant clean sky above"],
+    compositions: ["two or three baby animals low and mid-jump, bench low in frame, giant clean sky above"],
     colors: ["saturated blue sky and green grass", "golden sunlight and soft shadows"],
     emotions: ["funny", "momentum"],
     props: ["nothing"],
@@ -191,13 +191,13 @@ export const POSTER_ARCHETYPES = [
       "three tiny bunnies",
       "a white baby bunny and a grey baby bunny",
       "a tiny bunny pair",
-      "four baby rabbits",
+      "two baby rabbits with huge ears",
     ],
     action: "popping out of a laundry basket with suspiciously dramatic tiny faces",
     settings: ["a busy laundry room with spinning washer doors, detergent bottles, towel piles, and soft rectangular window light above"],
     cameras: ["compact camera flash photo", "old iPhone camera roll photo"],
     weather: ["sun peeking through clouds", "warm golden hour"],
-    compositions: ["basket and bunnies low in frame, washer circles and soft window light above"],
+    compositions: ["two or three bunnies in a basket low in frame, washer circles and soft window light above"],
     colors: ["bright white negative space with black-text-friendly contrast", "golden sunlight and soft shadows"],
     emotions: ["funny", "gentle"],
     props: ["nothing"],
@@ -2099,7 +2099,7 @@ ${exampleBlock}
 
 Each concept must feel like:
 - one specific old camera-roll upload, not a stock photo category
-- iconic at thumbnail size: one subject or one tight little animal cluster, one joke/feeling, one readable but specific background
+- iconic at thumbnail size: one subject or one tight little animal cluster of 2-3 animals max, one joke/feeling, one readable but specific background
 - weird, high-emotion, or peak-action enough to feel internet-native, but visually believable
 - the frame should catch the exact wild second: scream-laughing, midair, splash, wind blast, mist blast, flash hit, huge view reaction, singing-heart-out, rainbow freakout, or car-night chaos
 - subject low in frame with an upper text zone that is simple but still part of an interesting place: sky, smoke, mist, arena rafters, packed bleacher darkness, convention lights, neon reflections, rain, crowd bokeh, bridge underside, high ceiling, or sunset glow
@@ -2107,7 +2107,7 @@ Each concept must feel like:
 - sometimes conventionally beautiful, model-off-duty, or celebrity-adjacent, but only as a raw candid aura; never reference or resemble a real celebrity
 - less "beautiful lifestyle shoot", more "oddly perfect saved image from the internet"
 - over many outputs, cast a broad mix: people of color, white people, and mixed groups. Do not default exclusively to any one race.
-- animal frames can be a single expressive hero or a tight playful cluster: smiling into camera, goofy close-up faces, jumping, sprinting, tiny paws, harmless props, blue-sky nature, bright ice floes, flower fields, beaches, sunny grass, cozy flash pet photos, warm window light, and one instantly readable silly action.
+- animal frames can be a single expressive hero or a tight playful cluster of 2-3 animals max: smiling into camera, goofy close-up faces, jumping, sprinting, tiny paws, harmless props, blue-sky nature, bright ice floes, flower fields, beaches, sunny grass, cozy flash pet photos, warm window light, and one instantly readable silly action.
 - aesthetic anchors are welcome as broad vibes only, never as exact likenesses, logos, names, or franchise characters: rapper-stage chaos, UK drill streetwear, street-racing ensemble casts, homemade superhero cosplay, sci-fi helmet cosplay, anime fighter costumes, tech-billionaire garage aura, boxing/MMA/F1/soccer champion energy, 2000s actor red-carpet candids, awkward suit comedy, mascot costumes, plush monster battles, and action-comedy stunts.
 - early-2000s tuner cars, street-racing-adjacent parking lots, flash-lit hotel driveways, real boxing rings, stadiums, space convention floors, giant waterfalls, canyon overlooks, rollercoaster drops, rainbows after rain, happy rain flash, night-out singalongs, ridge hikes, beach sprints in swim clothes, storm puddles, and accidental paparazzi energy are welcome when they stay clean and text-friendly.
 
@@ -2115,6 +2115,7 @@ Banned overused ideas (do NOT use):
 - fireworks, sparklers, outdoor basketball court at night
 - generic plain wall, blank beige wall, empty studio backdrop, plain curtain, blank concrete, featureless hallway, or any dead indoor surface
 - gloomy animal scenes: muddy banks, foggy riverbanks, grey-green swamp water, dark wet fur piles, murky ponds, nature-documentary realism, sad flat overcast animal photos
+- animal crowds, big litters, flocks, swarms, packs, or any group larger than 3 animals
 - parking lot unless tied to a specific road-trip or skate moment
 - cozy coffee/bookshop/diner/window scenes that read like therapy content
 - generic friend groups smiling in a lifestyle ad

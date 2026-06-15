@@ -62,7 +62,7 @@ const VIBE_PRESETS = {
   chaos: "goofy peak-frame chaos, scream-laughing, absurd but happy, caught mid-action",
   "night-out": "friends outside late, singing, neon, rain-slick street, flash photo after a wild night",
   outdoors: "big view, hiking, beach run, wind, sunset, rainbows, warm rain, full-body joy",
-  "animal-chaos": "joyful animal meme energy: smiling into camera, goofy close-ups, jumping, running, playful piles, nature when it is bright/iconic, cozy flash pets, instant comedy",
+  "animal-chaos": "joyful animal meme energy: single animals or 2-3 animals max, smiling into camera, goofy close-ups, jumping, running, playful piles, nature when it is bright/iconic, cozy flash pets, instant comedy",
   "street-racer": "early-2000s street-racer styling, shiny cars as vague shapes, flash, motion, no logos or exact cast likenesses",
   "dressy-flash": "sharp suit or dress, model-level beauty, red-carpet-ish compact flash, expensive but candid",
 };
@@ -376,7 +376,8 @@ Hard creative rules:
 - Never solve text space with a plain wall, blank beige wall, empty studio backdrop, blank concrete, plain curtain, or featureless indoor surface.
 - Make it emotionally readable: happy, iconic, weird, confident, funny, scream-laughing, or caught in a peak moment.
 - Avoid muddy, swampy, murky, grey-green, damp, sad, documentary-wildlife, or eerie scenes unless the user explicitly asks for that.
-- Animal ideas can be singular or groups: smiling straight into camera, goofy close-up face, jumping, sprinting, tumbling, wearing a harmless prop, or doing one instantly readable silly thing.
+- Animal ideas should usually be singular. If there is a group, use only 2-3 animals max; never use crowds, flocks, big litters, packs, swarms, or more than 3 animals.
+- Animal ideas can show: smiling straight into camera, goofy close-up face, jumping, sprinting, tumbling, wearing a harmless prop, or doing one instantly readable silly thing.
 - Animal backgrounds can be nature when the animal is doing something fun: blue-sky grassland, flower field, bright ice floe, beach, sunny pond edge, farmyard, backyard, mountain meadow, or ocean overlook. Cozy indoor/flash pet photos are also good. Do not use foggy riverbanks, dark wet fur piles, muddy banks, cold mist, or gloomy swamp water.
 - If the user asks for costume, sport, formalwear, celebrity-adjacent, or pop-reference energy, put it in a fitting world: a convention floor, real boxing ring, stadium, paddock, hotel driveway, rooftop, arcade, street meet, public pool, beach sprint, or crowded event space.
 - If the user names a real person, actor, athlete, musician, celebrity, public figure, or fictional/franchise character, DO NOT depict that exact person/character. Translate it into generic styling, era, costume, posture, subject type, or aesthetic only.
@@ -456,7 +457,7 @@ function animalFallbackDirection(idea, index) {
   if (/\b(dog|dogs|puppy|puppies|pup|pups)\b/.test(text)) {
     return {
       setting: fallbackPick([
-        "a bright backyard lawn with a white fence, saturated blue sky, and puppies tumbling low in frame",
+        "a bright backyard lawn with a white fence, saturated blue sky, and two or three puppies tumbling low in frame",
         "a beach boardwalk edge with warm sand, ocean color, and a happy dog smiling into the camera",
         "a cozy living room with window light, toys low in frame, and a simple bright upper wall/ceiling glow",
       ], index),
@@ -476,7 +477,7 @@ function animalFallbackDirection(idea, index) {
       ], index),
       weather: "clear blue sky and bright sunlight",
       timeOfDay: "bright cheerful daytime",
-      composition: "small animals mid-jump or clustered low in frame, tiny paws readable, huge clean sky above",
+      composition: "two or three small animals max mid-jump or clustered low in frame, tiny paws readable, huge clean sky above",
       colorDirection: "saturated blue sky, spring grass, bright whites, flowers, and high-contrast digital grain",
     };
   }

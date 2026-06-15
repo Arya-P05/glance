@@ -1007,7 +1007,7 @@ function upgradeBoringBackground(brief) {
     return applyBackgroundUpgrade(
       out,
       "a busy laundry room with spinning washer doors, detergent bottles, towel piles, a laundry basket, and fluorescent ceiling light",
-      "basket and animals low in frame, washer circles and ceiling glow above for text",
+      "basket and two or three animals low in frame, washer circles and ceiling glow above for text",
       "clean whites, hard flash, detergent color, and fluorescent early-digital glare"
     );
   }
@@ -1066,7 +1066,7 @@ function upgradeGloomyAnimalScene(brief, rng = Math.random) {
   out.setting = pick(isWaterAnimal ? brightWaterSettings : brightLandSettings, rng);
   out.weather = pick(["clear blue sky", "bright midday sun", "warm golden hour", "soft sunrise"], rng);
   out.timeOfDay = out.weather;
-  out.composition = "animal or tight animal cluster low in frame, funny faces and tiny paws readable, bright cheerful sky or sunlit color above";
+  out.composition = "single animal or tight 2-3 animal cluster low in frame, funny faces and tiny paws readable, bright cheerful sky or sunlit color above";
   out.cameraAngle = out.composition;
   out.colorDirection = pick(
     ["saturated blue sky and green grass", "golden sunlight and soft shadows", "clean early-digital blue and green color"],
@@ -1356,11 +1356,82 @@ function harmonizeCreativeBrief(brief, rng = Math.random) {
 
 /** Wardrobe + prop + action/setting reconciliation without subject-pool overrides. */
 export function finalizeBrief(brief, rng = Math.random) {
-  const reconciled = reconcileActionAndSetting(brief, rng);
+  const capped = clampAnimalGroupSize(brief);
+  const reconciled = reconcileActionAndSetting(capped, rng);
   const upgraded = upgradeBoringBackground(reconciled);
   const brightened = upgradeGloomyAnimalScene(upgraded, rng);
   const harmonized = assignCoherentWardrobe(brightened, rng);
   return reconcileProps(upgradeGloomyAnimalScene(upgradeBoringBackground(harmonized), rng), rng);
+}
+
+function singularizeOneAnimalPlurals(text) {
+  const singulars = {
+    animals: "animal",
+    puppies: "puppy",
+    kittens: "kitten",
+    cats: "cat",
+    dogs: "dog",
+    ducklings: "duckling",
+    ducks: "duck",
+    bunnies: "bunny",
+    rabbits: "rabbit",
+    goats: "goat",
+    lambs: "lamb",
+    sparrows: "sparrow",
+    birds: "bird",
+    otters: "otter",
+    seals: "seal",
+    penguins: "penguin",
+    foxes: "fox",
+    cows: "cow",
+    bears: "bear",
+    monkeys: "monkey",
+    donkeys: "donkey",
+    horses: "horse",
+    ponies: "pony",
+  };
+  let out = String(text || "");
+  for (const [plural, singular] of Object.entries(singulars)) {
+    out = out.replace(new RegExp(`\\bone ${plural}\\b`, "gi"), `one ${singular}`);
+  }
+  return out;
+}
+
+function clampAnimalGroupSubject(subject) {
+  let out = String(subject || "")
+    .replace(/\b(four|five|six|seven|eight|nine|ten|eleven|twelve|[4-9]|[1-9]\d+)\s+/gi, "three ")
+    .replace(/\b(several|many|a bunch of|a crowd of|a pack of|a flock of|a swarm of|a litter of)\s+/gi, "three ")
+    .replace(/\b(?:a|an|the)\s+(?:small\s+)?(?:cluster|group|line|row)\s+of\s+/gi, "three ")
+    .replace(/\b(?:small\s+)?(?:cluster|group|line|row)\s+of\s+/gi, "three ")
+    .replace(/\bbaby animals\b/gi, "two or three baby animals");
+  out = out
+    .replace(/\bthree\b(?=[^,;]*\band one\b)/gi, "two")
+    .replace(/\btwo\b([^,;]*\band )two\b/gi, "two$1one");
+  return singularizeOneAnimalPlurals(out).trim();
+}
+
+function clampAnimalGroupField(text) {
+  let out = String(text || "")
+    .replace(/\b(four|five|six|seven|eight|nine|ten|eleven|twelve|[4-9]|[1-9]\d+)\s+/gi, "three ")
+    .replace(/\b(several|many|a crowd of|a pack of|a flock of|a swarm of|a litter of)\s+/gi, "two or three ")
+    .replace(/\b(?:a|an|the)\s+(?:small\s+)?(?:cluster|group|line|row)\s+of\s+/gi, "three ")
+    .replace(/\b(?:small\s+)?(?:cluster|group|line|row)\s+of\s+/gi, "three ");
+  out = out
+    .replace(/\bthree\b(?=[^,;]*\band one\b)/gi, "two")
+    .replace(/\btwo\b([^,;]*\band )two\b/gi, "two$1one");
+  return singularizeOneAnimalPlurals(out);
+}
+
+function clampAnimalGroupSize(brief) {
+  if (brief.subjectKind !== "animal") return brief;
+  const out = {
+    ...brief,
+    subject: clampAnimalGroupSubject(brief.subject),
+  };
+  for (const field of ["action", "composition", "cameraAngle"]) {
+    if (out[field]) out[field] = clampAnimalGroupField(out[field]);
+  }
+  return out;
 }
 
 function subjectHasExplicitEthnicity(subject) {
@@ -1460,7 +1531,7 @@ The final image must feel like:
 - emotionally loud: huge grin, scream-laugh, shock, wind-blasted joy, full-body confidence, or unhinged but happy reaction
 - happy, positive, and goofy in a believable way, not mellow wellness content
 - visually eventful: motion, splash, mist, wind, flash, smoke, height, speed, weird scale, huge view, rainbow, sunset, warm rain, night-out singing, hiking victory, or one absurd peak-frame detail
-- for animals, favor smiling into camera, goofy close-ups, tiny paws, jumping, sprinting, playful piles, bright nature when it fits, cozy flash pet photos, flowers, ice, beach, grass, colorful yards, warm window light, and tight multi-animal chaos when it still reads instantly
+- for animals, favor single expressive animals first; if using a group, use only 2-3 animals max. Good animal moments: smiling into camera, goofy close-ups, tiny paws, jumping, sprinting, playful piles, bright nature when it fits, cozy flash pet photos, flowers, ice, beach, grass, colorful yards, warm window light, and tight 2-3 animal chaos when it still reads instantly
 - by default, the image should feel bright, inspiring, funny, optimistic, and happy enough to work as a motivational widget background
 - the situation may be surreal or staged, but every clothing item, prop, and setting detail must make visual sense together
 - grainy early-2000s digital photography with enough resolution to look good
@@ -1494,7 +1565,8 @@ Hard requirements:
 - do not name, copy, or imply a specific real celebrity; "celebrity-level presence" should mean styling, confidence, and aura only
 - do not depict exact fictional characters, named franchises, team logos, superhero logos, brand logos, or recognizable celebrity faces; translate any reference into generic styling, costume, posture, and era
 - avoid random clutter and multiple competing stories; one wild thing may happen, but keep the chaos readable and mostly low/mid frame
-- if there are multiple animals, keep them in one tight playful cluster with one readable action; do not scatter them across the image
+- if there are multiple animals, use 2 or 3 animals max, keep them in one tight playful cluster with one readable action, and do not scatter them across the image
+- never generate animal crowds, flocks, swarms, packs, big litters, or more than 3 animals
 - avoid sickly green/yellow/cyan color casts; prefer natural early-digital blues, greens, warm sunlight, clean whites, or pastel sunset
 - for people: clothing and accessories must fit the setting (no bike helmets unless cycling/skating, no life jackets away from water, no random safety gear)
 - absurd animal behavior is allowed when it looks like a real internet snapshot: headphones, soda bottle, rude little paw pose, sunglasses, gaming desk, or prop comedy can be great
@@ -1514,9 +1586,9 @@ Great outcome examples in spirit:
 - a happy dog huge in the foreground on a blue-sky hill
 - a smiling cow close to a fisheye lens in a field
 - two puppies tumbling over each other in a backyard, motion-blurred paws, huge clean sky above
-- tiny kittens climbing out of a cardboard box in a messy foster-room corner with lamp glow and window light above
-- ducklings charging through a shallow puddle like a tiny parade under a pale sky
-- baby goats mid-bounce off a little bench in a sunny farmyard
+- two or three tiny kittens climbing out of a cardboard box in a messy foster-room corner with lamp glow and window light above
+- two or three ducklings charging through a shallow puddle like a tiny parade under a pale sky
+- two or three baby goats mid-bounce off a little bench in a sunny farmyard
 - an orange cat wearing huge headphones at a messy gaming desk, drinking from a soda bottle
 - a cat giving attitude with one paw raised in a blurry bedroom photo
 - a kid in a life jacket looking at bright ocean water
@@ -1550,7 +1622,8 @@ Return only the final image prompt as plain text.`;
 function sceneSpecificPromptNotes(brief) {
   const id = String(brief.conceptId || "");
   const notes = [];
-  const guidanceIdea = String(brief.guidance?.idea || "").trim();
+  const rawGuidanceIdea = String(brief.guidance?.idea || "").trim();
+  const guidanceIdea = brief.subjectKind === "animal" ? clampAnimalGroupField(rawGuidanceIdea) : rawGuidanceIdea;
   const guidanceVibe = String(brief.guidance?.vibePresetDescription || "").trim();
 
   if (guidanceIdea) {
@@ -1642,7 +1715,7 @@ function sceneSpecificPromptNotes(brief) {
 
   if (brief.subjectKind === "animal") {
     notes.push(
-      "ANIMAL MEME ENERGY: keep the animal or tight animal cluster as the unmistakable hero, low in frame, with a funny expression, camera-facing smile, tiny-paw motion, jump, sprint, or playful posture that feels like a real found internet photo. Good worlds include blue-sky grass, flowers, bright ice, beach, shallow splash, colorful yard, cozy room flash, or warm window light. Avoid glossy wildlife photography, foggy riverbanks, muddy banks, swamp water, dark wet fur piles, grey-green gloom, or documentary nature mood."
+      "ANIMAL MEME ENERGY: keep one animal as the hero, or a tight cluster of only 2-3 animals max, low in frame, with a funny expression, camera-facing smile, tiny-paw motion, jump, sprint, or playful posture that feels like a real found internet photo. Good worlds include blue-sky grass, flowers, bright ice, beach, shallow splash, colorful yard, cozy room flash, or warm window light. Avoid animal crowds, big litters, flocks, swarms, glossy wildlife photography, foggy riverbanks, muddy banks, swamp water, dark wet fur piles, grey-green gloom, or documentary nature mood."
     );
   }
 
