@@ -23,6 +23,7 @@ const MAX_BIG_TEXT_LENGTH = 44;
 const CAPTION_LINE_GAP_RATIO = 0.12;
 const CAPTION_SMALL_FONT_RATIO = 0.032;
 const CAPTION_BIG_FONT_RATIO = 0.06;
+const CAPTION_MAX_TEXT_WIDTH_RATIO = 0.78;
 const MEDIUM_WIDGET_WIDTH = 1024;
 const MEDIUM_WIDGET_HEIGHT = Math.round(MEDIUM_WIDGET_WIDTH * 155 / 329);
 
@@ -2244,6 +2245,9 @@ export const DEFAULT_CAPTION_LAYOUT = {
   yRatio: 0.3,
   textColor: null,
   fontScale: 1,
+  smallFontScale: 1,
+  bigFontScale: 1,
+  textSizeMode: "together",
 };
 
 export const DEFAULT_MEDIUM_CAPTION_LAYOUT = {
@@ -2257,12 +2261,18 @@ export function normalizeCaptionLayout(layout = {}) {
   const xRatio = Number(layout.xRatio);
   const yRatio = Number(layout.yRatio);
   const fontScale = Number(layout.fontScale);
+  const smallFontScale = Number(layout.smallFontScale);
+  const bigFontScale = Number(layout.bigFontScale);
   const textColor = layout.textColor === "#ffffff" || layout.textColor === "#050505" ? layout.textColor : null;
+  const textSizeMode = layout.textSizeMode === "separate" ? "separate" : "together";
   return {
     xRatio: Number.isFinite(xRatio) ? Math.min(0.92, Math.max(0.08, xRatio)) : DEFAULT_CAPTION_LAYOUT.xRatio,
     yRatio: Number.isFinite(yRatio) ? Math.min(0.88, Math.max(0.08, yRatio)) : DEFAULT_CAPTION_LAYOUT.yRatio,
     textColor,
-    fontScale: Number.isFinite(fontScale) ? Math.min(1.45, Math.max(0.7, fontScale)) : DEFAULT_CAPTION_LAYOUT.fontScale,
+    fontScale: Number.isFinite(fontScale) ? Math.min(1.8, Math.max(0.6, fontScale)) : DEFAULT_CAPTION_LAYOUT.fontScale,
+    smallFontScale: Number.isFinite(smallFontScale) ? Math.min(2.2, Math.max(0.5, smallFontScale)) : DEFAULT_CAPTION_LAYOUT.smallFontScale,
+    bigFontScale: Number.isFinite(bigFontScale) ? Math.min(2.2, Math.max(0.5, bigFontScale)) : DEFAULT_CAPTION_LAYOUT.bigFontScale,
+    textSizeMode,
   };
 }
 
@@ -2277,11 +2287,23 @@ export function normalizeMediumCaptionLayout(layout = {}, fallback = DEFAULT_MED
   };
 }
 
-export function captionFontSizes(width, caption, fontScale = 1) {
-  const maxTextWidth = width * 0.66;
+function lineFontScales(layoutOrFontScale = 1) {
+  if (typeof layoutOrFontScale === "number") {
+    const fontScale = Number.isFinite(layoutOrFontScale) ? layoutOrFontScale : 1;
+    return { smallScale: fontScale, bigScale: fontScale };
+  }
   return {
-    smallSize: fitTextSize(caption.smallText, Math.round(width * CAPTION_SMALL_FONT_RATIO * fontScale), maxTextWidth),
-    bigSize: fitTextSize(caption.bigText, Math.round(width * CAPTION_BIG_FONT_RATIO * fontScale), maxTextWidth),
+    smallScale: layoutOrFontScale.fontScale * layoutOrFontScale.smallFontScale,
+    bigScale: layoutOrFontScale.fontScale * layoutOrFontScale.bigFontScale,
+  };
+}
+
+export function captionFontSizes(width, caption, fontScale = 1) {
+  const maxTextWidth = width * CAPTION_MAX_TEXT_WIDTH_RATIO;
+  const { smallScale, bigScale } = lineFontScales(fontScale);
+  return {
+    smallSize: fitTextSize(caption.smallText, Math.round(width * CAPTION_SMALL_FONT_RATIO * smallScale), maxTextWidth),
+    bigSize: fitTextSize(caption.bigText, Math.round(width * CAPTION_BIG_FONT_RATIO * bigScale), maxTextWidth),
   };
 }
 
@@ -2332,7 +2354,7 @@ async function squareBaseImage(imageBytes) {
 }
 
 async function overlayCaptionOnFrame(basePng, width, height, caption, normalizedLayout) {
-  const { smallSize, bigSize } = captionFontSizes(width, caption, normalizedLayout.fontScale);
+  const { smallSize, bigSize } = captionFontSizes(width, caption, normalizedLayout);
   const x = Math.round(width * normalizedLayout.xRatio);
   const yTop = Math.round(height * normalizedLayout.yRatio);
   const lineGap = Math.round(bigSize * CAPTION_LINE_GAP_RATIO);

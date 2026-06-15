@@ -57,7 +57,7 @@ export const api = {
     selectedCaptionIndex?: number;
     captionModel?: string;
     captionPrompt?: string;
-    layout: { xRatio: number; yRatio: number; textColor: "#050505" | "#ffffff"; fontScale: number };
+    layout: CaptionLayout;
     mediumLayout: MediumCaptionLayout;
   }) =>
     request<{
@@ -69,13 +69,13 @@ export const api = {
       caption: CaptionText;
       captionOptions?: CaptionText[];
       selectedCaptionIndex?: number;
-      captionLayout: { xRatio: number; yRatio: number; textColor: string | null; fontScale: number };
+      captionLayout: CaptionLayout;
       mediumCaptionLayout: MediumCaptionLayout;
       captionModel: string;
     }>("/api/backgrounds/approve", { method: "POST", body: JSON.stringify(opts) }),
   renderDraftCaption: (opts: {
     id: string;
-    layout: { xRatio: number; yRatio: number; textColor: "#050505" | "#ffffff"; fontScale: number };
+    layout: CaptionLayout;
     mediumLayout: MediumCaptionLayout;
     caption?: CaptionText;
   }) =>
@@ -85,7 +85,7 @@ export const api = {
       imageUrl: string;
       mediumImageUrl: string;
       caption: CaptionText;
-      captionLayout: { xRatio: number; yRatio: number; textColor: string | null; fontScale: number };
+      captionLayout: CaptionLayout;
       mediumCaptionLayout: MediumCaptionLayout;
     }>("/api/drafts/render-caption", { method: "POST", body: JSON.stringify(opts) }),
   prompts: () => request<{ prompts: Prompt[] }>("/api/prompts"),
@@ -148,6 +148,9 @@ export interface CaptionLayout {
   yRatio: number;
   textColor: "#050505" | "#ffffff" | null;
   fontScale?: number;
+  smallFontScale?: number;
+  bigFontScale?: number;
+  textSizeMode?: "together" | "separate";
 }
 
 export interface MediumCaptionLayout extends CaptionLayout {

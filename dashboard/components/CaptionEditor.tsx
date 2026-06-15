@@ -174,20 +174,6 @@ export function CaptionEditor({
     }
   }
 
-  function adjustFontScale(delta: number) {
-    setLayout((l) => ({
-      ...l,
-      fontScale: clamp(Math.round((l.fontScale + delta) * 100) / 100, 0.7, 1.45),
-    }));
-  }
-
-  function adjustMediumFontScale(delta: number) {
-    setMediumLayout((l) => ({
-      ...l,
-      fontScale: clamp(Math.round((l.fontScale + delta) * 100) / 100, 0.7, 1.45),
-    }));
-  }
-
   function nudgeMediumCrop(deltaX: number, deltaY: number) {
     setMediumLayout((l) => ({
       ...l,
@@ -266,16 +252,7 @@ export function CaptionEditor({
                 />
               </View>
             )}
-            <Text style={styles.controlLabel}>Text size</Text>
-            <View style={styles.sizeRow}>
-              <Pressable onPress={() => adjustFontScale(-0.05)} style={styles.sizeBtn}>
-                <Text style={styles.sizeBtnText}>-</Text>
-              </Pressable>
-              <Text style={styles.sizeValue}>{Math.round(layout.fontScale * 100)}%</Text>
-              <Pressable onPress={() => adjustFontScale(0.05)} style={styles.sizeBtn}>
-                <Text style={styles.sizeBtnText}>+</Text>
-              </Pressable>
-            </View>
+            <TextSizeControls layout={layout} onChange={setLayout} />
             <Text style={styles.controlLabel}>Text color</Text>
             <View style={styles.colorRow}>
               <Pressable
@@ -389,16 +366,7 @@ export function CaptionEditor({
           {mediumMode === "text" ? (
             <View style={styles.mediumControls}>
               <View style={styles.controlBlock}>
-                <Text style={styles.controlLabel}>Text size</Text>
-                <View style={styles.sizeRow}>
-                  <Pressable onPress={() => adjustMediumFontScale(-0.05)} style={styles.sizeBtn}>
-                    <Text style={styles.sizeBtnText}>-</Text>
-                  </Pressable>
-                  <Text style={styles.sizeValue}>{Math.round(mediumLayout.fontScale * 100)}%</Text>
-                  <Pressable onPress={() => adjustMediumFontScale(0.05)} style={styles.sizeBtn}>
-                    <Text style={styles.sizeBtnText}>+</Text>
-                  </Pressable>
-                </View>
+                <TextSizeControls layout={mediumLayout} onChange={setMediumLayout} />
               </View>
               <View style={styles.controlBlock}>
                 <Text style={styles.controlLabel}>Color</Text>
@@ -470,6 +438,104 @@ function CropNudgeButton({
     <Pressable onPress={onPress} style={styles.nudgeBtn}>
       {children}
     </Pressable>
+  );
+}
+
+type TextSizeKey = "fontScale" | "smallFontScale" | "bigFontScale";
+
+function TextSizeControls<T extends CaptionLayout>({
+  layout,
+  onChange,
+}: {
+  layout: T;
+  onChange: React.Dispatch<React.SetStateAction<T>>;
+}) {
+  const mode = layout.textSizeMode === "separate" ? "separate" : "together";
+
+  function setMode(nextMode: "together" | "separate") {
+    onChange((current) => ({ ...current, textSizeMode: nextMode }));
+  }
+
+  function adjust(key: TextSizeKey, delta: number) {
+    onChange((current) => {
+      const min = key === "fontScale" ? 0.6 : 0.5;
+      const max = key === "fontScale" ? 1.8 : 2.2;
+      return {
+        ...current,
+        [key]: clamp(Math.round((current[key] + delta) * 100) / 100, min, max),
+      };
+    });
+  }
+
+  return (
+    <View style={styles.textSizeBlock}>
+      <View style={styles.controlHeaderRow}>
+        <Text style={styles.controlLabel}>Text size</Text>
+        <View style={styles.sizeModeRow}>
+          <Pressable
+            onPress={() => setMode("together")}
+            style={[styles.sizeModeBtn, mode === "together" && styles.sizeModeBtnActive]}
+          >
+            <Text style={[styles.sizeModeText, mode === "together" && styles.sizeModeTextActive]}>Together</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setMode("separate")}
+            style={[styles.sizeModeBtn, mode === "separate" && styles.sizeModeBtnActive]}
+          >
+            <Text style={[styles.sizeModeText, mode === "separate" && styles.sizeModeTextActive]}>Separate</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {mode === "together" ? (
+        <SizeStepper
+          label="Both"
+          value={Math.round(layout.fontScale * 100)}
+          onDecrease={() => adjust("fontScale", -0.05)}
+          onIncrease={() => adjust("fontScale", 0.05)}
+        />
+      ) : (
+        <>
+          <SizeStepper
+            label="Top"
+            value={Math.round(layout.fontScale * layout.smallFontScale * 100)}
+            onDecrease={() => adjust("smallFontScale", -0.05)}
+            onIncrease={() => adjust("smallFontScale", 0.05)}
+          />
+          <SizeStepper
+            label="Bottom"
+            value={Math.round(layout.fontScale * layout.bigFontScale * 100)}
+            onDecrease={() => adjust("bigFontScale", -0.05)}
+            onIncrease={() => adjust("bigFontScale", 0.05)}
+          />
+        </>
+      )}
+    </View>
+  );
+}
+
+function SizeStepper({
+  label,
+  value,
+  onDecrease,
+  onIncrease,
+}: {
+  label: string;
+  value: number;
+  onDecrease: () => void;
+  onIncrease: () => void;
+}) {
+  return (
+    <View style={styles.sizeRow}>
+      <Text style={styles.sizeLineLabel}>{label}</Text>
+      <Pressable onPress={onDecrease} style={styles.sizeBtn}>
+        <Text style={styles.sizeBtnText}>-</Text>
+      </Pressable>
+      <Text style={styles.sizeValue}>{value}%</Text>
+      <Pressable onPress={onIncrease} style={styles.sizeBtn}>
+        <Text style={styles.sizeBtnText}>+</Text>
+      </Pressable>
+    </View>
   );
 }
 
@@ -592,6 +658,12 @@ const styles = StyleSheet.create({
   mediumControls: { gap: 16 },
   controlBlock: { gap: 8 },
   controlLabel: { color: C.textMuted, fontSize: 11, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.6 },
+  controlHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
   textControls: { gap: 8, marginBottom: 8 },
   textInput: {
     backgroundColor: C.surface,
@@ -606,7 +678,29 @@ const styles = StyleSheet.create({
     outlineStyle: "none" as any,
   },
   textInputLarge: { fontSize: 18, fontWeight: "900" },
-  sizeRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 },
+  textSizeBlock: { gap: 8, marginBottom: 8 },
+  sizeModeRow: {
+    flexDirection: "row",
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+  sizeModeBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: C.surface,
+  },
+  sizeModeBtnActive: { backgroundColor: C.accent },
+  sizeModeText: { color: C.textSecondary, fontSize: 11, fontWeight: "800" },
+  sizeModeTextActive: { color: "#050505" },
+  sizeRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  sizeLineLabel: {
+    width: 58,
+    color: C.textSecondary,
+    fontSize: 12,
+    fontWeight: "800",
+  },
   sizeBtn: {
     width: 40,
     height: 34,
