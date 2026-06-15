@@ -48,7 +48,7 @@ const META_DIR = "content/meta";
 const CAMERA_LOOKS = {
   auto: "let the generator choose the best camera texture for the scene",
   "2000s-digital": "grainy high-contrast 2000s digital camera, crushed shadows, blown highlights, saturated color, JPEG softness",
-  "cheap-flash": "cheap compact-camera flash, hard shadows, shiny skin, dark simple background, accidental party-photo energy",
+  "cheap-flash": "cheap compact-camera flash, hard shadows, shiny skin, dark real-location background, accidental party-photo energy",
   disposable: "disposable camera photo, soft blur, washed colors, dust, imperfect focus, vacation-camera chaos",
   fisheye: "wide-angle fisheye snapshot, close foreground distortion, goofy low-angle internet-photo energy",
   "night-out": "high-contrast 2004 pocket camera flash at night, wet pavement, neon reflections, black sky",
@@ -371,8 +371,10 @@ ${args.styleNotes || "(none)"}
 
 Hard creative rules:
 - Keep the result like a real forgotten camera-roll photo: early-2000s digital, grain, cheap flash or imperfect exposure, accidental framing.
-- Leave a clean text-safe zone in the upper third or upper half: sky, dark awning, blank wall, smoke, mist, sunset, or simple color field.
+- Use a specific, interesting real place. The background can be readable for text, but it must still have context: sky, smoke, mist, sunset, arena rafters, packed bleachers, convention lights, neon reflections, rain, crowd bokeh, bridge underside, high ceiling, or event lighting.
+- Never solve text space with a plain wall, blank beige wall, empty studio backdrop, blank concrete, plain curtain, or featureless indoor surface.
 - Make it emotionally readable: happy, iconic, weird, confident, funny, scream-laughing, or caught in a peak moment.
+- If the user asks for costume, sport, formalwear, celebrity-adjacent, or pop-reference energy, put it in a fitting world: a convention floor, real boxing ring, stadium, paddock, hotel driveway, rooftop, arcade, street meet, public pool, beach sprint, or crowded event space.
 - If the user names a real person, actor, athlete, musician, celebrity, public figure, or fictional/franchise character, DO NOT depict that exact person/character. Translate it into generic styling, era, costume, posture, subject type, or aesthetic only.
 - Do not include logos, team crests, brand marks, franchise symbols, typography, signs as readable text, or exact celebrity likenesses.
 - If the idea mentions a specific famous place with lots of signs, keep signage unreadable/blurred and focus on lights, color, crowd, and mood.
@@ -427,9 +429,18 @@ function buildDirectedSceneFallback({ args, index, count, guidance }) {
   const camera = args.cameraLook === "auto"
     ? "grainy high-contrast 2000s digital camera photo"
     : CAMERA_LOOKS[args.cameraLook];
-  const setting = /\btimes square|city|street|night|neon\b/i.test(idea)
-    ? "a busy neon city square at night with blurred unreadable signs and a dark open sky above"
-    : "a real camera-roll location with a clean text-safe upper background";
+  let setting = "a real camera-roll location with interesting context and a readable upper sky, ceiling, mist, lights, or crowd-glow area";
+  if (/\bspace|sci-fi|helmet|convention\b/i.test(idea)) {
+    setting = "a busy space convention atrium with suspended planet props, vendor booths low in frame, camera flashes, and a high industrial ceiling";
+  } else if (/\bbox|boxing|boxer|glove|ring\b/i.test(idea)) {
+    setting = "a real boxing ring under arena lights with ropes low in frame and packed bleachers fading into darkness behind";
+  } else if (/\btimes square|city|street|night|neon\b/i.test(idea)) {
+    setting = "a busy neon city square at night with blurred unreadable signs, crowd glow, wet pavement, and a dark open sky above";
+  } else if (/\bstreet.?racer|tuner|modified car|fast car|garage\b/i.test(idea)) {
+    setting = "a night street-race meet under an overpass with modified cars, blue underglow, smoke, wet pavement, and bridge lights";
+  } else if (/\btux|dress|formal|red carpet|hotel|paparazzi\b/i.test(idea)) {
+    setting = "a hotel driveway at night with wet pavement, velvet ropes, valet lights, blurred camera flashes, and a dark entrance canopy";
+  }
   const vibe = args.vibePreset === "auto" ? (args.directionMode === "series" ? "custom series vibe" : "custom directed scene") : args.vibePreset.replace(/-/g, " ");
 
   return {
@@ -444,8 +455,8 @@ function buildDirectedSceneFallback({ args, index, count, guidance }) {
       weather: args.cameraLook === "night-out" ? "clear night with distant city glow" : "high-contrast 2000s light",
       timeOfDay: args.cameraLook === "night-out" ? "night" : "2000s camera-roll light",
       prop: "nothing",
-      cameraAngle: "subject low in frame with a clean text-safe upper background",
-      composition: "subject low in frame with a clean text-safe upper background",
+      cameraAngle: "subject low in frame with a readable but interesting upper background",
+      composition: "subject low in frame with a readable but interesting upper background",
       colorDirection: "high-contrast 2000s digital color with crushed shadows",
       emotion: "funny",
       copyFormula: "group-chat line, then iconic/gangsta/real payoff",

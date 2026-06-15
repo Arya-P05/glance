@@ -195,10 +195,10 @@ const MOODBOARD_SETTINGS = [
   "a mountain overlook with hazy hills",
   "a hiking ridge with a giant sunset view",
   "a snowy field with bright white negative space",
-  "a front porch with blank siding behind it",
-  "a sunny bedroom corner with a plain wall",
-  "a messy bedroom gaming desk with a blank wall above",
-  "a cluttered desk under a plain wall",
+  "a front porch with hanging plants, peeling paint, and bright sky above the roofline",
+  "a sunny bedroom corner with rumpled bedding, a glowing lamp, plants, and hard window light climbing upward",
+  "a messy bedroom gaming desk with glowing monitors, cables, snack wrappers, and LED light spilling upward",
+  "a cluttered desk under shelves, tangled cables, taped photos with no readable text, and warm lamp glare",
   "a grocery store parking lot",
   "an empty basketball court",
   "a backyard with harsh afternoon sun",
@@ -212,7 +212,7 @@ const MOODBOARD_SETTINGS = [
   "a county fair parking lot",
   "a picnic area with pine trees",
   "a desert road with pastel sky",
-  "a laundromat with a blank wall",
+  "a laundromat with spinning washer doors, detergent bottles, tile glare, and fluorescent ceiling light",
   "a school field on a sunny day",
   "inside a fighter jet cockpit with sunset sky outside",
 ];
@@ -253,8 +253,8 @@ const CAMERA_TEXTURES = [
 const COMPOSITION_IDEAS = [
   "subject huge in the lower third with a massive clean sky above",
   "subject close to the lens, low camera angle, open negative space above",
-  "subject slightly off-center with blank wall or sky for text",
-  "subject filling the bottom half, horizon low, simple background",
+  "subject slightly off-center with an interesting but low-detail sky, ceiling, mist, or lights above",
+  "subject filling the bottom half, horizon low, readable but specific background",
   "wide-angle close-up with goofy face and lots of empty color above",
   "simple candid frame with one clear focal point and no clutter",
 ];
@@ -266,21 +266,21 @@ const COLOR_DIRECTIONS = [
   "pastel sunset colors",
   "high-contrast 2000s digital color with crushed shadows",
   "rainbow-after-rain color against a pale sky",
-  "flash-lit subject against dark simple background",
+  "flash-lit subject against dark venue lights and early-digital shadows",
   "bright white negative space with black-text-friendly contrast",
   "clean early-digital blue and green color",
 ];
 
 const DESK_SETTINGS = [
-  "a messy bedroom gaming desk with a blank wall above",
-  "a cluttered desk under a plain wall",
-  "a sunny bedroom corner with a plain wall",
+  "a messy bedroom gaming desk with glowing monitors, tangled cables, and LED light spilling upward",
+  "a cluttered desk under shelves, taped photos with no readable text, and warm lamp glare",
+  "a sunny bedroom corner with rumpled bedding, plants, and hard window light climbing upward",
 ];
 
 const INDOOR_SETTINGS = [
-  "a sunny bedroom corner with a plain wall",
-  "a laundromat with a blank wall",
-  "a front porch with blank siding behind it",
+  "a sunny bedroom corner with rumpled bedding, plants, and hard window light climbing upward",
+  "a laundromat with spinning washer doors, detergent bottles, tile glare, and fluorescent ceiling light",
+  "a front porch with hanging plants, peeling paint, and bright sky above the roofline",
 ];
 
 const FIREWORKS_SETTINGS = [
@@ -343,7 +343,7 @@ const ACTION_SETTING_HINTS = [
   { pattern: /hiking|triumphant/, settings: ["a hiking ridge with a giant sunset view", "a mountain overlook with hazy hills"] },
   { pattern: /warm rain|dancing in warm rain/, settings: ["a wet city street after rain with neon reflections", "a backyard with harsh afternoon sun"] },
   { pattern: /flower|pure joy|running with/, settings: FIELD_SETTINGS_NO_FIREWORKS },
-  { pattern: /kiddie pool|splashing/, settings: ["a backyard with harsh afternoon sun", "a front porch with blank siding behind it"] },
+  { pattern: /kiddie pool|splashing/, settings: ["a backyard with harsh afternoon sun", "a front porch with hanging plants, peeling paint, and bright sky above the roofline"] },
   { pattern: /downhill|grassy/, settings: ["a huge green hill under a bright blue sky", "a farm field with a low horizon", "a sunflower field"] },
   { pattern: /snowy day/, settings: COLD_SETTINGS },
 ];
@@ -351,14 +351,14 @@ const ACTION_SETTING_HINTS = [
 const SKY_COMPOSITIONS = [
   "subject huge in the lower third with a massive clean sky above",
   "subject close to the lens, low camera angle, open negative space above",
-  "subject filling the bottom half, horizon low, simple background",
+  "subject filling the bottom half, horizon low, readable but specific background",
   "wide-angle close-up with goofy face and lots of empty color above",
 ];
 
 const WALL_COMPOSITIONS = [
-  "subject close to the lens in the lower third with a blank wall above",
-  "subject slightly off-center with blank wall or sky for text",
-  "simple candid frame with one clear focal point and no clutter",
+  "subject close to the lens in the lower third with interesting window light, ceiling, or shelves above",
+  "subject slightly off-center with a readable but specific upper background",
+  "simple candid frame with one clear focal point and contextual details around the edges",
 ];
 
 export const SUBJECTS = [
@@ -462,7 +462,7 @@ export const SETTINGS = [
   "a mall parking lot",
   "a campground",
   "a picnic area",
-  "a plain bedroom wall",
+  "a lived-in bedroom corner with lamp glow and plants",
   "a sunny corner of a room",
   "a quiet kitchen",
   "a grassy hill",
@@ -490,7 +490,7 @@ const PEOPLE_SETTINGS = [
   "a front porch",
   "a campground",
   "a picnic area",
-  "a plain bedroom wall",
+  "a lived-in bedroom corner with lamp glow and plants",
   "a sunny corner of a room",
   "a quiet kitchen",
   "a grassy hill",
@@ -509,7 +509,7 @@ const SPECIAL_SETTINGS = {
 };
 
 const CAT_SETTINGS = [
-  "a plain bedroom wall",
+  "a lived-in bedroom corner with lamp glow and plants",
   "a sunny corner of a room",
   "a quiet kitchen",
   "a backyard",
@@ -791,7 +791,7 @@ const SCENE_PRESETS = [
   },
   {
     subject: "a black cat",
-    setting: "a plain bedroom wall",
+    setting: "a lived-in bedroom corner with lamp glow and plants",
     action: "looking confused but oddly proud",
     camera: "early digital camera photo",
     weather: "overcast",
@@ -879,6 +879,163 @@ function sceneContext(brief) {
 function settingMatchesPool(setting, pool) {
   const s = setting.toLowerCase();
   return pool.some((candidate) => s === candidate.toLowerCase());
+}
+
+const BORING_BACKGROUND_PATTERN =
+  /\b(blank|plain|off-white|beige|mostly blank)\b.*\b(wall|curtain|backdrop|awning|ceiling|siding)\b|\b(wall|curtain|backdrop|awning|ceiling|siding)\b.*\b(blank|plain|off-white|beige|mostly blank)\b|\bblank wall\b|\bplain wall\b|\bwall above\b|\bblank concrete\b|\bblank warehouse\b|\bblank gym\b/i;
+
+function hasBoringBackground(brief) {
+  return BORING_BACKGROUND_PATTERN.test(
+    `${brief.setting || ""} ${brief.composition || ""} ${brief.cameraAngle || ""}`
+  );
+}
+
+function applyBackgroundUpgrade(out, setting, composition, colorDirection) {
+  out.setting = setting;
+  out.composition = composition;
+  out.cameraAngle = composition;
+  out.colorDirection = colorDirection;
+  return out;
+}
+
+function upgradeBoringBackground(brief) {
+  if (!hasBoringBackground(brief)) return brief;
+
+  const out = { ...brief };
+  const ctx = `${out.conceptId || ""} ${out.vibe || ""} ${out.subject || ""} ${out.action || ""} ${out.setting || ""}`.toLowerCase();
+
+  if (/space|sci-fi|helmet|convention/.test(ctx)) {
+    return applyBackgroundUpgrade(
+      out,
+      "a busy space convention atrium with suspended planet props, vendor booths low in frame, camera flashes, and a high industrial ceiling",
+      "costumed subject low in frame, convention props and ceiling lights above forming a readable but interesting text zone",
+      "cheap flash against glossy black costume details, blue convention lights, and warm carpet tones"
+    );
+  }
+
+  if (/boxer|boxing|glove|shadowboxing/.test(ctx)) {
+    return applyBackgroundUpgrade(
+      out,
+      "a real boxing ring under arena lights with ropes low in frame and packed bleachers fading into darkness behind",
+      "boxer low in the ring with gloves readable, crowd glow and dark rafters above for text",
+      "high-contrast 2000s flash, red ropes, dark crowd, and bright arena highlights"
+    );
+  }
+
+  if (/garage|workshop|machine|sports car|tech/.test(ctx)) {
+    return applyBackgroundUpgrade(
+      out,
+      "a messy garage workshop at night with a half-built machine, tool benches, a red sports car, and overhead shop lights",
+      "subject and machine low in frame, tool clutter around the edges, overhead lights and dark rafters above for text",
+      "cheap flash, red car paint, oily shadows, and high-contrast garage color"
+    );
+  }
+
+  if (/street-racer|modified|tuner|warehouse|underglow|coupe/.test(ctx)) {
+    return applyBackgroundUpgrade(
+      out,
+      "a night street-race meet under an overpass with modified cars, blue underglow, smoke, wet pavement, and bridge lights",
+      "people and cars low in frame, smoke and bridge darkness above forming a readable text zone",
+      "blue underglow, wet asphalt reflections, cheap flash, and crushed black shadows"
+    );
+  }
+
+  if (/red-carpet|actor|tux|formalwear|hotel driveway|gala|evening dress|paparazzi/.test(ctx)) {
+    return applyBackgroundUpgrade(
+      out,
+      "a hotel driveway at night with wet pavement, velvet ropes, valet lights, blurred camera flashes, and a dark entrance canopy",
+      "formalwear low and close, flash reflections low, dark canopy and distant lights above for text",
+      "compact-camera flash, black night shadows, wet pavement highlights, and warm hotel lights"
+    );
+  }
+
+  if (/press|mma|fight-night|fighter/.test(ctx)) {
+    return applyBackgroundUpgrade(
+      out,
+      "a fight-night media room with camera flashes, folding chairs, reporters at the edges, and a sponsor-free dark curtain",
+      "subject low and close, flash glare on face, dark curtain and camera lights above for text",
+      "cheap flash, crushed black curtain, shiny suit highlights, and hard early-digital contrast"
+    );
+  }
+
+  if (/mascot|birthday|community hall|costume head|fuzzy/.test(ctx)) {
+    return applyBackgroundUpgrade(
+      out,
+      "a community hall birthday party with balloons, streamers, folding chairs, a cake table, and harsh compact-camera flash",
+      "costume low and moving, party decorations around the edges, ceiling lights and streamers above for text",
+      "flash-lit party color, red costume fuzz, warm ceiling light, and crushed shadows"
+    );
+  }
+
+  if (/community gym|school gym|gym wall|basketball|chair/.test(ctx)) {
+    return applyBackgroundUpgrade(
+      out,
+      "a school gym with polished floor, folded bleachers, blurred banners with no readable text, and high rafters",
+      "jumping subject low and fully visible, gym floor low, rafters and blurred banners above for text",
+      "high-contrast gym lights, polished wood reflections, and early-digital color"
+    );
+  }
+
+  if (/subway|platform|tiled/.test(ctx)) {
+    return applyBackgroundUpgrade(
+      out,
+      "an empty subway platform with tiled columns, dark tunnel depth, fluorescent light strips, and glossy floor reflections",
+      "subject low and slightly off-center, tunnel darkness and repeating fluorescent lights above for text",
+      "flash-lit subject, greenish fluorescent strips, dark tunnel, and glossy tile reflections"
+    );
+  }
+
+  if (/gaming|headphones|desk|monitor/.test(ctx)) {
+    return applyBackgroundUpgrade(
+      out,
+      "a messy gaming desk with glowing monitors, tangled cables, soda cans, controller clutter, and LED light spilling upward",
+      "subject low near the keyboard, monitor glow and shelves above forming a readable but specific upper zone",
+      "monitor blue, cheap flash, snack-wrapper highlights, and warm messy-room shadows"
+    );
+  }
+
+  if (/kitten|cardboard|cat|bedroom|apartment/.test(ctx)) {
+    return applyBackgroundUpgrade(
+      out,
+      "a lived-in bedroom corner with rumpled bedding, a cardboard box, plants, a lamp glow, and hard window light climbing upward",
+      "animal low in frame, bed and box low, window light and lamp glow above for text",
+      "warm flash, sun rectangles, soft bedding color, and early-digital shadows"
+    );
+  }
+
+  if (/bunn|rabbit|laundry|basket/.test(ctx)) {
+    return applyBackgroundUpgrade(
+      out,
+      "a busy laundry room with spinning washer doors, detergent bottles, towel piles, a laundry basket, and fluorescent ceiling light",
+      "basket and animals low in frame, washer circles and ceiling glow above for text",
+      "clean whites, hard flash, detergent color, and fluorescent early-digital glare"
+    );
+  }
+
+  if (/hallway|awkward|suit comedy|tweed/.test(ctx)) {
+    return applyBackgroundUpgrade(
+      out,
+      "a cheap hotel lobby hallway with patterned carpet, elevator doors, wall sconces, and harsh overhead light",
+      "subject low and centered, patterned carpet low, overhead lights and elevator shine above for text",
+      "warm beige hotel light, flash shadows, patterned carpet color, and old-camera softness"
+    );
+  }
+
+  if (out.subjectKind === "animal") {
+    return applyBackgroundUpgrade(
+      out,
+      "a specific lived-in room or yard with toys, plants, window light, messy edges, and a bright upper area",
+      "animal low in frame with playful clutter around the edges and window light or sky above for text",
+      "warm flash, natural blues and greens, bright window light, and early-digital texture"
+    );
+  }
+
+  return applyBackgroundUpgrade(
+    out,
+    "a real camera-roll location with visible context, lights, crowd edges, weather, or architecture, plus a readable upper zone",
+    "subject low in frame with specific environmental details around the edges and a simple sky, ceiling, mist, or light field above",
+    "high-contrast 2000s digital color with real location texture and readable upper light"
+  );
 }
 
 /** Keep `setting` as the single source of truth for WHERE; action is pose/behavior only. */
@@ -1130,7 +1287,7 @@ function harmonizeCreativeBrief(brief, rng = Math.random) {
     out.setting = pick(FIREWORKS_SETTINGS, rng);
     out.weather = "clear night with distant fireworks";
     out.timeOfDay = out.weather;
-    out.colorDirection = "flash-lit subject against dark simple background";
+    out.colorDirection = "flash-lit subject against dark venue lights and early-digital shadows";
     out.composition = "subject huge in the lower third with dark open sky and distant fireworks above";
     out.cameraAngle = out.composition;
   }
@@ -1163,8 +1320,9 @@ function harmonizeCreativeBrief(brief, rng = Math.random) {
 /** Wardrobe + prop + action/setting reconciliation without subject-pool overrides. */
 export function finalizeBrief(brief, rng = Math.random) {
   const reconciled = reconcileActionAndSetting(brief, rng);
-  const harmonized = assignCoherentWardrobe(reconciled, rng);
-  return reconcileProps(harmonized, rng);
+  const upgraded = upgradeBoringBackground(reconciled);
+  const harmonized = assignCoherentWardrobe(upgraded, rng);
+  return reconcileProps(upgradeBoringBackground(harmonized), rng);
 }
 
 function subjectHasExplicitEthnicity(subject) {
@@ -1288,7 +1446,8 @@ Hard requirements:
 - keep a clean text-safe zone in the upper third or upper half, but do not make the whole image empty or calm
 - the subject/action can occupy 30-60% of image height when the moment is dramatic; keep the main faces comfortably readable
 - keep the subject's face and body comfortably inside the frame; do not crop the face at the edge
-- keep the upper text area simple enough for later text: sky, blank wall, fog, snow, ocean, ceiling, smoke, mist, or simple color field
+- keep the upper text area simple enough for later text, but make it visually alive: sky, fog, snow, ocean, smoke, mist, arena rafters, convention lights, crowd bokeh, neon reflections, rain, high ceiling, bridge underside, or sunset glow
+- do not use a plain wall, blank beige wall, empty studio backdrop, plain curtain, blank concrete, or featureless indoor background; every background needs a specific place with visual context
 - use natural light only unless the camera style is flash
 - avoid corporate motivation, fantasy painting, 3D render, studio portrait, glossy ad, cinematic movie still, glossy editorial fashion shoot, shallow-depth product photography, or lifestyle stock photo
 - do not name, copy, or imply a specific real celebrity; "celebrity-level presence" should mean styling, confidence, and aura only
@@ -1300,6 +1459,7 @@ Hard requirements:
 - absurd animal behavior is allowed when it looks like a real internet snapshot: headphones, soda bottle, rude little paw pose, sunglasses, gaming desk, or prop comedy can be great
 - if an animal uses a human-like prop or pose, make it look like a real internet meme photo, cheap edit, costume, forced perspective, or lucky candid snapshot, not glossy CGI
 - prioritize an iconic peak moment over safe prettiness; the image should feel like something someone would save because it looks accidentally cool and a little insane
+- if the subject is in costume, sport gear, formalwear, or a pop-reference-inspired outfit, place them in a real contextual world: convention floor, real ring, stadium, paddock, hotel driveway, rooftop, arcade, street meet, or crowded event space
 - if any ingredients feel contradictory, reinterpret them into one coherent happy scene while preserving the core subject, action, and vibe
 
 Style discipline:
@@ -1313,7 +1473,7 @@ Great outcome examples in spirit:
 - a happy dog huge in the foreground on a blue-sky hill
 - a smiling cow close to a fisheye lens in a field
 - two puppies tumbling over each other in a backyard, motion-blurred paws, huge clean sky above
-- tiny kittens climbing out of a cardboard box under cheap flash with a blank apartment wall above
+- tiny kittens climbing out of a cardboard box in a messy foster-room corner with lamp glow and window light above
 - ducklings charging through a shallow puddle like a tiny parade under a pale sky
 - baby goats mid-bounce off a little bench in a sunny farmyard
 - an orange cat wearing huge headphones at a messy gaming desk, drinking from a soda bottle
@@ -1331,7 +1491,7 @@ Great outcome examples in spirit:
 - a homemade red-and-blue superhero costume on a rooftop at sunset, funny and real
 - a no-logo racing driver spraying soda in a night paddock under flash
 - a 2000s red-carpet actor-looking stranger caught by cheap flash, no real likeness
-- a boxer in a tiny gym raising gloves and laughing like the comeback already happened
+- a boxer in a real ring under arena lights with packed bleachers fading into darkness
 - someone scream-laughing in waterfall mist with a gigantic white sky above
 - friends sprinting through a puddle splash under a dramatic storm sky
 - people scream-laughing under a huge rainbow after warm rain, wet pavement and high contrast
@@ -1381,7 +1541,7 @@ function sceneSpecificPromptNotes(brief) {
 
   if (id === "rollercoaster-flash-face") {
     notes.push(
-      "RIDE PHOTO EXECUTION: make the faces big enough to read and emotionally ridiculous: scared-laughing, hair flying, hands gripping the lap bar. Keep the sky or blank track background clean above; do not crop the faces."
+      "RIDE PHOTO EXECUTION: make the faces big enough to read and emotionally ridiculous: scared-laughing, hair flying, hands gripping the lap bar. Keep the sky, coaster structure, or motion-blurred track area readable above; do not crop the faces."
     );
   }
 
@@ -1429,7 +1589,7 @@ function sceneSpecificPromptNotes(brief) {
 
   if (id === "roommates-couch-laugh") {
     notes.push(
-      "COUCH CHAOS CONTROL: keep only one clear group of friends and one odd low-frame detail. The wall above them should stay mostly blank; do not fill the room with many objects, pets, posters, or competing focal points."
+      "COUCH CHAOS CONTROL: keep only one clear group of friends and one odd low-frame detail. The upper room should stay readable through lamp glow, window light, or couch-back shapes; do not flatten it into a blank wall or fill it with competing focal points."
     );
   }
 
@@ -1534,7 +1694,8 @@ export function buildMotivationalPrompt(scene = buildScene()) {
 
 IMPORTANT:
 Do not add any text, lettering, caption, logo, watermark, or typography. Text will be added later.
-Leave clean open negative space where poster text can float above the subject.
+Leave a readable open zone where poster text can float above the subject.
+The negative space must still belong to an interesting real place; do not use a plain wall, blank studio backdrop, or featureless indoor surface.
 
 SCENE:
 ${scene.subject}, ${scene.action}, in ${scene.setting}.
@@ -1561,16 +1722,16 @@ High-quality square image with grainy early-digital texture, not low-resolution.
 
 COMPOSITION:
 Square 1:1 image.
-Large negative space, 60-85% of the frame.
+Readable negative space, roughly 35-60% of the frame.
 Subject positioned low in frame, lower third or lower half.
-Subject should feel close to camera while leaving a huge clean upper field for text.
+Subject should feel close to camera while leaving a clean but visually specific upper field for text.
 Subject should be the obvious focal point, not tiny or distant.
-Simple composition.
+Readable composition with one clear focal point and a specific environment.
 Wide-angle or fisheye lens feeling.
 Low camera angle.
 Natural candid framing.
 The subject should feel happy, wholesome, slightly goofy, and unintentionally beautiful.
-The upper half should stay visually simple: sky, blank wall, fog, snow, ocean, or clean empty space.
+The upper half should stay readable but visually specific: sky, fog, snow, ocean, mist, arena rafters, convention lights, high ceiling, neon reflections, rain, smoke, or sunset glow.
 
 FINAL LOOK:
 Calm, hopeful, playful, gentle.
