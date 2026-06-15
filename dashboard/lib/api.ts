@@ -38,7 +38,7 @@ export const api = {
     request<PublishDraftResult>("/api/drafts/publish", { method: "POST", body: JSON.stringify(opts) }),
   discardDraft: (opts: { id?: string; all?: boolean }) =>
     request<{ success: boolean; updated: number; ids: string[] }>("/api/drafts/discard", { method: "POST", body: JSON.stringify(opts) }),
-  discardBackground: (opts: { id?: string; all?: boolean }) =>
+  discardBackground: (opts: { id?: string; dbId?: string; all?: boolean }) =>
     request<{ success: boolean; updated: number; ids: string[] }>("/api/backgrounds/discard", { method: "POST", body: JSON.stringify(opts) }),
   generateBackgroundMessages: (opts: { id: string; captionModel?: string }) =>
     request<{
@@ -184,6 +184,7 @@ export interface DraftMeta {
 
 export interface Draft {
   id: string;
+  dbId?: string;
   filename: string;
   imageUrl: string;
   rawImageUrl?: string | null;

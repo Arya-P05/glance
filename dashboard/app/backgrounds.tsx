@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Image, Platform, useWindowDimensions,
 } from "react-native";
@@ -52,6 +52,7 @@ export default function BackgroundsScreen() {
   const [caption, setCaption] = useState<CaptionText>({ smallText: "", bigText: "" });
   const [captionModel, setCaptionModel] = useState<string | undefined>();
   const [captionPrompt, setCaptionPrompt] = useState<string | undefined>();
+  const discardLockRef = useRef(false);
   const gridViewportWidth = Math.max(
     320,
     width - (Platform.OS === "web" && width > 600 ? C.sidebarW : 0) - GRID_PADDING * 2
@@ -86,7 +87,7 @@ export default function BackgroundsScreen() {
         e.preventDefault();
         nextBackground();
       } else if (e.key === "s") skipCurrent();
-      else if (e.key === "d") discardCurrent();
+      else if (e.key === "d" && !e.repeat) discardCurrent();
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -112,24 +113,25 @@ export default function BackgroundsScreen() {
 
   async function discardCurrent() {
     const background = backgrounds[reviewIdx];
-    if (!background || busy) return;
+    if (!background || busy || discardLockRef.current) return;
 
+    discardLockRef.current = true;
     const id = background.id;
-    const next = backgrounds.filter(b => b.id !== id);
-    setBackgrounds(next);
-    if (next.length === 0) setScreen("grid");
-    else setReviewIdx(i => Math.min(i, next.length - 1));
-
     setBusy(true);
     try {
-      await api.discardBackground({ id });
-      if (next.length === 0) load();
+      await api.discardBackground({ id, dbId: background.dbId });
+      const nextLength = Math.max(0, backgrounds.length - 1);
+      setBackgrounds(prev => prev.filter(b => b.id !== id));
+      if (nextLength === 0) setScreen("grid");
+      else setReviewIdx(i => Math.min(i, nextLength - 1));
+      if (nextLength === 0) load();
     } catch (e: any) {
       await load();
       setScreen("grid");
       alert(e.message);
     } finally {
       setBusy(false);
+      discardLockRef.current = false;
     }
   }
 

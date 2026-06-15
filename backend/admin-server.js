@@ -235,6 +235,7 @@ async function listBackgrounds(supabase, projectUrl) {
 
   return (backgroundsResult.data ?? []).map(row => ({
     id: row.name,
+    dbId: row.id,
     filename: `${row.name}.png`,
     imageUrl: publicObjectUrl(projectUrl, row.storage_path),
     rawImageUrl: publicObjectUrl(projectUrl, row.storage_path),
@@ -433,6 +434,10 @@ function normalizeSelectedCaption(caption) {
   return { smallText, bigText };
 }
 
+function isUuid(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value || ""));
+}
+
 async function loadPendingBackground(supabase, id) {
   const { data: row, error } = await supabase
     .from("backgrounds")
@@ -443,6 +448,40 @@ async function loadPendingBackground(supabase, id) {
   if (error) throw error;
   if (!row) throw new Error(`Background not found: ${id}`);
   return row;
+}
+
+async function discardPendingBackground(supabase, { id, dbId }) {
+  const target = dbId || id;
+  if (!target) throw Object.assign(new Error("Provide id"), { statusCode: 400 });
+
+  let matchQuery = supabase
+    .from("backgrounds")
+    .select("id, name")
+    .eq("status", "pending")
+    .limit(2);
+  matchQuery = isUuid(target) ? matchQuery.eq("id", target) : matchQuery.eq("name", target);
+
+  const { data: matches, error: matchErr } = await matchQuery;
+  if (matchErr) throw matchErr;
+  if (!matches?.length) {
+    throw Object.assign(new Error(`Background not found: ${target}`), { statusCode: 404 });
+  }
+  if (matches.length > 1) {
+    throw Object.assign(new Error(`Background id is ambiguous: ${target}. Refresh and try again.`), { statusCode: 409 });
+  }
+
+  const row = matches[0];
+  const { data, error } = await supabase
+    .from("backgrounds")
+    .update({ status: "discarded" })
+    .eq("id", row.id)
+    .eq("status", "pending")
+    .select("name");
+  if (error) throw error;
+  if (!data?.length) {
+    throw Object.assign(new Error(`Background not found: ${target}`), { statusCode: 404 });
+  }
+  return data;
 }
 
 function sceneForBackground(row) {
@@ -901,24 +940,28 @@ async function main() {
       if (!payload) { json(res, 400, { error: "Invalid JSON" }); return; }
 
       try {
-        let query = supabase.from("backgrounds").update({ status: "discarded" });
+        let data;
         if (payload.all) {
-          query = query.eq("status", "pending");
-        } else if (payload.id) {
-          query = query.eq("name", payload.id).eq("status", "pending");
+          const result = await supabase
+            .from("backgrounds")
+            .update({ status: "discarded" })
+            .eq("status", "pending")
+            .select("name");
+          if (result.error) throw result.error;
+          data = result.data;
+        } else if (payload.id || payload.dbId) {
+          data = await discardPendingBackground(supabase, { id: payload.id, dbId: payload.dbId });
         } else {
           json(res, 400, { error: "Provide all or id" }); return;
         }
 
-        const { data, error } = await query.select("name");
-        if (error) throw error;
         if (!data?.length) {
           json(res, 404, { error: payload.id ? `Background not found: ${payload.id}` : "No backgrounds matched" });
           return;
         }
         json(res, 200, { success: true, updated: data.length, ids: data.map(row => row.name) });
       } catch (e) {
-        json(res, 500, { error: e.message });
+        json(res, e.statusCode || 500, { error: e.message });
       }
       return;
     }
