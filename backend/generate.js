@@ -24,6 +24,7 @@ import {
   buildMotivationalPrompt,
   buildPlayfulAnimalScene,
   buildPromptWriterPrompt,
+  buildReferenceAestheticScene,
   buildScene,
   buildSceneFromArchetype,
   buildSceneFromDirector,
@@ -270,13 +271,17 @@ async function pickUniqueScene({ client, promptModel, avoidSignatures, preferEne
 
     if (preferEnergy && attempt < 6) {
       scene = buildPlayfulAnimalScene();
+    } else if (preferEnergy && attempt < 12) {
+      scene = buildReferenceAestheticScene();
     } else if (preferEnergy && attempt < 20) {
       scene = buildHighConceptScene();
-    } else if (roll < 0.18) {
+    } else if (roll < 0.14) {
       scene = buildPlayfulAnimalScene();
-    } else if (roll < 0.42) {
+    } else if (roll < 0.32) {
+      scene = buildReferenceAestheticScene();
+    } else if (roll < 0.52) {
       scene = buildHighConceptScene();
-    } else if (roll < 0.72) {
+    } else if (roll < 0.76) {
       scene = buildIconicEnergyScene();
     } else if (roll < 0.9) {
       scene = buildSceneFromArchetype();
@@ -298,14 +303,14 @@ async function pickUniqueScene({ client, promptModel, avoidSignatures, preferEne
   for (let attempt = 0; attempt < 80; attempt++) {
     const scene =
       preferEnergy && attempt < 40
-        ? (attempt % 3 === 0 ? buildPlayfulAnimalScene() : buildHighConceptScene())
+        ? (attempt % 3 === 0 ? buildPlayfulAnimalScene() : attempt % 3 === 1 ? buildReferenceAestheticScene() : buildHighConceptScene())
         : attempt % 2 === 0
           ? buildIconicEnergyScene()
-          : buildHighConceptScene();
+          : buildReferenceAestheticScene();
     if (isAllowedScene(scene, avoidSignatures, { allowFamilyRepeat: true })) return scene;
   }
 
-  return preferEnergy ? buildPlayfulAnimalScene() : buildSceneFromArchetype();
+  return preferEnergy ? buildReferenceAestheticScene() : buildSceneFromArchetype();
 }
 
 function rememberScene(scene, avoidSignatures) {

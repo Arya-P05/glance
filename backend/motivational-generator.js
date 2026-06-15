@@ -8,6 +8,7 @@ import {
   ICONIC_ENERGY_ARCHETYPES,
   PLAYFUL_ANIMAL_ARCHETYPES,
   POSTER_ARCHETYPES,
+  REFERENCE_AESTHETIC_ARCHETYPES,
   isSceneBlocked,
   sceneDedupKeys,
   sceneSignature,
@@ -57,6 +58,7 @@ const ANIMAL_IDEAS = [
   "rabbit",
   "baby rabbit",
   "polar bear",
+  "brown bear",
   "sheep",
   "lamb",
   "donkey",
@@ -74,6 +76,8 @@ const ANIMAL_IDEAS = [
   "turtle",
   "hedgehog",
   "red panda",
+  "fox",
+  "monkey",
   "marmot",
   "ferret",
   "guinea pig",
@@ -1067,7 +1071,7 @@ function harmonizeCreativeBrief(brief, rng = Math.random) {
     out.colorDirection = pick(["golden sunlight and soft shadows", "bright white negative space with black-text-friendly contrast"], rng);
   }
 
-  if (/cow|alpaca|llama|horse|goat|sheep|lamb|donkey|capybara|rabbit|bunny|duck|duckling|goose|pony|foal/.test(subject)) {
+  if (/cow|alpaca|llama|horse|goat|sheep|lamb|donkey|capybara|rabbit|bunny|duck|duckling|goose|pony|foal|brown bear|fox|monkey/.test(subject)) {
     out.setting = pick(FIELD_SETTINGS, rng);
     out.composition = pick(SKY_COMPOSITIONS, rng);
     out.cameraAngle = out.composition;
@@ -1229,6 +1233,10 @@ export function buildPlayfulAnimalScene(rng = Math.random) {
   return buildSceneFromArchetype(rng, pick(PLAYFUL_ANIMAL_ARCHETYPES, rng));
 }
 
+export function buildReferenceAestheticScene(rng = Math.random) {
+  return buildSceneFromArchetype(rng, pick(REFERENCE_AESTHETIC_ARCHETYPES, rng));
+}
+
 export function buildSceneFromDirector(directorScene) {
   return finalizeBrief({ ...directorScene, source: "director" });
 }
@@ -1251,6 +1259,7 @@ The final image must feel like:
 - grainy high-contrast 2000s digital camera energy: crushed shadows, cheap flash, blown highlights, saturated color, visible sensor noise
 - ugly-pretty and iconic because it feels found, not because it feels polished
 - sometimes accidentally model-level beautiful or celebrity-adjacent, like a cool person caught by cheap flash, without resembling any real celebrity
+- pop-reference energy is allowed only as broad styling: street-racer ensemble, rapper-stage aura, UK streetwear, homemade superhero cosplay, sci-fi helmet costume, anime fighter costume, tech-garage genius, boxing/MMA/F1/soccer champion energy, 2000s actor red-carpet flash, awkward suit comedy, mascot costume, plush monster battle
 - emotionally loud: huge grin, scream-laugh, shock, wind-blasted joy, full-body confidence, or unhinged but happy reaction
 - happy, positive, and goofy in a believable way, not mellow wellness content
 - visually eventful: motion, splash, mist, wind, flash, smoke, height, speed, weird scale, huge view, rainbow, sunset, warm rain, night-out singing, hiking victory, or one absurd peak-frame detail
@@ -1282,6 +1291,7 @@ Hard requirements:
 - use natural light only unless the camera style is flash
 - avoid corporate motivation, fantasy painting, 3D render, studio portrait, glossy ad, cinematic movie still, glossy editorial fashion shoot, shallow-depth product photography, or lifestyle stock photo
 - do not name, copy, or imply a specific real celebrity; "celebrity-level presence" should mean styling, confidence, and aura only
+- do not depict exact fictional characters, named franchises, team logos, superhero logos, brand logos, or recognizable celebrity faces; translate any reference into generic styling, costume, posture, and era
 - avoid random clutter and multiple competing stories; one wild thing may happen, but keep the chaos readable and mostly low/mid frame
 - if there are multiple animals, keep them in one tight playful cluster with one readable action; do not scatter them across the image
 - avoid sickly green/yellow/cyan color casts; prefer natural early-digital blues, greens, warm sunlight, clean whites, or pastel sunset
@@ -1316,6 +1326,11 @@ Great outcome examples in spirit:
 - friends dancing badly in a parking lot under cheap flash
 - a white model-looking stranger leaning on a silver tuner car under cheap flash, early-2000s street-racing energy
 - a mixed friend group in thrifted racing jackets laughing beside parked modified cars at blue hour
+- a 2000s street-racer-looking group laughing by modified coupes under cheap flash
+- a homemade red-and-blue superhero costume on a rooftop at sunset, funny and real
+- a no-logo racing driver spraying soda in a night paddock under flash
+- a 2000s red-carpet actor-looking stranger caught by cheap flash, no real likeness
+- a boxer in a tiny gym raising gloves and laughing like the comeback already happened
 - someone scream-laughing in waterfall mist with a gigantic white sky above
 - friends sprinting through a puddle splash under a dramatic storm sky
 - people scream-laughing under a huge rainbow after warm rain, wet pavement and high contrast
