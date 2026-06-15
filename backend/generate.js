@@ -62,7 +62,7 @@ const VIBE_PRESETS = {
   chaos: "goofy peak-frame chaos, scream-laughing, absurd but happy, caught mid-action",
   "night-out": "friends outside late, singing, neon, rain-slick street, flash photo after a wild night",
   outdoors: "big view, hiking, beach run, wind, sunset, rainbows, warm rain, full-body joy",
-  "animal-chaos": "bright happy baby animals or multiple animals in one frame, playful piles, zoomies, tiny paws, sunny grass, beach, flowers, splash, instant comedy",
+  "animal-chaos": "joyful animal meme energy: smiling into camera, goofy close-ups, jumping, running, playful piles, nature when it is bright/iconic, cozy flash pets, instant comedy",
   "street-racer": "early-2000s street-racer styling, shiny cars as vague shapes, flash, motion, no logos or exact cast likenesses",
   "dressy-flash": "sharp suit or dress, model-level beauty, red-carpet-ish compact flash, expensive but candid",
 };
@@ -375,8 +375,9 @@ Hard creative rules:
 - Use a specific, interesting real place. The background can be readable for text, but it must still have context: sky, smoke, mist, sunset, arena rafters, packed bleachers, convention lights, neon reflections, rain, crowd bokeh, bridge underside, high ceiling, or event lighting.
 - Never solve text space with a plain wall, blank beige wall, empty studio backdrop, blank concrete, plain curtain, or featureless indoor surface.
 - Make it emotionally readable: happy, iconic, weird, confident, funny, scream-laughing, or caught in a peak moment.
-- Avoid muddy, swampy, murky, grey-green, damp, overcast, sad, documentary-wildlife, or eerie scenes unless the user explicitly asks for that.
-- For animal or baby-animal ideas, make the background cheerful: sunlit grass, flowers, blue sky, beach, shallow splash, colorful yard, picnic blanket, park path, or warm window light. Do not use foggy riverbanks, dark wet fur piles, muddy banks, cold mist, or gloomy swamp water.
+- Avoid muddy, swampy, murky, grey-green, damp, sad, documentary-wildlife, or eerie scenes unless the user explicitly asks for that.
+- Animal ideas can be singular or groups: smiling straight into camera, goofy close-up face, jumping, sprinting, tumbling, wearing a harmless prop, or doing one instantly readable silly thing.
+- Animal backgrounds can be nature when the animal is doing something fun: blue-sky grassland, flower field, bright ice floe, beach, sunny pond edge, farmyard, backyard, mountain meadow, or ocean overlook. Cozy indoor/flash pet photos are also good. Do not use foggy riverbanks, dark wet fur piles, muddy banks, cold mist, or gloomy swamp water.
 - If the user asks for costume, sport, formalwear, celebrity-adjacent, or pop-reference energy, put it in a fitting world: a convention floor, real boxing ring, stadium, paddock, hotel driveway, rooftop, arcade, street meet, public pool, beach sprint, or crowded event space.
 - If the user names a real person, actor, athlete, musician, celebrity, public figure, or fictional/franchise character, DO NOT depict that exact person/character. Translate it into generic styling, era, costume, posture, subject type, or aesthetic only.
 - Do not include logos, team crests, brand marks, franchise symbols, typography, signs as readable text, or exact celebrity likenesses.
@@ -424,16 +425,112 @@ async function generateDirectedScene({ client, model, args, index, count, avoidS
   };
 }
 
+function fallbackPick(items, index) {
+  return items[(Math.max(1, Number(index) || 1) - 1) % items.length];
+}
+
+function animalFallbackDirection(idea, index) {
+  const text = String(idea || "").toLowerCase();
+  const base = {
+    setting: "a bright blue-sky field with flowers, grass texture low in frame, and a clean happy sky above",
+    weather: "clear blue sky with warm happy sunlight",
+    timeOfDay: "bright cheerful daytime",
+    composition: "animal low in frame, funny face readable, bright simple upper background for text",
+    colorDirection: "saturated blue sky, bright grass, clean whites, warm sunlight, and early-digital color",
+  };
+
+  if (/\b(cat|cats|kitten|kittens|kitty|tabby|siamese)\b/.test(text)) {
+    return {
+      setting: fallbackPick([
+        "a cozy messy bedroom with rumpled bedding low in frame, cheap flash glare, and a simple bright ceiling/wall area above",
+        "a dark hallway pet snapshot with hard compact-camera flash, floor texture low in frame, and a funny spotlight falloff above",
+        "a sunny flower patch with blue sky, bright petals around the cat, and a clean upper background",
+      ], index),
+      weather: "cheap compact-camera flash or bright sunny window light",
+      timeOfDay: "flash-lit indoor moment or bright garden daytime",
+      composition: "goofy cat face close to the lens or low in frame, eyes readable, simple upper area for text",
+      colorDirection: "warm flash whites, natural fur color, saturated blue or cozy shadow, visible digital grain",
+    };
+  }
+
+  if (/\b(dog|dogs|puppy|puppies|pup|pups)\b/.test(text)) {
+    return {
+      setting: fallbackPick([
+        "a bright backyard lawn with a white fence, saturated blue sky, and puppies tumbling low in frame",
+        "a beach boardwalk edge with warm sand, ocean color, and a happy dog smiling into the camera",
+        "a cozy living room with window light, toys low in frame, and a simple bright upper wall/ceiling glow",
+      ], index),
+      weather: "bright happy daylight or warm window flash",
+      timeOfDay: "cheerful daytime",
+      composition: "dog or puppy cluster low in frame, smiling face readable, upper third clean for text",
+      colorDirection: "blue sky, bright grass or warm indoor flash, clean whites, and early-digital saturation",
+    };
+  }
+
+  if (/\b(goat|goats|lamb|lambs|sheep|duck|ducks|duckling|ducklings)\b/.test(text)) {
+    return {
+      setting: fallbackPick([
+        "a sunny farmyard with a tiny bench low in frame, electric blue sky, grass texture, and animals mid-jump",
+        "a flower meadow beside a fence with bright grass low in frame and clean blue sky above",
+        "a colorful backyard garden with a picnic blanket, toy clutter low in frame, and warm sun",
+      ], index),
+      weather: "clear blue sky and bright sunlight",
+      timeOfDay: "bright cheerful daytime",
+      composition: "small animals mid-jump or clustered low in frame, tiny paws readable, huge clean sky above",
+      colorDirection: "saturated blue sky, spring grass, bright whites, flowers, and high-contrast digital grain",
+    };
+  }
+
+  if (/\b(polar bear|penguin|penguins)\b/.test(text)) {
+    return {
+      setting: fallbackPick([
+        "a bright ice floe under cobalt blue sky with clean white snow shapes and the animal low in frame",
+        "a sunny arctic shoreline with sparkling ice, blue water, and a huge simple sky above",
+        "a surreal bright flower field near a cold ocean overlook, clean horizon, and the animal low in frame",
+      ], index),
+      weather: "clear cold sunlight that still feels happy",
+      timeOfDay: "bright arctic daytime",
+      composition: "animal low in frame, face readable, cobalt sky or clean horizon above for text",
+      colorDirection: "clean icy whites, deep cobalt blue, bright sun, and crunchy early-digital contrast",
+    };
+  }
+
+  if (/\b(bear|bears|rhino|rhinos|rhinoceros|fox|foxes|monkey|monkeys|donkey|donkeys|horse|horses|pony|ponies)\b/.test(text)) {
+    return {
+      setting: fallbackPick([
+        "a wide blue-sky grassland with flowers and the animal sprinting low in frame",
+        "a sunny ocean-overlook flower field with bright color low in frame and a clean horizon above",
+        "a playful sanctuary yard with toys, sunlit grass, fence shapes low in frame, and clean sky above",
+      ], index),
+      weather: "bright open daylight",
+      timeOfDay: "cheerful daytime",
+      composition: "animal running, smiling, or doing one goofy action low in frame with a simple iconic background above",
+      colorDirection: "natural bright greens, saturated blue sky, flower color, and old digital-camera contrast",
+    };
+  }
+
+  return {
+    ...base,
+    setting: fallbackPick([
+      base.setting,
+      "a sunny flower field with the animal smiling into camera, bright petals low in frame, and blue sky above",
+      "a cozy flash-lit room with playful clutter low in frame, funny animal expression, and a simple upper glow",
+      "a bright beach or pond edge with sparkling water low in frame and clean sky above",
+    ], index),
+  };
+}
+
 function buildDirectedSceneFallback({ args, index, count, guidance }) {
   const idea = args.idea || args.styleNotes || "custom camera-roll idea";
-  const subjectKind = args.vibePreset === "animal-chaos" || /\b(cat|cats|dog|dogs|cow|cows|bear|bears|monkey|monkeys|duck|ducks|duckling|ducklings|donkey|donkeys|fox|foxes|lamb|lambs|animal|animals|puppy|puppies|kitten|kittens|otter|otters|seal|seals|bunny|bunnies|rabbit|rabbits|goat|goats)\b/i.test(idea)
+  const subjectKind = args.vibePreset === "animal-chaos" || /\b(cat|cats|dog|dogs|cow|cows|bear|bears|polar bear|brown bear|monkey|monkeys|duck|ducks|duckling|ducklings|donkey|donkeys|fox|foxes|lamb|lambs|animal|animals|puppy|puppies|kitten|kittens|otter|otters|seal|seals|bunny|bunnies|rabbit|rabbits|goat|goats|rhino|rhinos|rhinoceros|penguin|penguins|horse|horses|pony|ponies)\b/i.test(idea)
     ? "animal"
     : "person";
   const camera = args.cameraLook === "auto"
     ? "grainy high-contrast 2000s digital camera photo"
     : CAMERA_LOOKS[args.cameraLook];
+  const animalDirection = subjectKind === "animal" ? animalFallbackDirection(idea, index) : null;
   let setting = subjectKind === "animal"
-    ? "a bright sunny park lawn with flowers, blue sky, playful clutter low in frame, and a readable joyful upper background"
+    ? animalDirection.setting
     : "a real camera-roll location with interesting context and a readable upper sky, ceiling, mist, lights, or crowd-glow area";
   if (/\bspace|sci-fi|helmet|convention\b/i.test(idea)) {
     setting = "a busy space convention atrium with suspended planet props, vendor booths low in frame, camera flashes, and a high industrial ceiling";
@@ -458,16 +555,16 @@ function buildDirectedSceneFallback({ args, index, count, guidance }) {
       setting,
       camera,
       weather: subjectKind === "animal"
-        ? "clear blue sky with warm happy sunlight"
+        ? animalDirection.weather
         : args.cameraLook === "night-out" ? "clear night with distant city glow" : "high-contrast 2000s light",
       timeOfDay: subjectKind === "animal"
-        ? "bright cheerful daytime"
+        ? animalDirection.timeOfDay
         : args.cameraLook === "night-out" ? "night" : "2000s camera-roll light",
       prop: "nothing",
-      cameraAngle: "subject low in frame with a readable but interesting upper background",
-      composition: "subject low in frame with a readable but interesting upper background",
+      cameraAngle: subjectKind === "animal" ? animalDirection.composition : "subject low in frame with a readable but interesting upper background",
+      composition: subjectKind === "animal" ? animalDirection.composition : "subject low in frame with a readable but interesting upper background",
       colorDirection: subjectKind === "animal"
-        ? "saturated blue sky, bright grass, flowers, warm sunlight, and clean early-digital color"
+        ? animalDirection.colorDirection
         : "high-contrast 2000s digital color with crushed shadows",
       emotion: "funny",
       copyFormula: "group-chat line, then iconic/gangsta/real payoff",

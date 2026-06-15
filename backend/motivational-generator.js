@@ -1042,8 +1042,12 @@ function upgradeGloomyAnimalScene(brief, rng = Math.random) {
   if (brief.subjectKind !== "animal") return brief;
 
   const ctx = `${brief.subject || ""} ${brief.setting || ""} ${brief.weather || ""} ${brief.timeOfDay || ""} ${brief.composition || ""} ${brief.colorDirection || ""}`.toLowerCase();
-  const isGloomyAnimalSetting =
-    /\b(fog|mist|murky|muddy|mud|swamp|damp|grey|gray|overcast|dark|cold|riverbank|river bank|marsh|documentary|wildlife)\b/.test(ctx);
+  const hasBadAnimalTexture =
+    /\b(murky|muddy|mud|swamp|damp|grey-green|gray-green|riverbank|river bank|marsh|documentary|wildlife|dark wet fur|dull swamp|gloomy swamp)\b/.test(ctx);
+  const hasBadWeatherCombo =
+    /\b(fog|mist|overcast|grey|gray|cold)\b/.test(ctx) &&
+    /\b(river|bank|swamp|mud|marsh|wet fur|gloom|murky|documentary)\b/.test(ctx);
+  const isGloomyAnimalSetting = hasBadAnimalTexture || hasBadWeatherCombo;
   if (!isGloomyAnimalSetting) return brief;
 
   const out = { ...brief };
@@ -1062,7 +1066,7 @@ function upgradeGloomyAnimalScene(brief, rng = Math.random) {
   out.setting = pick(isWaterAnimal ? brightWaterSettings : brightLandSettings, rng);
   out.weather = pick(["clear blue sky", "bright midday sun", "warm golden hour", "soft sunrise"], rng);
   out.timeOfDay = out.weather;
-  out.composition = "animal cluster low in frame, funny faces and tiny paws readable, bright cheerful sky or sunlit color above";
+  out.composition = "animal or tight animal cluster low in frame, funny faces and tiny paws readable, bright cheerful sky or sunlit color above";
   out.cameraAngle = out.composition;
   out.colorDirection = pick(
     ["saturated blue sky and green grass", "golden sunlight and soft shadows", "clean early-digital blue and green color"],
@@ -1456,7 +1460,7 @@ The final image must feel like:
 - emotionally loud: huge grin, scream-laugh, shock, wind-blasted joy, full-body confidence, or unhinged but happy reaction
 - happy, positive, and goofy in a believable way, not mellow wellness content
 - visually eventful: motion, splash, mist, wind, flash, smoke, height, speed, weird scale, huge view, rainbow, sunset, warm rain, night-out singing, hiking victory, or one absurd peak-frame detail
-- for animals, favor baby animals, tiny paws, playful piles, zoomies, sunny grass, flowers, beach, shallow splash, colorful yard, picnic blanket, warm window light, and tight multi-animal chaos when it still reads instantly
+- for animals, favor smiling into camera, goofy close-ups, tiny paws, jumping, sprinting, playful piles, bright nature when it fits, cozy flash pet photos, flowers, ice, beach, grass, colorful yards, warm window light, and tight multi-animal chaos when it still reads instantly
 - by default, the image should feel bright, inspiring, funny, optimistic, and happy enough to work as a motivational widget background
 - the situation may be surreal or staged, but every clothing item, prop, and setting detail must make visual sense together
 - grainy early-2000s digital photography with enough resolution to look good
@@ -1479,7 +1483,7 @@ Hard requirements:
 - the subject must look visibly happy, shocked, scream-laughing, goofy, proud, or like the best/wildest second of the moment just happened
 - if the scene has fog, snow, rain, night, or unusual weather, the subject is still visibly happy and positive
 - avoid gloomy, murky, damp, swampy, muddy, sad, grey-green, low-energy, or documentary-wildlife moods unless the scene explicitly demands them
-- for animal scenes, do not use foggy riverbanks, muddy banks, cold mist, dark wet fur piles, dull swamp water, or nature-documentary realism; make it cute, bright, playful, and emotionally warm
+- for animal scenes, avoid foggy riverbanks, muddy banks, dark wet fur piles, dull swamp water, or nature-documentary realism; cute indoor flash, dramatic night flash, bright ice, flower fields, blue-sky grass, beaches, and cozy rooms are all good when the animal feels funny or happy
 - keep a clean text-safe zone in the upper third or upper half, but do not make the whole image empty or calm
 - the subject/action can occupy 30-60% of image height when the moment is dramatic; keep the main faces comfortably readable
 - keep the subject's face and body comfortably inside the frame; do not crop the face at the edge
@@ -1638,7 +1642,7 @@ function sceneSpecificPromptNotes(brief) {
 
   if (brief.subjectKind === "animal") {
     notes.push(
-      "ANIMAL MEME ENERGY: keep the animal or tight animal cluster as the unmistakable hero, low in frame, with a funny expression, tiny-paw motion, or playful posture that feels like a real found internet photo. Make the whole image bright, cute, optimistic, and widget-worthy: sunlit grass, flowers, blue sky, beach, shallow splash, picnic blanket, colorful yard, or warm window light. Avoid glossy wildlife photography, foggy riverbanks, muddy banks, swamp water, dark wet fur piles, grey-green gloom, or documentary nature mood."
+      "ANIMAL MEME ENERGY: keep the animal or tight animal cluster as the unmistakable hero, low in frame, with a funny expression, camera-facing smile, tiny-paw motion, jump, sprint, or playful posture that feels like a real found internet photo. Good worlds include blue-sky grass, flowers, bright ice, beach, shallow splash, colorful yard, cozy room flash, or warm window light. Avoid glossy wildlife photography, foggy riverbanks, muddy banks, swamp water, dark wet fur piles, grey-green gloom, or documentary nature mood."
     );
   }
 

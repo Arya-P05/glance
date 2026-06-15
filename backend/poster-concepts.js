@@ -2107,14 +2107,14 @@ Each concept must feel like:
 - sometimes conventionally beautiful, model-off-duty, or celebrity-adjacent, but only as a raw candid aura; never reference or resemble a real celebrity
 - less "beautiful lifestyle shoot", more "oddly perfect saved image from the internet"
 - over many outputs, cast a broad mix: people of color, white people, and mixed groups. Do not default exclusively to any one race.
-- baby animals and playful multi-animal frames should feel bright, cute, optimistic, and widget-worthy: puppies, kittens, ducklings, baby goats, bunnies, lambs, tiny paws, zoomies, flowers, sunny grass, shallow splashes, picnic blankets, colorful yards, warm window light, and one clear chaotic cluster.
+- animal frames can be a single expressive hero or a tight playful cluster: smiling into camera, goofy close-up faces, jumping, sprinting, tiny paws, harmless props, blue-sky nature, bright ice floes, flower fields, beaches, sunny grass, cozy flash pet photos, warm window light, and one instantly readable silly action.
 - aesthetic anchors are welcome as broad vibes only, never as exact likenesses, logos, names, or franchise characters: rapper-stage chaos, UK drill streetwear, street-racing ensemble casts, homemade superhero cosplay, sci-fi helmet cosplay, anime fighter costumes, tech-billionaire garage aura, boxing/MMA/F1/soccer champion energy, 2000s actor red-carpet candids, awkward suit comedy, mascot costumes, plush monster battles, and action-comedy stunts.
 - early-2000s tuner cars, street-racing-adjacent parking lots, flash-lit hotel driveways, real boxing rings, stadiums, space convention floors, giant waterfalls, canyon overlooks, rollercoaster drops, rainbows after rain, happy rain flash, night-out singalongs, ridge hikes, beach sprints in swim clothes, storm puddles, and accidental paparazzi energy are welcome when they stay clean and text-friendly.
 
 Banned overused ideas (do NOT use):
 - fireworks, sparklers, outdoor basketball court at night
 - generic plain wall, blank beige wall, empty studio backdrop, plain curtain, blank concrete, featureless hallway, or any dead indoor surface
-- gloomy animal scenes: muddy banks, foggy riverbanks, grey-green swamp water, dark wet fur piles, murky ponds, nature-documentary realism, sad overcast animal photos
+- gloomy animal scenes: muddy banks, foggy riverbanks, grey-green swamp water, dark wet fur piles, murky ponds, nature-documentary realism, sad flat overcast animal photos
 - parking lot unless tied to a specific road-trip or skate moment
 - cozy coffee/bookshop/diner/window scenes that read like therapy content
 - generic friend groups smiling in a lifestyle ad
