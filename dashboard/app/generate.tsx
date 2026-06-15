@@ -8,6 +8,25 @@ import { clearCachedJob } from "../lib/useJobStream";
 
 type Mode = "images" | "prompts";
 type Size = "1024x1024" | "1536x1024" | "1024x1536";
+type DirectionMode = "series" | "exact";
+type CameraLook =
+  | "auto"
+  | "2000s-digital"
+  | "cheap-flash"
+  | "disposable"
+  | "fisheye"
+  | "night-out"
+  | "sunset"
+  | "raw-iphone";
+type VibePreset =
+  | "auto"
+  | "iconic"
+  | "chaos"
+  | "night-out"
+  | "outdoors"
+  | "animal-chaos"
+  | "street-racer"
+  | "dressy-flash";
 
 const MODES: { id: Mode; label: string; desc: string }[] = [
   { id: "images", label: "Backgrounds", desc: "Stage clean images for review" },
@@ -15,6 +34,33 @@ const MODES: { id: Mode; label: string; desc: string }[] = [
 ];
 
 const SIZES: Size[] = ["1024x1024", "1536x1024", "1024x1536"];
+
+const DIRECTION_MODES: { id: DirectionMode; label: string }[] = [
+  { id: "series", label: "Series" },
+  { id: "exact", label: "Exact" },
+];
+
+const CAMERA_LOOKS: { id: CameraLook; label: string }[] = [
+  { id: "auto", label: "Auto" },
+  { id: "2000s-digital", label: "2000s digital" },
+  { id: "cheap-flash", label: "Cheap flash" },
+  { id: "disposable", label: "Disposable" },
+  { id: "fisheye", label: "Fisheye" },
+  { id: "night-out", label: "Night out" },
+  { id: "sunset", label: "Sunset" },
+  { id: "raw-iphone", label: "Raw iPhone" },
+];
+
+const VIBE_PRESETS: { id: VibePreset; label: string }[] = [
+  { id: "auto", label: "Auto" },
+  { id: "iconic", label: "Iconic" },
+  { id: "chaos", label: "Chaos" },
+  { id: "night-out", label: "Night out" },
+  { id: "outdoors", label: "Outdoors" },
+  { id: "animal-chaos", label: "Baby animals" },
+  { id: "street-racer", label: "Street racer" },
+  { id: "dressy-flash", label: "Dressy flash" },
+];
 
 const GENERATE_JOB_KEY = "generate_job";
 const LEGACY_SESSION_KEY = "generate_jobId";
@@ -64,9 +110,15 @@ export default function GenerateScreen() {
   const [model, setModel] = useState("gpt-image-2");
   const [promptModel, setPromptModel] = useState("gpt-4.1-mini");
   const [dryRun, setDryRun] = useState(false);
+  const [idea, setIdea] = useState("");
+  const [directionMode, setDirectionMode] = useState<DirectionMode>("series");
+  const [cameraLook, setCameraLook] = useState<CameraLook>("auto");
+  const [vibePreset, setVibePreset] = useState<VibePreset>("auto");
+  const [styleNotes, setStyleNotes] = useState("");
   const [jobId, setJobId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [lastResult, setLastResult] = useState<string | null>(null);
+  const hasCreativeDirection = Boolean(idea.trim() || styleNotes.trim() || cameraLook !== "auto" || vibePreset !== "auto");
 
   useEffect(() => {
     let cancelled = false;
@@ -121,6 +173,11 @@ export default function GenerateScreen() {
         promptModel,
         size,
         dryRun,
+        idea: idea.trim() || undefined,
+        directionMode,
+        cameraLook,
+        vibePreset,
+        styleNotes: styleNotes.trim() || undefined,
       };
       const { jobId: id } = await api.generate(opts);
       setJobId(id);
@@ -152,6 +209,67 @@ export default function GenerateScreen() {
             <Text style={styles.modeDesc}>{m.desc}</Text>
           </Pressable>
         ))}
+      </View>
+
+      <Text style={[S.label, { marginTop: 6, marginBottom: 10 }]}>Creative Direction</Text>
+      <View style={styles.directionBox}>
+        <TextInput
+          style={[styles.input, styles.ideaInput]}
+          value={idea}
+          onChangeText={setIdea}
+          multiline
+          placeholder={"man and girl in suit and dress outside times square pointing finger guns at the camera"}
+          placeholderTextColor={C.textMuted}
+        />
+
+        <View style={styles.directionSegmented}>
+          {DIRECTION_MODES.map(option => (
+            <Pressable
+              key={option.id}
+              onPress={() => setDirectionMode(option.id)}
+              style={[styles.directionSegment, directionMode === option.id && styles.directionSegmentActive]}
+            >
+              <Text style={[styles.directionSegmentLabel, directionMode === option.id && styles.directionSegmentLabelActive]}>
+                {option.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
+        <Text style={styles.fieldLabel}>Camera Look</Text>
+        <View style={styles.chipGrid}>
+          {CAMERA_LOOKS.map(option => (
+            <Pressable
+              key={option.id}
+              onPress={() => setCameraLook(option.id)}
+              style={[styles.chip, cameraLook === option.id && styles.chipActive]}
+            >
+              <Text style={[styles.chipText, cameraLook === option.id && styles.chipTextActive]}>{option.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+
+        <Text style={styles.fieldLabel}>Scene Vibe</Text>
+        <View style={styles.chipGrid}>
+          {VIBE_PRESETS.map(option => (
+            <Pressable
+              key={option.id}
+              onPress={() => setVibePreset(option.id)}
+              style={[styles.chip, vibePreset === option.id && styles.chipActive]}
+            >
+              <Text style={[styles.chipText, vibePreset === option.id && styles.chipTextActive]}>{option.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+
+        <TextInput
+          style={[styles.input, styles.notesInput]}
+          value={styleNotes}
+          onChangeText={setStyleNotes}
+          multiline
+          placeholder="extra style notes: rainy, high contrast, all Arc'teryx-ish outdoor gear, same vague vibe but different poses"
+          placeholderTextColor={C.textMuted}
+        />
       </View>
 
       {/* Count */}
@@ -226,6 +344,7 @@ export default function GenerateScreen() {
             const n = parseInt(count) || 0;
             const s = n !== 1 ? "s" : "";
             if (dryRun) return `Preview ${n} Scene${s}`;
+            if (hasCreativeDirection) return `Generate ${n} Directed ${mode === "prompts" ? `Prompt${s}` : `Background${s}`}`;
             if (mode === "prompts") return `Generate ${n} Prompt${s}`;
             return `Generate ${n} Background${s}`;
           })()}
@@ -267,6 +386,51 @@ const styles = StyleSheet.create({
   modeLabel: { color: C.textSecondary, fontSize: 13, fontWeight: "600" },
   modeLabelActive: { color: C.accent },
   modeDesc: { color: C.textMuted, fontSize: 11 },
+  directionBox: {
+    backgroundColor: C.surface,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: C.border,
+    padding: 14,
+    gap: 12,
+    marginBottom: 24,
+  },
+  ideaInput: {
+    minHeight: 76,
+    textAlignVertical: "top",
+    lineHeight: 19,
+  },
+  notesInput: {
+    minHeight: 52,
+    textAlignVertical: "top",
+    lineHeight: 18,
+  },
+  directionSegmented: { flexDirection: "row", gap: 4 },
+  directionSegment: {
+    flex: 1,
+    minWidth: 120,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 7,
+    paddingVertical: 9,
+    alignItems: "center",
+    backgroundColor: "#0f0f0f",
+  },
+  directionSegmentActive: { borderColor: C.accent, backgroundColor: C.accent },
+  directionSegmentLabel: { color: C.textSecondary, fontSize: 12, fontWeight: "800" },
+  directionSegmentLabelActive: { color: C.bg },
+  chipGrid: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
+  chip: {
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: "#0f0f0f",
+  },
+  chipActive: { borderColor: C.accent, backgroundColor: C.accent },
+  chipText: { color: C.textSecondary, fontSize: 12, fontWeight: "700" },
+  chipTextActive: { color: C.bg },
   row: { flexDirection: "row", gap: 16, flexWrap: "wrap" },
   field: { flex: 1, minWidth: 160 },
   fieldLabel: { color: C.textSecondary, fontSize: 11, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 },

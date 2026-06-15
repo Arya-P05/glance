@@ -45,6 +45,28 @@ const PROMPTS_DIR = "content/prompts";
 const BACKGROUNDS_DIR = "content/backgrounds";
 const META_DIR = "content/meta";
 
+const CAMERA_LOOKS = {
+  auto: "let the generator choose the best camera texture for the scene",
+  "2000s-digital": "grainy high-contrast 2000s digital camera, crushed shadows, blown highlights, saturated color, JPEG softness",
+  "cheap-flash": "cheap compact-camera flash, hard shadows, shiny skin, dark simple background, accidental party-photo energy",
+  disposable: "disposable camera photo, soft blur, washed colors, dust, imperfect focus, vacation-camera chaos",
+  fisheye: "wide-angle fisheye snapshot, close foreground distortion, goofy low-angle internet-photo energy",
+  "night-out": "high-contrast 2004 pocket camera flash at night, wet pavement, neon reflections, black sky",
+  sunset: "grainy sunset point-and-shoot photo, pastel sky, warm blown highlights, silhouettes low in frame",
+  "raw-iphone": "old iPhone camera roll photo, mild motion blur, uneven exposure, raw found-photo framing",
+};
+
+const VIBE_PRESETS = {
+  auto: "let the user's idea lead the mood",
+  iconic: "main-character cool, attractive, celebrity-adjacent without resembling a real person, confident flash-photo energy",
+  chaos: "goofy peak-frame chaos, scream-laughing, absurd but happy, caught mid-action",
+  "night-out": "friends outside late, singing, neon, rain-slick street, flash photo after a wild night",
+  outdoors: "big view, hiking, beach run, wind, sunset, rainbows, warm rain, full-body joy",
+  "animal-chaos": "baby animals or multiple animals in one frame, playful piles, zoomies, tiny paws, instant comedy",
+  "street-racer": "early-2000s street-racer styling, shiny cars as vague shapes, flash, motion, no logos or exact cast likenesses",
+  "dressy-flash": "sharp suit or dress, model-level beauty, red-carpet-ish compact flash, expensive but candid",
+};
+
 function parseArgs(argv) {
   const out = {
     count: Number(process.env.POSTER_COUNT || "10"),
@@ -57,6 +79,11 @@ function parseArgs(argv) {
     promptModel: process.env.OPENAI_PROMPT_MODEL || DEFAULT_PROMPT_MODEL,
     size: process.env.OPENAI_IMAGE_SIZE || "1024x1024",
     dryRun: false,
+    idea: "",
+    directionMode: "series",
+    cameraLook: "auto",
+    vibePreset: "auto",
+    styleNotes: "",
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -75,6 +102,11 @@ function parseArgs(argv) {
     else if (arg === "--prompt-model") out.promptModel = next();
     else if (arg === "--size") out.size = next();
     else if (arg === "--dry-run") out.dryRun = true;
+    else if (arg === "--idea") out.idea = cleanOptionText(next(), 700);
+    else if (arg === "--direction-mode") out.directionMode = next();
+    else if (arg === "--camera-look") out.cameraLook = next();
+    else if (arg === "--vibe-preset") out.vibePreset = next();
+    else if (arg === "--style-notes") out.styleNotes = cleanOptionText(next(), 500);
     else if (arg === "--help" || arg === "-h") out.help = true;
     else throw new Error(`Unknown argument: ${arg}`);
   }
@@ -88,6 +120,15 @@ function parseArgs(argv) {
   if (out.fromPrompts && out.mode === "prompts") {
     throw new Error("--from-prompts cannot be used with --mode prompts");
   }
+  if (!["series", "exact"].includes(out.directionMode)) {
+    throw new Error("--direction-mode must be one of: series, exact");
+  }
+  if (!CAMERA_LOOKS[out.cameraLook]) {
+    throw new Error(`--camera-look must be one of: ${Object.keys(CAMERA_LOOKS).join(", ")}`);
+  }
+  if (!VIBE_PRESETS[out.vibePreset]) {
+    throw new Error(`--vibe-preset must be one of: ${Object.keys(VIBE_PRESETS).join(", ")}`);
+  }
 
   if (!out.outDir) {
     out.outDir = out.mode === "prompts" ? PROMPTS_DIR : BACKGROUNDS_DIR;
@@ -95,6 +136,13 @@ function parseArgs(argv) {
   out.metaDir = out.mode === "prompts" ? out.outDir : META_DIR;
 
   return out;
+}
+
+function cleanOptionText(value, maxLength) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLength);
 }
 
 function usage() {
@@ -113,6 +161,11 @@ Options:
   --model <model>      Image model. Default: ${DEFAULT_IMAGE_MODEL}
   --prompt-model       Prompt writer model. Default: ${DEFAULT_PROMPT_MODEL}
   --size <size>        Image size. Default: 1024x1024
+  --idea <text>        Optional scene/topic direction for the batch
+  --direction-mode     series | exact. Default: series
+  --camera-look        ${Object.keys(CAMERA_LOOKS).join(" | ")}
+  --vibe-preset        ${Object.keys(VIBE_PRESETS).join(" | ")}
+  --style-notes <text> Optional extra styling notes
   --dry-run            Print scenes/prompts only; no API calls
 `;
 }
@@ -262,6 +315,146 @@ async function generateSceneFromDirector({ client, model, avoidSignatures }) {
   });
   const raw = parseDirectorScene(responseText(response));
   return buildSceneFromDirector(raw);
+}
+
+function hasDirection(args) {
+  return Boolean(args.idea || args.styleNotes || args.cameraLook !== "auto" || args.vibePreset !== "auto");
+}
+
+function directionMetadata(args) {
+  if (!hasDirection(args)) return null;
+  return {
+    idea: args.idea || null,
+    directionMode: args.directionMode,
+    cameraLook: args.cameraLook,
+    cameraLookDescription: CAMERA_LOOKS[args.cameraLook],
+    vibePreset: args.vibePreset,
+    vibePresetDescription: VIBE_PRESETS[args.vibePreset],
+    styleNotes: args.styleNotes || null,
+  };
+}
+
+function directionAvoidList(avoidSignatures = new Set()) {
+  return [...avoidSignatures]
+    .filter((key) => key.startsWith("family:") || key.startsWith("concept:"))
+    .slice(0, 20)
+    .map((key) => `- ${key.replace(/^(family|concept):/, "")}`)
+    .join("\n");
+}
+
+function buildDirectedScenePrompt({ args, index, count, avoidSignatures }) {
+  const avoidList = directionAvoidList(avoidSignatures);
+  const modeInstruction = args.directionMode === "exact"
+    ? "Preserve the user's core scene as closely as possible while making the photo coherent and text-friendly."
+    : "Treat the user's idea as a loose topic/vibe for a related series. This item should clearly belong to the same set, but it must change at least one meaningful element such as subject detail, gesture, camera angle, nearby action, weather, or micro-setting.";
+
+  return `Create ONE scene brief for a square Instagram lock-screen poster background.
+
+This is item ${index} of ${count}.
+
+User idea / topic:
+${args.idea || "(none provided; use the options below)"}
+
+Direction mode:
+${args.directionMode}
+
+${modeInstruction}
+
+Camera look:
+${CAMERA_LOOKS[args.cameraLook]}
+
+Scene vibe preset:
+${VIBE_PRESETS[args.vibePreset]}
+
+Extra style notes:
+${args.styleNotes || "(none)"}
+
+Hard creative rules:
+- Keep the result like a real forgotten camera-roll photo: early-2000s digital, grain, cheap flash or imperfect exposure, accidental framing.
+- Leave a clean text-safe zone in the upper third or upper half: sky, dark awning, blank wall, smoke, mist, sunset, or simple color field.
+- Make it emotionally readable: happy, iconic, weird, confident, funny, scream-laughing, or caught in a peak moment.
+- If the user names a real person, actor, athlete, musician, celebrity, public figure, or fictional/franchise character, DO NOT depict that exact person/character. Translate it into generic styling, era, costume, posture, subject type, or aesthetic only.
+- Do not include logos, team crests, brand marks, franchise symbols, typography, signs as readable text, or exact celebrity likenesses.
+- If the idea mentions a specific famous place with lots of signs, keep signage unreadable/blurred and focus on lights, color, crowd, and mood.
+- Keep clothing coherent with the scene.
+- If this is a series, avoid making every item the same composition.
+${avoidList ? `\nRecently used concepts/families to avoid repeating too closely:\n${avoidList}` : ""}
+
+Return ONLY JSON with these exact fields:
+{
+  "conceptId": "short-kebab-id",
+  "vibe": "3-6 word mood label",
+  "subjectKind": "animal" or "person",
+  "subject": "full subject phrase, generic not a named likeness",
+  "action": "pose/behavior only, no location words",
+  "setting": "one specific place, richly described",
+  "camera": "camera texture phrase",
+  "weather": "light/weather phrase",
+  "timeOfDay": "same as weather or time phrase",
+  "prop": "nothing or one simple prop",
+  "cameraAngle": "composition phrase",
+  "composition": "same as cameraAngle",
+  "colorDirection": "color palette phrase",
+  "emotion": "one of: gentle, funny, momentum, self-worth, perspective",
+  "copyFormula": "one of: plain opener, then deadpan truth | smile/stay/remember opener, then tiny sincere payoff | group-chat line, then iconic/gangsta/real payoff"
+}`;
+}
+
+async function generateDirectedScene({ client, model, args, index, count, avoidSignatures }) {
+  const guidance = directionMetadata(args);
+  if (!client) return buildDirectedSceneFallback({ args, index, count, guidance });
+
+  const prompt = buildDirectedScenePrompt({ args, index, count, avoidSignatures });
+  const response = await client.responses.create({
+    model,
+    input: [{ role: "user", content: [{ type: "input_text", text: prompt }] }],
+  });
+  const raw = parseDirectorScene(responseText(response));
+  return {
+    ...buildSceneFromDirector(raw),
+    source: "custom-direction",
+    guidance,
+    seriesIndex: index,
+    seriesCount: count,
+  };
+}
+
+function buildDirectedSceneFallback({ args, index, count, guidance }) {
+  const idea = args.idea || args.styleNotes || "custom camera-roll idea";
+  const subjectKind = /\b(cat|dog|cow|bear|monkey|duck|donkey|fox|lamb|animal|puppy|kitten)\b/i.test(idea)
+    ? "animal"
+    : "person";
+  const camera = args.cameraLook === "auto"
+    ? "grainy high-contrast 2000s digital camera photo"
+    : CAMERA_LOOKS[args.cameraLook];
+  const setting = /\btimes square|city|street|night|neon\b/i.test(idea)
+    ? "a busy neon city square at night with blurred unreadable signs and a dark open sky above"
+    : "a real camera-roll location with a clean text-safe upper background";
+  const vibe = args.vibePreset === "auto" ? (args.directionMode === "series" ? "custom series vibe" : "custom directed scene") : args.vibePreset.replace(/-/g, " ");
+
+  return {
+    ...buildSceneFromDirector({
+      conceptId: `custom-direction-${index}`,
+      vibe,
+      subjectKind,
+      subject: subjectKind === "animal" ? "the user-described animal subject" : "the user-described subject",
+      action: `${idea}${args.directionMode === "series" && count > 1 ? `, variation ${index} of ${count}` : ""}`,
+      setting,
+      camera,
+      weather: args.cameraLook === "night-out" ? "clear night with distant city glow" : "high-contrast 2000s light",
+      timeOfDay: args.cameraLook === "night-out" ? "night" : "2000s camera-roll light",
+      prop: "nothing",
+      cameraAngle: "subject low in frame with a clean text-safe upper background",
+      composition: "subject low in frame with a clean text-safe upper background",
+      colorDirection: "high-contrast 2000s digital color with crushed shadows",
+      emotion: "funny",
+      copyFormula: "group-chat line, then iconic/gangsta/real payoff",
+      guidance,
+      seriesIndex: index,
+      seriesCount: count,
+    }),
+    source: "custom-direction",
+  };
 }
 
 async function pickUniqueScene({ client, promptModel, avoidSignatures, preferEnergy = false }) {
@@ -489,6 +682,12 @@ async function main() {
     const modeLabel = { prompts: "prompts only", images: "background images" }[args.mode];
     console.log(`Generating ${args.count} × ${modeLabel} → ${args.outDir}/`);
     if (args.fromPrompts) console.log(`Using prompts from: ${args.fromPromptsDir}/`);
+    if (hasDirection(args)) {
+      console.log(`Direction: ${args.directionMode} | ${args.idea || "(style-only)"}`);
+      console.log(`Camera look: ${args.cameraLook}`);
+      console.log(`Scene vibe: ${args.vibePreset}`);
+      if (args.styleNotes) console.log(`Style notes: ${args.styleNotes}`);
+    }
     console.log(`Models: prompt=${args.promptModel}  image=${args.model}`);
     console.log("");
   }
@@ -528,12 +727,23 @@ async function main() {
       ({ scene, prompt: scenePrompt, promptWriterPrompt, name } = source);
     } else {
       name = makeBackgroundName(attempted);
-      scene = await pickUniqueScene({
-        client: openai,
-        promptModel: args.promptModel,
-        avoidSignatures: avoidSceneSignatures,
-        preferEnergy: itemNumber % 3 === 1,
-      });
+      if (hasDirection(args)) {
+        scene = await generateDirectedScene({
+          client: openai,
+          model: args.promptModel,
+          args,
+          index: itemNumber,
+          count: args.count,
+          avoidSignatures: avoidSceneSignatures,
+        });
+      } else {
+        scene = await pickUniqueScene({
+          client: openai,
+          promptModel: args.promptModel,
+          avoidSignatures: avoidSceneSignatures,
+          preferEnergy: itemNumber % 3 === 1,
+        });
+      }
       rememberScene(scene, avoidSceneSignatures);
     }
 
@@ -564,6 +774,7 @@ async function main() {
           promptModel: args.promptModel,
           generatedAt: new Date().toISOString(),
           scene,
+          generationDirection: directionMetadata(args),
           promptWriterPrompt,
         };
         const paths = await withProgress(`${prefix} saving prompt`, () =>
@@ -595,6 +806,7 @@ async function main() {
         size: args.size,
         generatedAt: new Date().toISOString(),
         scene,
+        generationDirection: directionMetadata(args),
         scenePrompt,
         promptWriterPrompt,
       };

@@ -1349,6 +1349,17 @@ Return only the final image prompt as plain text.`;
 function sceneSpecificPromptNotes(brief) {
   const id = String(brief.conceptId || "");
   const notes = [];
+  const guidanceIdea = String(brief.guidance?.idea || "").trim();
+  const guidanceVibe = String(brief.guidance?.vibePresetDescription || "").trim();
+
+  if (guidanceIdea) {
+    notes.push(
+      `CUSTOM USER DIRECTION: preserve the core requested idea/vibe: "${guidanceIdea.slice(0, 260)}". If it contains a named celebrity, public figure, brand, team, or fictional/franchise character, translate that into generic styling, costume, era, mood, or pose only; do not depict exact likenesses, logos, readable brand marks, or exact characters.`
+    );
+  }
+  if (guidanceVibe && guidanceVibe !== "let the user's idea lead the mood") {
+    notes.push(`CUSTOM SCENE VIBE: ${guidanceVibe}.`);
+  }
 
   if (id === "skydiver-sunset-grin") {
     notes.push(

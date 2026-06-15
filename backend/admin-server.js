@@ -1040,6 +1040,11 @@ async function main() {
       if (payload.promptModel) args.push("--prompt-model", payload.promptModel);
       if (payload.size) args.push("--size", payload.size);
       if (payload.dryRun) args.push("--dry-run");
+      if (payload.idea && String(payload.idea).trim()) args.push("--idea", String(payload.idea));
+      if (payload.directionMode) args.push("--direction-mode", String(payload.directionMode));
+      if (payload.cameraLook) args.push("--camera-look", String(payload.cameraLook));
+      if (payload.vibePreset) args.push("--vibe-preset", String(payload.vibePreset));
+      if (payload.styleNotes && String(payload.styleNotes).trim()) args.push("--style-notes", String(payload.styleNotes));
       if (Array.isArray(payload.promptIds) && payload.promptIds.length) {
         args.push("--prompt-ids", payload.promptIds.join(","));
       }

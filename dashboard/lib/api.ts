@@ -212,6 +212,11 @@ export interface GenerateOptions {
   promptModel?: string;
   size?: string;
   dryRun?: boolean;
+  idea?: string;
+  directionMode?: "series" | "exact";
+  cameraLook?: "auto" | "2000s-digital" | "cheap-flash" | "disposable" | "fisheye" | "night-out" | "sunset" | "raw-iphone";
+  vibePreset?: "auto" | "iconic" | "chaos" | "night-out" | "outdoors" | "animal-chaos" | "street-racer" | "dressy-flash";
+  styleNotes?: string;
   promptIds?: string[];
 }
 
