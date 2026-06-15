@@ -62,7 +62,7 @@ const VIBE_PRESETS = {
   chaos: "goofy peak-frame chaos, scream-laughing, absurd but happy, caught mid-action",
   "night-out": "friends outside late, singing, neon, rain-slick street, flash photo after a wild night",
   outdoors: "big view, hiking, beach run, wind, sunset, rainbows, warm rain, full-body joy",
-  "animal-chaos": "baby animals or multiple animals in one frame, playful piles, zoomies, tiny paws, instant comedy",
+  "animal-chaos": "bright happy baby animals or multiple animals in one frame, playful piles, zoomies, tiny paws, sunny grass, beach, flowers, splash, instant comedy",
   "street-racer": "early-2000s street-racer styling, shiny cars as vague shapes, flash, motion, no logos or exact cast likenesses",
   "dressy-flash": "sharp suit or dress, model-level beauty, red-carpet-ish compact flash, expensive but candid",
 };
@@ -371,9 +371,12 @@ ${args.styleNotes || "(none)"}
 
 Hard creative rules:
 - Keep the result like a real forgotten camera-roll photo: early-2000s digital, grain, cheap flash or imperfect exposure, accidental framing.
+- The default emotional temperature is bright, uplifting, funny, and save-worthy. It should feel like a small hit of joy, not gloomy nature content.
 - Use a specific, interesting real place. The background can be readable for text, but it must still have context: sky, smoke, mist, sunset, arena rafters, packed bleachers, convention lights, neon reflections, rain, crowd bokeh, bridge underside, high ceiling, or event lighting.
 - Never solve text space with a plain wall, blank beige wall, empty studio backdrop, blank concrete, plain curtain, or featureless indoor surface.
 - Make it emotionally readable: happy, iconic, weird, confident, funny, scream-laughing, or caught in a peak moment.
+- Avoid muddy, swampy, murky, grey-green, damp, overcast, sad, documentary-wildlife, or eerie scenes unless the user explicitly asks for that.
+- For animal or baby-animal ideas, make the background cheerful: sunlit grass, flowers, blue sky, beach, shallow splash, colorful yard, picnic blanket, park path, or warm window light. Do not use foggy riverbanks, dark wet fur piles, muddy banks, cold mist, or gloomy swamp water.
 - If the user asks for costume, sport, formalwear, celebrity-adjacent, or pop-reference energy, put it in a fitting world: a convention floor, real boxing ring, stadium, paddock, hotel driveway, rooftop, arcade, street meet, public pool, beach sprint, or crowded event space.
 - If the user names a real person, actor, athlete, musician, celebrity, public figure, or fictional/franchise character, DO NOT depict that exact person/character. Translate it into generic styling, era, costume, posture, subject type, or aesthetic only.
 - Do not include logos, team crests, brand marks, franchise symbols, typography, signs as readable text, or exact celebrity likenesses.
@@ -423,13 +426,15 @@ async function generateDirectedScene({ client, model, args, index, count, avoidS
 
 function buildDirectedSceneFallback({ args, index, count, guidance }) {
   const idea = args.idea || args.styleNotes || "custom camera-roll idea";
-  const subjectKind = /\b(cat|dog|cow|bear|monkey|duck|donkey|fox|lamb|animal|puppy|kitten)\b/i.test(idea)
+  const subjectKind = args.vibePreset === "animal-chaos" || /\b(cat|cats|dog|dogs|cow|cows|bear|bears|monkey|monkeys|duck|ducks|duckling|ducklings|donkey|donkeys|fox|foxes|lamb|lambs|animal|animals|puppy|puppies|kitten|kittens|otter|otters|seal|seals|bunny|bunnies|rabbit|rabbits|goat|goats)\b/i.test(idea)
     ? "animal"
     : "person";
   const camera = args.cameraLook === "auto"
     ? "grainy high-contrast 2000s digital camera photo"
     : CAMERA_LOOKS[args.cameraLook];
-  let setting = "a real camera-roll location with interesting context and a readable upper sky, ceiling, mist, lights, or crowd-glow area";
+  let setting = subjectKind === "animal"
+    ? "a bright sunny park lawn with flowers, blue sky, playful clutter low in frame, and a readable joyful upper background"
+    : "a real camera-roll location with interesting context and a readable upper sky, ceiling, mist, lights, or crowd-glow area";
   if (/\bspace|sci-fi|helmet|convention\b/i.test(idea)) {
     setting = "a busy space convention atrium with suspended planet props, vendor booths low in frame, camera flashes, and a high industrial ceiling";
   } else if (/\bbox|boxing|boxer|glove|ring\b/i.test(idea)) {
@@ -452,12 +457,18 @@ function buildDirectedSceneFallback({ args, index, count, guidance }) {
       action: `${idea}${args.directionMode === "series" && count > 1 ? `, variation ${index} of ${count}` : ""}`,
       setting,
       camera,
-      weather: args.cameraLook === "night-out" ? "clear night with distant city glow" : "high-contrast 2000s light",
-      timeOfDay: args.cameraLook === "night-out" ? "night" : "2000s camera-roll light",
+      weather: subjectKind === "animal"
+        ? "clear blue sky with warm happy sunlight"
+        : args.cameraLook === "night-out" ? "clear night with distant city glow" : "high-contrast 2000s light",
+      timeOfDay: subjectKind === "animal"
+        ? "bright cheerful daytime"
+        : args.cameraLook === "night-out" ? "night" : "2000s camera-roll light",
       prop: "nothing",
       cameraAngle: "subject low in frame with a readable but interesting upper background",
       composition: "subject low in frame with a readable but interesting upper background",
-      colorDirection: "high-contrast 2000s digital color with crushed shadows",
+      colorDirection: subjectKind === "animal"
+        ? "saturated blue sky, bright grass, flowers, warm sunlight, and clean early-digital color"
+        : "high-contrast 2000s digital color with crushed shadows",
       emotion: "funny",
       copyFormula: "group-chat line, then iconic/gangsta/real payoff",
       guidance,
