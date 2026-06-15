@@ -83,8 +83,15 @@ function finishJob(jobId, exitCode) {
   }
 }
 
+function formatSpawnArg(arg) {
+  const value = String(arg);
+  if (/^[A-Za-z0-9_./:=@-]+$/.test(value)) return value;
+  return JSON.stringify(value);
+}
+
 function spawnJob(type, scriptName, args = [], extraEnv = {}) {
   const jobId = createJob(type);
+  addJobLine(jobId, `$ node ${[scriptName, ...args].map(formatSpawnArg).join(" ")}`);
   const proc = spawn("node", [join(__dirname, scriptName), ...args], {
     cwd: __dirname,
     env: { ...process.env, ...extraEnv },
