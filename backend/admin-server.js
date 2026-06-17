@@ -24,6 +24,7 @@ import {
   resizeForWidget,
 } from "./instagram-helper.js";
 import { getDraftForPublish, publishDraftFromDb } from "./publish-draft.js";
+import { getInstagramConnectionStatus, publishInstagramCarousel } from "./instagram-publisher.js";
 import {
   DEFAULT_CAPTION_MODEL,
   buildCaptionPrompt,
@@ -105,6 +106,22 @@ function spawnJob(type, scriptName, args = [], extraEnv = {}) {
   return jobId;
 }
 
+function runInProcessJob(type, handler) {
+  const jobId = createJob(type);
+  queueMicrotask(async () => {
+    try {
+      await handler({
+        log: (line) => addJobLine(jobId, line),
+      });
+      finishJob(jobId, 0);
+    } catch (e) {
+      addJobLine(jobId, `[err] ${e.message || e}`);
+      finishJob(jobId, 1);
+    }
+  });
+  return jobId;
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function env(name) {
@@ -159,7 +176,7 @@ function checkToken(req) {
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, X-Admin-Token",
 };
 
@@ -189,7 +206,386 @@ async function listAllStoragePaths(supabase) {
   return paths;
 }
 
+async function deletePostImage(supabase, { id, storagePath }) {
+  let query = supabase
+    .from("posts")
+    .select("id, storage_path")
+    .limit(2);
+  if (id) query = query.eq("id", id);
+  else query = query.eq("storage_path", storagePath);
+
+  const { data: rows, error: selectErr } = await query;
+  if (selectErr) throw selectErr;
+  if (!rows?.length) throw httpError("Post image not found", 404);
+  if (rows.length > 1) throw httpError("Delete target is ambiguous. Refresh and try again.", 409);
+
+  const row = rows[0];
+  if (storagePath && row.storage_path !== storagePath) {
+    throw httpError("Delete target changed. Refresh and try again.", 409);
+  }
+  if (!row.storage_path.startsWith(`${PREFIX}/`)) {
+    throw httpError("Invalid storage path", 400);
+  }
+
+  const { error: rmErr } = await supabase.storage.from(BUCKET).remove([row.storage_path]);
+  if (rmErr) throw rmErr;
+
+  const { data: deleted, error: dbErr } = await supabase
+    .from("posts")
+    .delete()
+    .eq("id", row.id)
+    .select("id, storage_path");
+  if (dbErr) throw dbErr;
+  if (!deleted?.length) throw httpError("Post image row was already deleted", 404);
+
+  return {
+    removedStorage: 1,
+    removedRows: deleted.length,
+    removed: deleted.map(item => ({ id: item.id, storagePath: item.storage_path })),
+  };
+}
+
 // ─── DB Helpers ───────────────────────────────────────────────────────────────
+
+const CAROUSEL_ITEM_COUNT = 5;
+const EDITABLE_CAROUSEL_STATUSES = new Set(["draft", "ready", "failed"]);
+
+function httpError(message, statusCode = 500) {
+  const err = new Error(message);
+  err.statusCode = statusCode;
+  return err;
+}
+
+function postToStorageImage(row, projectUrl) {
+  return {
+    id: row.id,
+    instagramId: row.instagram_id,
+    storagePath: row.storage_path,
+    caption: row.caption,
+    createdAt: row.created_at,
+    status: row.status ?? "active",
+    publicUrl: publicObjectUrl(projectUrl, row.storage_path),
+  };
+}
+
+function normalizeCarouselPostIds(value) {
+  const postIds = Array.isArray(value) ? value.filter(id => typeof id === "string" && id.trim()) : [];
+  if (postIds.length !== CAROUSEL_ITEM_COUNT) {
+    throw httpError(`Choose exactly ${CAROUSEL_ITEM_COUNT} Library posts for a carousel`, 400);
+  }
+  if (new Set(postIds).size !== postIds.length) {
+    throw httpError("A carousel cannot use the same Library post twice", 400);
+  }
+  return postIds;
+}
+
+async function getActivePostsInOrder(supabase, postIds) {
+  const { data, error } = await supabase
+    .from("posts")
+    .select("id, instagram_id, storage_path, caption, created_at, status")
+    .in("id", postIds);
+  if (error) throw error;
+  const byId = new Map((data ?? []).map(row => [row.id, row]));
+  const missing = postIds.filter(id => !byId.has(id));
+  if (missing.length) throw httpError(`Library post not found: ${missing[0]}`, 400);
+  const posts = postIds.map(id => byId.get(id));
+  const inactive = posts.find(row => (row.status ?? "active") !== "active");
+  if (inactive) throw httpError("Carousels can only use active Library posts", 400);
+  return posts;
+}
+
+function serializeCarousel(row, items, postsById, projectUrl) {
+  return {
+    id: row.id,
+    title: row.title || "",
+    caption: row.caption || "",
+    status: row.status,
+    instagramMediaId: row.instagram_media_id || null,
+    permalink: row.permalink || null,
+    lastError: row.last_error || null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    postedAt: row.posted_at || null,
+    items: items
+      .slice()
+      .sort((a, b) => a.position - b.position)
+      .map(item => {
+        const post = postsById.get(item.post_id) || null;
+        return {
+          id: item.id,
+          carouselId: item.carousel_id,
+          postId: item.post_id,
+          position: item.position,
+          storagePathSnapshot: item.storage_path_snapshot,
+          captionSnapshot: item.caption_snapshot || null,
+          createdAt: item.created_at,
+          post: post ? postToStorageImage(post, projectUrl) : null,
+        };
+      }),
+  };
+}
+
+async function readCarousel(supabase, projectUrl, id) {
+  const { data: row, error } = await supabase
+    .from("instagram_carousels")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  if (!row) return null;
+
+  const { data: items, error: itemsError } = await supabase
+    .from("instagram_carousel_items")
+    .select("*")
+    .eq("carousel_id", id)
+    .order("position", { ascending: true });
+  if (itemsError) throw itemsError;
+
+  const postIds = [...new Set((items ?? []).map(item => item.post_id))];
+  const postsById = new Map();
+  if (postIds.length) {
+    const { data: posts, error: postsError } = await supabase
+      .from("posts")
+      .select("id, instagram_id, storage_path, caption, created_at, status")
+      .in("id", postIds);
+    if (postsError) throw postsError;
+    for (const post of posts ?? []) postsById.set(post.id, post);
+  }
+
+  return serializeCarousel(row, items ?? [], postsById, projectUrl);
+}
+
+async function listCarousels(supabase, projectUrl, { includeArchived = false } = {}) {
+  let query = supabase
+    .from("instagram_carousels")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (!includeArchived) query = query.neq("status", "archived");
+
+  const { data: rows, error } = await query;
+  if (error) throw error;
+  if (!rows?.length) return [];
+
+  const carouselIds = rows.map(row => row.id);
+  const { data: items, error: itemsError } = await supabase
+    .from("instagram_carousel_items")
+    .select("*")
+    .in("carousel_id", carouselIds)
+    .order("position", { ascending: true });
+  if (itemsError) throw itemsError;
+
+  const postIds = [...new Set((items ?? []).map(item => item.post_id))];
+  const postsById = new Map();
+  if (postIds.length) {
+    const { data: posts, error: postsError } = await supabase
+      .from("posts")
+      .select("id, instagram_id, storage_path, caption, created_at, status")
+      .in("id", postIds);
+    if (postsError) throw postsError;
+    for (const post of posts ?? []) postsById.set(post.id, post);
+  }
+
+  const itemsByCarousel = new Map();
+  for (const item of items ?? []) {
+    if (!itemsByCarousel.has(item.carousel_id)) itemsByCarousel.set(item.carousel_id, []);
+    itemsByCarousel.get(item.carousel_id).push(item);
+  }
+
+  return rows.map(row => serializeCarousel(row, itemsByCarousel.get(row.id) ?? [], postsById, projectUrl));
+}
+
+async function createCarousel(supabase, projectUrl, payload) {
+  const postIds = normalizeCarouselPostIds(payload?.postIds);
+  const posts = await getActivePostsInOrder(supabase, postIds);
+  const title = typeof payload.title === "string" && payload.title.trim()
+    ? payload.title.trim().slice(0, 120)
+    : `Carousel ${new Date().toLocaleDateString()}`;
+  const caption = typeof payload.caption === "string" ? payload.caption : "";
+  const status = payload.status === "ready" ? "ready" : "draft";
+
+  const { data: row, error } = await supabase
+    .from("instagram_carousels")
+    .insert({ title, caption, status, last_error: null })
+    .select("id")
+    .single();
+  if (error) throw error;
+
+  const itemRows = posts.map((post, index) => ({
+    carousel_id: row.id,
+    post_id: post.id,
+    position: index + 1,
+    storage_path_snapshot: post.storage_path,
+    caption_snapshot: post.caption || null,
+  }));
+  const { error: itemError } = await supabase.from("instagram_carousel_items").insert(itemRows);
+  if (itemError) {
+    await supabase.from("instagram_carousels").delete().eq("id", row.id);
+    throw itemError;
+  }
+
+  return await readCarousel(supabase, projectUrl, row.id);
+}
+
+async function updateCarousel(supabase, projectUrl, id, payload) {
+  const existing = await readCarousel(supabase, projectUrl, id);
+  if (!existing) throw httpError("Carousel not found", 404);
+  if (!EDITABLE_CAROUSEL_STATUSES.has(existing.status)) {
+    throw httpError(`Cannot edit a ${existing.status} carousel`, 400);
+  }
+
+  let posts = null;
+  if (Object.prototype.hasOwnProperty.call(payload, "postIds")) {
+    const postIds = normalizeCarouselPostIds(payload.postIds);
+    posts = await getActivePostsInOrder(supabase, postIds);
+  }
+
+  const patch = {};
+  if (typeof payload.title === "string") patch.title = payload.title.trim().slice(0, 120);
+  if (typeof payload.caption === "string") patch.caption = payload.caption;
+  if (typeof payload.status === "string") {
+    if (!["draft", "ready"].includes(payload.status)) throw httpError("status must be draft or ready", 400);
+    patch.status = payload.status;
+  }
+  if (Object.keys(patch).length) {
+    patch.last_error = null;
+    const { error } = await supabase.from("instagram_carousels").update(patch).eq("id", id);
+    if (error) throw error;
+  }
+
+  if (posts) {
+    const { error: deleteError } = await supabase.from("instagram_carousel_items").delete().eq("carousel_id", id);
+    if (deleteError) throw deleteError;
+    const itemRows = posts.map((post, index) => ({
+      carousel_id: id,
+      post_id: post.id,
+      position: index + 1,
+      storage_path_snapshot: post.storage_path,
+      caption_snapshot: post.caption || null,
+    }));
+    const { error: insertError } = await supabase.from("instagram_carousel_items").insert(itemRows);
+    if (insertError) throw insertError;
+  }
+
+  return await readCarousel(supabase, projectUrl, id);
+}
+
+async function duplicateCarousel(supabase, projectUrl, id) {
+  const existing = await readCarousel(supabase, projectUrl, id);
+  if (!existing) throw httpError("Carousel not found", 404);
+  return await createCarousel(supabase, projectUrl, {
+    postIds: existing.items.map(item => item.postId),
+    caption: existing.caption,
+    title: `${existing.title || "Carousel"} copy`,
+  });
+}
+
+async function archiveCarousel(supabase, projectUrl, id) {
+  const existing = await readCarousel(supabase, projectUrl, id);
+  if (!existing) throw httpError("Carousel not found", 404);
+  if (existing.status === "posting") throw httpError("Cannot archive a carousel while it is posting", 400);
+  const { error } = await supabase
+    .from("instagram_carousels")
+    .update({ status: "archived" })
+    .eq("id", id);
+  if (error) throw error;
+  return await readCarousel(supabase, projectUrl, id);
+}
+
+async function exportCarouselPackage(supabase, projectUrl, id) {
+  const existing = await readCarousel(supabase, projectUrl, id);
+  if (!existing) throw httpError("Carousel not found", 404);
+  if (existing.items.length !== CAROUSEL_ITEM_COUNT || existing.items.some(item => !item.post)) {
+    throw httpError(`Carousel must have exactly ${CAROUSEL_ITEM_COUNT} Library posts before export`, 400);
+  }
+
+  const safeTitle = (existing.title || "carousel")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48) || "carousel";
+
+  return {
+    id: existing.id,
+    title: existing.title,
+    caption: existing.caption,
+    status: existing.status,
+    items: existing.items.map((item, index) => ({
+      position: index + 1,
+      postId: item.postId,
+      storagePath: item.post.storagePath,
+      url: item.post.publicUrl,
+      filename: `${String(index + 1).padStart(2, "0")}-${safeTitle}.${item.post.storagePath.split(".").pop() || "jpg"}`,
+    })),
+  };
+}
+
+async function markCarouselPosted(supabase, projectUrl, id, payload = {}) {
+  const existing = await readCarousel(supabase, projectUrl, id);
+  if (!existing) throw httpError("Carousel not found", 404);
+  if (existing.status === "posting") throw httpError("Cannot manually mark a carousel posted while it is posting", 400);
+  if (existing.status === "archived") throw httpError("Cannot manually mark an archived carousel posted", 400);
+
+  const patch = {
+    status: "posted",
+    posted_at: new Date().toISOString(),
+    last_error: null,
+  };
+  if (typeof payload.permalink === "string" && payload.permalink.trim()) {
+    patch.permalink = payload.permalink.trim();
+  }
+
+  const { error } = await supabase.from("instagram_carousels").update(patch).eq("id", id);
+  if (error) throw error;
+  return await readCarousel(supabase, projectUrl, id);
+}
+
+async function publishCarouselNow(supabase, projectUrl, id, log) {
+  const existing = await readCarousel(supabase, projectUrl, id);
+  if (!existing) throw httpError("Carousel not found", 404);
+  if (["posting", "posted", "archived"].includes(existing.status)) {
+    throw httpError(`Cannot post a ${existing.status} carousel`, 400);
+  }
+  if (existing.items.length !== CAROUSEL_ITEM_COUNT || existing.items.some(item => !item.post)) {
+    throw httpError(`Carousel must have exactly ${CAROUSEL_ITEM_COUNT} Library posts`, 400);
+  }
+  const inactive = existing.items.find(item => item.post.status !== "active");
+  if (inactive) throw httpError("Carousels can only publish active Library posts", 400);
+
+  const { error: postingError } = await supabase
+    .from("instagram_carousels")
+    .update({ status: "posting", last_error: null })
+    .eq("id", id);
+  if (postingError) throw postingError;
+
+  try {
+    log(`Publishing carousel ${id}`);
+    const imageUrls = existing.items.map(item => item.post.publicUrl);
+    const result = await publishInstagramCarousel({
+      imageUrls,
+      caption: existing.caption,
+      log,
+    });
+    const { error: postedError } = await supabase
+      .from("instagram_carousels")
+      .update({
+        status: "posted",
+        instagram_media_id: result.instagramMediaId,
+        permalink: result.permalink,
+        posted_at: new Date().toISOString(),
+        last_error: null,
+      })
+      .eq("id", id);
+    if (postedError) throw postedError;
+    log(`Published Instagram media ${result.instagramMediaId}`);
+    if (result.permalink) log(result.permalink);
+  } catch (e) {
+    await supabase
+      .from("instagram_carousels")
+      .update({ status: "failed", last_error: e.message || String(e) })
+      .eq("id", id);
+    throw e;
+  }
+}
 
 async function listDrafts(supabase, projectUrl) {
   const draftsResult = await supabase
@@ -717,9 +1113,12 @@ async function resolveTargetsWithInstaloader(targets) {
   py.stdout.on("data", d => { out += d.toString(); });
   py.stderr.on("data", d => { err += d.toString(); });
   const code = await new Promise(resolve => py.on("close", resolve));
-  if (code !== 0) throw new Error(err.trim() || "Instaloader resolver failed");
   let parsed;
-  try { parsed = JSON.parse(out || "{}"); } catch { throw new Error("Instaloader resolver returned invalid JSON"); }
+  try { parsed = JSON.parse(out || "{}"); } catch {
+    const detail = [err.trim(), out.trim()].filter(Boolean).join("\n");
+    throw new Error(detail || "Instaloader resolver returned invalid JSON");
+  }
+  if (code !== 0) throw new Error(parsed.error || err.trim() || "Instaloader resolver failed");
   if (parsed.error) throw new Error(parsed.error);
   if (!Array.isArray(parsed.items)) throw new Error("Instaloader resolver returned invalid items");
   return parsed.items;
@@ -870,6 +1269,120 @@ async function main() {
       const { error } = await supabase.from("posts").update({ status }).in("storage_path", paths);
       if (error) { json(res, 500, { error: error.message }); return; }
       json(res, 200, { updated: paths.length, status });
+      return;
+    }
+
+    // ── Instagram Carousels ───────────────────────────────────────────────
+
+    if (req.method === "GET" && url.pathname === "/api/instagram/status") {
+      try {
+        json(res, 200, await getInstagramConnectionStatus());
+      } catch (e) {
+        json(res, 500, { error: e.message });
+      }
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/carousels") {
+      try {
+        const includeArchived = ["1", "true", "yes"].includes(String(url.searchParams.get("includeArchived") || "").toLowerCase());
+        json(res, 200, { carousels: await listCarousels(supabase, projectUrl, { includeArchived }) });
+      } catch (e) {
+        json(res, e.statusCode || 500, { error: e.message });
+      }
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/carousels") {
+      const payload = await readBody(req);
+      if (!payload) { json(res, 400, { error: "Invalid JSON" }); return; }
+      try {
+        json(res, 200, { carousel: await createCarousel(supabase, projectUrl, payload) });
+      } catch (e) {
+        json(res, e.statusCode || 500, { error: e.message });
+      }
+      return;
+    }
+
+    const carouselPostNowMatch = url.pathname.match(/^\/api\/carousels\/([^/]+)\/post-now$/);
+    if (req.method === "POST" && carouselPostNowMatch) {
+      try {
+        const status = await getInstagramConnectionStatus();
+        if (!status.publishEnabled) {
+          json(res, 400, { error: status.error || `Instagram publishing is not connected${status.missing?.length ? `: missing ${status.missing.join(", ")}` : ""}` });
+          return;
+        }
+        const carouselId = carouselPostNowMatch[1];
+        const jobId = runInProcessJob("instagram-publish", ({ log }) => publishCarouselNow(supabase, projectUrl, carouselId, log));
+        json(res, 200, { jobId });
+      } catch (e) {
+        json(res, e.statusCode || 500, { error: e.message });
+      }
+      return;
+    }
+
+    const carouselDuplicateMatch = url.pathname.match(/^\/api\/carousels\/([^/]+)\/duplicate$/);
+    if (req.method === "POST" && carouselDuplicateMatch) {
+      try {
+        json(res, 200, { carousel: await duplicateCarousel(supabase, projectUrl, carouselDuplicateMatch[1]) });
+      } catch (e) {
+        json(res, e.statusCode || 500, { error: e.message });
+      }
+      return;
+    }
+
+    const carouselArchiveMatch = url.pathname.match(/^\/api\/carousels\/([^/]+)\/archive$/);
+    if (req.method === "POST" && carouselArchiveMatch) {
+      try {
+        json(res, 200, { carousel: await archiveCarousel(supabase, projectUrl, carouselArchiveMatch[1]) });
+      } catch (e) {
+        json(res, e.statusCode || 500, { error: e.message });
+      }
+      return;
+    }
+
+    const carouselExportMatch = url.pathname.match(/^\/api\/carousels\/([^/]+)\/export$/);
+    if (req.method === "GET" && carouselExportMatch) {
+      try {
+        json(res, 200, { package: await exportCarouselPackage(supabase, projectUrl, carouselExportMatch[1]) });
+      } catch (e) {
+        json(res, e.statusCode || 500, { error: e.message });
+      }
+      return;
+    }
+
+    const carouselMarkPostedMatch = url.pathname.match(/^\/api\/carousels\/([^/]+)\/mark-posted$/);
+    if (req.method === "POST" && carouselMarkPostedMatch) {
+      const payload = await readBody(req);
+      if (!payload) { json(res, 400, { error: "Invalid JSON" }); return; }
+      try {
+        json(res, 200, { carousel: await markCarouselPosted(supabase, projectUrl, carouselMarkPostedMatch[1], payload) });
+      } catch (e) {
+        json(res, e.statusCode || 500, { error: e.message });
+      }
+      return;
+    }
+
+    const carouselMatch = url.pathname.match(/^\/api\/carousels\/([^/]+)$/);
+    if (req.method === "GET" && carouselMatch) {
+      try {
+        const carousel = await readCarousel(supabase, projectUrl, carouselMatch[1]);
+        if (!carousel) { json(res, 404, { error: "Carousel not found" }); return; }
+        json(res, 200, { carousel });
+      } catch (e) {
+        json(res, e.statusCode || 500, { error: e.message });
+      }
+      return;
+    }
+
+    if (req.method === "PATCH" && carouselMatch) {
+      const payload = await readBody(req);
+      if (!payload) { json(res, 400, { error: "Invalid JSON" }); return; }
+      try {
+        json(res, 200, { carousel: await updateCarousel(supabase, projectUrl, carouselMatch[1], payload) });
+      } catch (e) {
+        json(res, e.statusCode || 500, { error: e.message });
+      }
       return;
     }
 
@@ -1092,6 +1605,12 @@ async function main() {
       if (payload.dryRun) args.push("--dry-run");
       if (payload.idea && String(payload.idea).trim()) args.push("--idea", String(payload.idea));
       if (payload.directionMode) args.push("--direction-mode", String(payload.directionMode));
+      if (payload.styleRecipe) args.push("--style-recipe", String(payload.styleRecipe));
+      if (payload.subject && String(payload.subject).trim()) args.push("--subject", String(payload.subject));
+      if (payload.location && String(payload.location).trim()) args.push("--location", String(payload.location));
+      if (payload.gender && String(payload.gender).trim()) args.push("--gender", String(payload.gender));
+      if (payload.gear && String(payload.gear).trim()) args.push("--gear", String(payload.gear));
+      if (payload.action && String(payload.action).trim()) args.push("--action", String(payload.action));
       if (payload.cameraLook) args.push("--camera-look", String(payload.cameraLook));
       if (payload.vibePreset) args.push("--vibe-preset", String(payload.vibePreset));
       if (payload.styleNotes && String(payload.styleNotes).trim()) args.push("--style-notes", String(payload.styleNotes));
@@ -1302,18 +1821,34 @@ async function main() {
     if (req.method === "POST" && url.pathname === "/api/delete") {
       const payload = await readBody(req);
       if (!payload) { json(res, 400, { error: "Invalid JSON" }); return; }
+      if (typeof payload.id === "string" && payload.id.trim()) {
+        try {
+          const result = await deletePostImage(supabase, {
+            id: payload.id.trim(),
+            storagePath: typeof payload.storagePath === "string" ? payload.storagePath : undefined,
+          });
+          json(res, 200, { ...result, message: `Removed ${result.removedStorage} file; deleted ${result.removedRows} post row.` });
+        } catch (e) {
+          json(res, e.statusCode || 500, { error: e.message });
+        }
+        return;
+      }
       const paths = Array.isArray(payload.paths) ? payload.paths.filter(p => typeof p === "string") : [];
       if (!paths.length) { json(res, 400, { error: "paths[] required" }); return; }
+      if (paths.length > 1 && payload.allowBatch !== true) {
+        json(res, 400, { error: "Batch image delete is disabled in the dashboard. Delete one image at a time." });
+        return;
+      }
       let removedStorage = 0, removedRows = 0;
       const errors = [];
       for (const storagePath of paths) {
-        if (!storagePath.startsWith(`${PREFIX}/`)) { errors.push({ path: storagePath, step: "validate", message: "Invalid path" }); continue; }
-        const { error: rmErr } = await supabase.storage.from(BUCKET).remove([storagePath]);
-        if (rmErr) { errors.push({ path: storagePath, step: "storage", message: rmErr.message }); continue; }
-        removedStorage++;
-        const { data: deleted, error: dbErr } = await supabase.from("posts").delete().eq("storage_path", storagePath).select("id");
-        if (dbErr) errors.push({ path: storagePath, step: "database", message: dbErr.message });
-        else removedRows += deleted?.length ?? 0;
+        try {
+          const result = await deletePostImage(supabase, { storagePath });
+          removedStorage += result.removedStorage;
+          removedRows += result.removedRows;
+        } catch (e) {
+          errors.push({ path: storagePath, step: "delete", message: e.message });
+        }
       }
       json(res, 200, { removedStorage, removedRows, errors: errors.length ? errors : undefined, message: `Removed ${removedStorage} file(s); deleted ${removedRows} post row(s).` });
       return;

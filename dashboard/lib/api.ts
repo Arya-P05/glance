@@ -21,15 +21,42 @@ export const api = {
   stats: () => request<Stats>("/api/stats"),
 
   images: () => request<{ items: StorageImage[] }>("/api/images"),
-  deleteImages: (paths: string[]) =>
+  deleteImage: (opts: { id: string; storagePath: string }) =>
     request<{ removedStorage: number; removedRows: number }>("/api/delete", {
       method: "POST",
-      body: JSON.stringify({ paths }),
+      body: JSON.stringify(opts),
     }),
   setImageStatus: (paths: string[], status: "active" | "inactive") =>
     request<{ updated: number; status: string }>("/api/images/set-status", {
       method: "POST",
       body: JSON.stringify({ paths, status }),
+    }),
+
+  instagramStatus: () => request<InstagramStatus>("/api/instagram/status"),
+  carousels: () => request<{ carousels: InstagramCarousel[] }>("/api/carousels"),
+  carousel: (id: string) => request<{ carousel: InstagramCarousel }>(`/api/carousels/${id}`),
+  createCarousel: (opts: { title?: string; caption?: string; postIds: string[]; status?: "draft" | "ready" }) =>
+    request<{ carousel: InstagramCarousel }>("/api/carousels", {
+      method: "POST",
+      body: JSON.stringify(opts),
+    }),
+  updateCarousel: (id: string, opts: { title?: string; caption?: string; postIds?: string[]; status?: "draft" | "ready" }) =>
+    request<{ carousel: InstagramCarousel }>(`/api/carousels/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(opts),
+    }),
+  duplicateCarousel: (id: string) =>
+    request<{ carousel: InstagramCarousel }>(`/api/carousels/${id}/duplicate`, { method: "POST" }),
+  archiveCarousel: (id: string) =>
+    request<{ carousel: InstagramCarousel }>(`/api/carousels/${id}/archive`, { method: "POST" }),
+  postCarouselNow: (id: string) =>
+    request<{ jobId: string }>(`/api/carousels/${id}/post-now`, { method: "POST" }),
+  exportCarousel: (id: string) =>
+    request<{ package: InstagramCarouselPackage }>(`/api/carousels/${id}/export`),
+  markCarouselPosted: (id: string, opts?: { permalink?: string }) =>
+    request<{ carousel: InstagramCarousel }>(`/api/carousels/${id}/mark-posted`, {
+      method: "POST",
+      body: JSON.stringify(opts ?? {}),
     }),
 
   drafts: () => request<{ drafts: Draft[] }>("/api/drafts"),
@@ -143,6 +170,61 @@ export interface StorageImage {
   publicUrl: string;
 }
 
+export type InstagramCarouselStatus = "draft" | "ready" | "posting" | "posted" | "failed" | "archived";
+
+export interface InstagramCarouselItem {
+  id: string;
+  carouselId: string;
+  postId: string;
+  position: number;
+  storagePathSnapshot: string;
+  captionSnapshot: string | null;
+  createdAt: string;
+  post: StorageImage | null;
+}
+
+export interface InstagramCarousel {
+  id: string;
+  title: string;
+  caption: string;
+  status: InstagramCarouselStatus;
+  instagramMediaId: string | null;
+  permalink: string | null;
+  lastError: string | null;
+  createdAt: string;
+  updatedAt: string;
+  postedAt: string | null;
+  items: InstagramCarouselItem[];
+}
+
+export interface InstagramCarouselPackageItem {
+  position: number;
+  postId: string;
+  storagePath: string;
+  url: string;
+  filename: string;
+}
+
+export interface InstagramCarouselPackage {
+  id: string;
+  title: string;
+  caption: string;
+  status: InstagramCarouselStatus;
+  items: InstagramCarouselPackageItem[];
+}
+
+export interface InstagramStatus {
+  configured: boolean;
+  connected: boolean;
+  publishEnabled: boolean;
+  accountId: string | null;
+  graphApiBase: string;
+  graphApiVersion: string;
+  missing?: string[];
+  username?: string | null;
+  error?: string;
+}
+
 export interface CaptionLayout {
   xRatio: number;
   yRatio: number;
@@ -215,6 +297,12 @@ export interface GenerateOptions {
   dryRun?: boolean;
   idea?: string;
   directionMode?: "series" | "exact";
+  styleRecipe?: "none" | "alpine-techwear" | "animal-nature-selfie";
+  subject?: string;
+  location?: string;
+  gender?: string;
+  gear?: string;
+  action?: string;
   cameraLook?: "auto" | "2000s-digital" | "cheap-flash" | "disposable" | "fisheye" | "night-out" | "sunset" | "raw-iphone";
   vibePreset?: "auto" | "iconic" | "chaos" | "night-out" | "outdoors" | "animal-chaos" | "street-racer" | "dressy-flash";
   styleNotes?: string;

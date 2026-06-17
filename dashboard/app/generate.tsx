@@ -9,6 +9,7 @@ import { clearCachedJob } from "../lib/useJobStream";
 type Mode = "images" | "prompts";
 type Size = "1024x1024" | "1536x1024" | "1024x1536";
 type DirectionMode = "series" | "exact";
+type StyleRecipe = "none" | "alpine-techwear" | "animal-nature-selfie";
 type CameraLook =
   | "auto"
   | "2000s-digital"
@@ -38,6 +39,12 @@ const SIZES: Size[] = ["1024x1024", "1536x1024", "1024x1536"];
 const DIRECTION_MODES: { id: DirectionMode; label: string }[] = [
   { id: "series", label: "Series" },
   { id: "exact", label: "Exact" },
+];
+
+const STYLE_RECIPES: { id: StyleRecipe; label: string; desc: string }[] = [
+  { id: "none", label: "No lock", desc: "Let the prompt decide" },
+  { id: "alpine-techwear", label: "Alpine techwear", desc: "Masked cold outdoor action-cam set" },
+  { id: "animal-nature-selfie", label: "Animal selfie", desc: "Goofy pet/animal selfie with huge sky" },
 ];
 
 const CAMERA_LOOKS: { id: CameraLook; label: string }[] = [
@@ -112,13 +119,30 @@ export default function GenerateScreen() {
   const [dryRun, setDryRun] = useState(false);
   const [idea, setIdea] = useState("");
   const [directionMode, setDirectionMode] = useState<DirectionMode>("series");
+  const [styleRecipe, setStyleRecipe] = useState<StyleRecipe>("none");
+  const [subject, setSubject] = useState("");
+  const [location, setLocation] = useState("");
+  const [gender, setGender] = useState("");
+  const [gear, setGear] = useState("");
+  const [action, setAction] = useState("");
   const [cameraLook, setCameraLook] = useState<CameraLook>("auto");
   const [vibePreset, setVibePreset] = useState<VibePreset>("auto");
   const [styleNotes, setStyleNotes] = useState("");
   const [jobId, setJobId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [lastResult, setLastResult] = useState<string | null>(null);
-  const hasCreativeDirection = Boolean(idea.trim() || styleNotes.trim() || cameraLook !== "auto" || vibePreset !== "auto");
+  const hasCreativeDirection = Boolean(
+    idea.trim() ||
+    styleNotes.trim() ||
+    subject.trim() ||
+    location.trim() ||
+    gender.trim() ||
+    gear.trim() ||
+    action.trim() ||
+    styleRecipe !== "none" ||
+    cameraLook !== "auto" ||
+    vibePreset !== "auto"
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -175,6 +199,12 @@ export default function GenerateScreen() {
         dryRun,
         idea: idea.trim() || undefined,
         directionMode,
+        styleRecipe,
+        subject: subject.trim() || undefined,
+        location: location.trim() || undefined,
+        gender: gender.trim() || undefined,
+        gear: gear.trim() || undefined,
+        action: action.trim() || undefined,
         cameraLook,
         vibePreset,
         styleNotes: styleNotes.trim() || undefined,
@@ -218,7 +248,7 @@ export default function GenerateScreen() {
           value={idea}
           onChangeText={setIdea}
           multiline
-          placeholder={"man and girl in suit and dress outside times square pointing finger guns at the camera"}
+          placeholder={"core idea: masked person on a mountain, same crunchy outdoor action-cam vibe"}
           placeholderTextColor={C.textMuted}
         />
 
@@ -234,6 +264,77 @@ export default function GenerateScreen() {
               </Text>
             </Pressable>
           ))}
+        </View>
+
+        <Text style={styles.fieldLabel}>Style Recipe</Text>
+        <View style={styles.recipeGrid}>
+          {STYLE_RECIPES.map(option => (
+            <Pressable
+              key={option.id}
+              onPress={() => setStyleRecipe(option.id)}
+              style={[styles.recipeCard, styleRecipe === option.id && styles.recipeCardActive]}
+            >
+              <Text style={[styles.recipeLabel, styleRecipe === option.id && styles.recipeLabelActive]}>
+                {option.label}
+              </Text>
+              <Text style={[styles.recipeDesc, styleRecipe === option.id && styles.recipeDescActive]}>
+                {option.desc}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
+        <View style={styles.variableGrid}>
+          <View style={styles.variableField}>
+            <Text style={styles.fieldLabel}>Subject</Text>
+            <TextInput
+              style={styles.input}
+              value={subject}
+              onChangeText={setSubject}
+              placeholder="golden retriever, donkey, cat, solo hiker"
+              placeholderTextColor={C.textMuted}
+            />
+          </View>
+          <View style={styles.variableField}>
+            <Text style={styles.fieldLabel}>Location</Text>
+            <TextInput
+              style={styles.input}
+              value={location}
+              onChangeText={setLocation}
+              placeholder="snowy ridge, green meadow, city roof"
+              placeholderTextColor={C.textMuted}
+            />
+          </View>
+          <View style={styles.variableField}>
+            <Text style={styles.fieldLabel}>Gender / Look</Text>
+            <TextInput
+              style={styles.input}
+              value={gender}
+              onChangeText={setGender}
+              placeholder="woman, man, fluffy, sleepy, mixed"
+              placeholderTextColor={C.textMuted}
+            />
+          </View>
+          <View style={styles.variableField}>
+            <Text style={styles.fieldLabel}>Gear / Prop</Text>
+            <TextInput
+              style={styles.input}
+              value={gear}
+              onChangeText={setGear}
+              placeholder="baseball cap, flower, white shell"
+              placeholderTextColor={C.textMuted}
+            />
+          </View>
+          <View style={styles.variableFieldWide}>
+            <Text style={styles.fieldLabel}>Action</Text>
+            <TextInput
+              style={styles.input}
+              value={action}
+              onChangeText={setAction}
+              placeholder="shrugging at camera, selfie arm, standing above clouds"
+              placeholderTextColor={C.textMuted}
+            />
+          </View>
         </View>
 
         <Text style={styles.fieldLabel}>Camera Look</Text>
@@ -267,7 +368,7 @@ export default function GenerateScreen() {
           value={styleNotes}
           onChangeText={setStyleNotes}
           multiline
-          placeholder="extra style notes: rainy, high contrast, all Arc'teryx-ish outdoor gear, same vague vibe but different poses"
+          placeholder="extra locked style notes: cold blue sky, fisheye, no logos, subject low in frame, huge negative space"
           placeholderTextColor={C.textMuted}
         />
       </View>
@@ -419,6 +520,25 @@ const styles = StyleSheet.create({
   directionSegmentActive: { borderColor: C.accent, backgroundColor: C.accent },
   directionSegmentLabel: { color: C.textSecondary, fontSize: 12, fontWeight: "800" },
   directionSegmentLabelActive: { color: C.bg },
+  recipeGrid: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
+  recipeCard: {
+    flex: 1,
+    minWidth: 180,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 8,
+    backgroundColor: "#0f0f0f",
+    padding: 11,
+    gap: 3,
+  },
+  recipeCardActive: { borderColor: C.accent, backgroundColor: "#141f09" },
+  recipeLabel: { color: C.textPrimary, fontSize: 12, fontWeight: "800" },
+  recipeLabelActive: { color: C.accent },
+  recipeDesc: { color: C.textMuted, fontSize: 11, lineHeight: 15 },
+  recipeDescActive: { color: C.textSecondary },
+  variableGrid: { flexDirection: "row", gap: 10, flexWrap: "wrap" },
+  variableField: { flex: 1, minWidth: 210 },
+  variableFieldWide: { flexBasis: "100%" },
   chipGrid: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
   chip: {
     paddingHorizontal: 11,

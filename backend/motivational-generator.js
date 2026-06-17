@@ -1516,6 +1516,12 @@ export function buildPromptWriterPrompt(brief) {
   const composition = brief.composition || brief.cameraAngle || "subject close to the lens, low camera angle, open negative space above";
   const colorDirection = brief.colorDirection || "clean early-digital blue and green color";
   const sceneSpecific = sceneSpecificPromptNotes(brief);
+  const isAlpineTechwear =
+    brief.guidance?.styleRecipe === "alpine-techwear" ||
+    String(brief.conceptId || "").startsWith("alpine-techwear");
+  const expressionRequirement = isAlpineTechwear
+    ? "- for alpine techwear scenes, do not force an open-mouth grin. The subject can have a covered mouth, balaclava, neck gaiter, neutral cool expression, closed-mouth smile, subtle grin, or occasional open smile only when the scene calls for it"
+    : "- the subject must look visibly happy, shocked, scream-laughing, goofy, proud, or like the best/wildest second of the moment just happened";
 
   return `Write one image-generation prompt for a square Instagram lock-screen poster background.
 
@@ -1551,7 +1557,7 @@ ${sceneSpecific}
 Hard requirements:
 - no text, no letters, no typography, no logo, no watermark
 - do not include any poster quote inside the image
-- the subject must look visibly happy, shocked, scream-laughing, goofy, proud, or like the best/wildest second of the moment just happened
+${expressionRequirement}
 - if the scene has fog, snow, rain, night, or unusual weather, the subject is still visibly happy and positive
 - avoid gloomy, murky, damp, swampy, muddy, sad, grey-green, low-energy, or documentary-wildlife moods unless the scene explicitly demands them
 - for animal scenes, avoid foggy riverbanks, muddy banks, dark wet fur piles, dull swamp water, or nature-documentary realism; cute indoor flash, dramatic night flash, bright ice, flower fields, blue-sky grass, beaches, and cozy rooms are all good when the animal feels funny or happy
@@ -1625,11 +1631,33 @@ function sceneSpecificPromptNotes(brief) {
   const rawGuidanceIdea = String(brief.guidance?.idea || "").trim();
   const guidanceIdea = brief.subjectKind === "animal" ? clampAnimalGroupField(rawGuidanceIdea) : rawGuidanceIdea;
   const guidanceVibe = String(brief.guidance?.vibePresetDescription || "").trim();
+  const guidanceStyleRecipe = String(brief.guidance?.styleRecipe || "none").trim();
+  const guidanceStyleDescription = String(brief.guidance?.styleRecipeDescription || "").trim();
 
   if (guidanceIdea) {
     notes.push(
       `CUSTOM USER DIRECTION: preserve the core requested idea/vibe: "${guidanceIdea.slice(0, 260)}". If it contains a named celebrity, public figure, brand, team, or fictional/franchise character, translate that into generic styling, costume, era, mood, or pose only; do not depict exact likenesses, logos, readable brand marks, or exact characters.`
     );
+  }
+  if (guidanceStyleRecipe && guidanceStyleRecipe !== "none" && guidanceStyleDescription) {
+    notes.push(
+      `LOCKED STYLE RECIPE: ${guidanceStyleDescription}. Keep this recipe's camera texture, color family, composition grammar, and overall vibe consistent. User knobs may change subject, gender/look, location, gear, or action, but do not drift into a different aesthetic.`
+    );
+  }
+  if (guidanceStyleRecipe === "alpine-techwear" || id.startsWith("alpine-techwear")) {
+    notes.push(
+      "ALPINE TECHWEAR DETAILS: do not default to solo men, open mouths, or silver ski goggles. Subjects can be women, men, androgynous people, two girls, a guy and girl, or two friends. Eyewear can be reflective sunglasses, wraparound glacier shades, mirrored shield sunglasses, smoke/amber/blue/green/black lenses, or ski goggles only sometimes. Mouths can be covered by balaclava/neck gaiter or closed with a calm cool expression."
+    );
+  }
+  const knobNotes = [
+    brief.guidance?.subject && `subject=${brief.guidance.subject}`,
+    brief.guidance?.gender && `gender/look=${brief.guidance.gender}`,
+    brief.guidance?.location && `location=${brief.guidance.location}`,
+    brief.guidance?.gear && `gear=${brief.guidance.gear}`,
+    brief.guidance?.action && `action=${brief.guidance.action}`,
+  ].filter(Boolean);
+  if (knobNotes.length) {
+    notes.push(`USER VARIABLE KNOBS: ${knobNotes.join("; ")}. Treat these as explicit controls inside the locked aesthetic.`);
   }
   if (guidanceVibe && guidanceVibe !== "let the user's idea lead the mood") {
     notes.push(`CUSTOM SCENE VIBE: ${guidanceVibe}.`);

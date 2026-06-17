@@ -6,7 +6,42 @@ Input (stdin JSON): {"targets":[{"shortcode":"DWRd7OqjFVd","kind":"p"}]}
 Output (stdout JSON): {"items":[{"shortcode":"...","kind":"p","media_index":1,"media_count":1,"image_url":"...","caption":"..."}]}
 """
 import json
+import os
 import sys
+
+
+def apply_instagram_cookies(loader) -> None:
+    session = getattr(loader.context, "_session", None)
+    if session is None:
+        return
+
+    sessionid = os.environ.get("INSTAGRAM_SESSIONID", "").strip()
+    if sessionid:
+        session.cookies.set("sessionid", sessionid, domain=".instagram.com", path="/")
+
+    cookies_path = os.environ.get("INSTAGRAM_COOKIES_PATH", "").strip()
+    if not cookies_path:
+        return
+
+    try:
+        with open(cookies_path, "r", encoding="utf-8") as fh:
+            cookies = json.load(fh)
+    except Exception as e:
+        raise RuntimeError(f"Could not read INSTAGRAM_COOKIES_PATH: {e}") from e
+
+    if not isinstance(cookies, list):
+        raise RuntimeError("INSTAGRAM_COOKIES_PATH must point to a JSON array of cookies")
+
+    for cookie in cookies:
+        if not isinstance(cookie, dict):
+            continue
+        name = str(cookie.get("name", "")).strip()
+        value = str(cookie.get("value", "")).strip()
+        if not name or not value:
+            continue
+        domain = str(cookie.get("domain", "")).strip() or ".instagram.com"
+        path = str(cookie.get("path", "")).strip() or "/"
+        session.cookies.set(name, value, domain=domain, path=path)
 
 
 def main() -> int:
@@ -37,6 +72,11 @@ def main() -> int:
         compress_json=False,
         quiet=True,
     )
+    try:
+        apply_instagram_cookies(loader)
+    except Exception as e:
+        print(json.dumps({"error": str(e)}))
+        return 1
 
     items = []
     for t in targets[:50]:
@@ -101,4 +141,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

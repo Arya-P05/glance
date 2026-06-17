@@ -67,6 +67,143 @@ const VIBE_PRESETS = {
   "dressy-flash": "sharp suit or dress, model-level beauty, red-carpet-ish compact flash, expensive but candid",
 };
 
+const STYLE_RECIPES = {
+  none: "no locked style recipe",
+  "alpine-techwear": [
+    "masked alpine techwear outdoor action-camera set",
+    "technical shell jacket, reflective sunglasses or goggles, face covering sometimes, gloves, cold-weather or mountain gear, no visible logos",
+    "eyewear should rotate: reflective sunglasses, wraparound glacier shades, mirrored shield sunglasses, smoke lenses, amber lenses, blue lenses, green lenses, black lenses, and ski goggles only sometimes; not always silver",
+    "expressions should vary: mouth often covered by balaclava or neck gaiter, closed-mouth calm, neutral cool, subtle smile, occasional open smile only sometimes",
+    "subjects can be women, men, androgynous people, two girls together, a guy and girl together, or two friends; do not default to solo men",
+    "huge mountain, snow, grass, cloud, or sky negative space for text",
+    "crunchy early-2000s digital/action-cam texture, cold blue/green color, high contrast, blown sky, visible grain",
+    "same isolated iconic outdoor vibe across the whole series while only the chosen variables change",
+  ].join("; "),
+  "animal-nature-selfie": [
+    "goofy animal selfie in a bright real outdoor place",
+    "one expressive animal as the hero, or 2-3 animals max only when explicitly requested",
+    "wide-angle/fisheye close foreground face, low camera, huge readable sky/field/grass/beach/hill negative space for text",
+    "grainy early-2000s compact digital camera texture, oversaturated blue sky and green/yellow grass, blown highlights, JPEG softness",
+    "funny wholesome internet-pet energy: smiling into camera, nose close to lens, tiny accessory, awkward crop, accidental nature wallpaper",
+  ].join("; "),
+};
+
+const ALPINE_TECHWEAR_SUBJECTS = [
+  "a solo woman in no-logo alpine techwear",
+  "two girls together in matching no-logo mountain shells",
+  "a guy and girl together in layered cold-weather techwear",
+  "an androgynous solo hiker in layered alpine gear",
+  "two friends in no-logo alpine shells and gloves",
+  "a solo man in no-logo alpine techwear",
+  "a girl and guy sitting together on a high alpine slope",
+  "two women in oversized technical shells on a windy ridge",
+];
+
+const ALPINE_EYEWEAR = [
+  "blue mirrored wraparound sunglasses",
+  "amber reflective shield sunglasses",
+  "smoke-tinted glacier sunglasses",
+  "green mirrored sporty sunglasses",
+  "black-lens wraparound shades",
+  "rose-gold reflective sunglasses",
+  "blue mirrored ski goggles",
+  "dark ski goggles under a beanie",
+];
+
+const ALPINE_FACE_STYLING = [
+  "mouth covered by a black balaclava",
+  "mouth hidden by a neck gaiter",
+  "closed-mouth calm expression",
+  "subtle closed-mouth smile",
+  "neutral cool expression",
+  "tiny smile with lips closed",
+  "face mostly covered by winter gear",
+  "occasional open smile, not screaming",
+];
+
+const ALPINE_TECHWEAR_VARIATIONS = [
+  {
+    setting: "a misty mountaintop overlook above a pale cloud layer with blue ridgelines fading into the distance",
+    action: "standing low in frame with both gloved hands out in a deadpan shrug toward the camera, mouth covered by a balaclava or neck gaiter",
+    weather: "cold bright haze with blown-out blue-white sky",
+    composition: "wide action-camera framing, subject low in the bottom third, huge readable sky and mountains above",
+    color: "icy blue sky, soft white haze, muted alpine greens, crunchy high-contrast digital color",
+  },
+  {
+    setting: "a snowy alpine ridge with jagged mountains behind, wind-blown snow texture low in frame, and a huge bright sky",
+    action: "facing the camera in a clean still pose with gloved hands near the chest, calm closed-mouth expression or mouth hidden by gear",
+    weather: "bluebird winter daylight with harsh snow reflection",
+    composition: "wide fisheye-ish frame, subject small-to-medium low in frame, mountains and sky dominating the top",
+    color: "cold cobalt blue, clean snow white, dark gear contrast, early-digital sensor grain",
+  },
+  {
+    setting: "a high ski slope or glacier path with an empty white run falling away into a distant alpine valley",
+    action: "holding one arm toward the camera like a self-shot while looking back through reflective eyewear, subtle closed-mouth smile or covered mouth",
+    weather: "thin mountain sun with blown highlights and cold air",
+    composition: "POV action-camera angle with an extended arm, subject low and centered, valley and sky left open for text",
+    color: "blue-white snow, black gear, washed cyan sky, JPEG softness and grit",
+  },
+  {
+    setting: "a steep green alpine meadow seen from above with tiny yellow flowers and dark grass texture around the subject",
+    action: "lying or sitting in the grass with arms crossed, staring up through reflective eyewear like a weird album-cover snapshot",
+    weather: "clear crisp daylight with slightly harsh point-and-shoot exposure",
+    composition: "top-down wide-angle framing, subject centered low/mid frame, dense green texture with simple upper space",
+    color: "saturated moss green, white gear, deep shadow pockets, crunchy old-camera contrast",
+  },
+  {
+    setting: "a bright open ski bowl with dramatic clouds, blue mountain silhouettes, and a clean white slope below",
+    action: "leaning close to the lens in full winter face covering and reflective eyewear, playful but cool without an open-mouth grin, as if caught before dropping in",
+    weather: "bright high-altitude sun with fast clouds and blown highlights",
+    composition: "close wide-angle action-camera frame, helmet and goggles readable, sky and slope open behind for text",
+    color: "electric blue sky, clean alpine whites, black lens reflection, high-contrast digital grain",
+  },
+];
+
+const ANIMAL_NATURE_SELFIE_VARIATIONS = [
+  {
+    setting: "a soft green meadow with distant blue hills, tiny wildflowers low in frame, and a pale grainy sky above",
+    action: "smiling straight into the wide-angle camera with nose slightly too close to the lens",
+    weather: "misty bright morning light with soft blown highlights",
+    composition: "animal head low and centered in the lower third, goofy face readable, huge hazy sky and meadow open above",
+    color: "pale blue sky, soft green field, flower yellow, washed early-digital grain",
+  },
+  {
+    setting: "a wide sandy beach or open dirt path with tiny clouds, low horizon, and a giant saturated blue sky",
+    action: "grinning with mouth open toward the camera like a happy accidental selfie",
+    weather: "clear bright daylight with harsh compact-camera exposure",
+    composition: "extreme wide-angle close animal face in foreground, horizon low, sky dominating the top half",
+    color: "deep blue sky, beige sand, warm fur tones, crunchy sensor noise and JPEG softness",
+  },
+  {
+    setting: "a rolling golden field with a few distant animals blurred behind and dramatic purple-grey clouds above",
+    action: "looking back at the camera mid-walk with a goofy happy face",
+    weather: "stormy-but-bright afternoon light, not gloomy, with glowing field color",
+    composition: "animal close in the lower foreground, background animals tiny and blurred, huge textured sky for text",
+    color: "golden grass, lavender cloud shadows, warm fur, grainy high-contrast digital color",
+  },
+  {
+    setting: "a grassy hill under an electric blue sky with one wild cloud streak and distant trees low on the horizon",
+    action: "staring into the camera with a proud weird little expression",
+    weather: "bright blue-sky daylight with sun glare and old-camera softness",
+    composition: "low-angle fisheye frame, animal face and shoulders low/mid frame, sky clean and massive above",
+    color: "electric blue sky, saturated green grass, clean whites, high-contrast old compact-camera grain",
+  },
+  {
+    setting: "a backyard or park lawn with a line of trees, bright open grass, and a cloud-streaked sky",
+    action: "charging toward the camera with tongue out and a ridiculously happy face",
+    weather: "sunny afternoon with blown highlights and mild motion blur",
+    composition: "wide-angle action selfie, animal low and close, motion blur on body, sky and grass left readable for text",
+    color: "bright green lawn, blue sky, warm fur, crunchy 2000s digital saturation",
+  },
+  {
+    setting: "a snowy open hill or grey winter field with bare trees low in the distance and a simple overcast sky",
+    action: "accidentally taking a selfie with a startled funny expression while one or two other animals peek from behind",
+    weather: "flat winter daylight with flash-like high contrast, still playful not sad",
+    composition: "funny close animal face low in frame, optional 1-2 background animals only, large pale sky/field above",
+    color: "soft grey sky, muted snow or winter grass, dark fur contrast, visible grain and old-phone softness",
+  },
+];
+
 function parseArgs(argv) {
   const out = {
     count: Number(process.env.POSTER_COUNT || "10"),
@@ -81,6 +218,12 @@ function parseArgs(argv) {
     dryRun: false,
     idea: "",
     directionMode: "series",
+    styleRecipe: "none",
+    subject: "",
+    location: "",
+    gender: "",
+    gear: "",
+    action: "",
     cameraLook: "auto",
     vibePreset: "auto",
     styleNotes: "",
@@ -104,6 +247,12 @@ function parseArgs(argv) {
     else if (arg === "--dry-run") out.dryRun = true;
     else if (arg === "--idea") out.idea = cleanOptionText(next(), 700);
     else if (arg === "--direction-mode") out.directionMode = next();
+    else if (arg === "--style-recipe") out.styleRecipe = next();
+    else if (arg === "--subject") out.subject = cleanOptionText(next(), 300);
+    else if (arg === "--location") out.location = cleanOptionText(next(), 300);
+    else if (arg === "--gender") out.gender = cleanOptionText(next(), 160);
+    else if (arg === "--gear") out.gear = cleanOptionText(next(), 300);
+    else if (arg === "--action") out.action = cleanOptionText(next(), 300);
     else if (arg === "--camera-look") out.cameraLook = next();
     else if (arg === "--vibe-preset") out.vibePreset = next();
     else if (arg === "--style-notes") out.styleNotes = cleanOptionText(next(), 500);
@@ -122,6 +271,9 @@ function parseArgs(argv) {
   }
   if (!["series", "exact"].includes(out.directionMode)) {
     throw new Error("--direction-mode must be one of: series, exact");
+  }
+  if (!STYLE_RECIPES[out.styleRecipe]) {
+    throw new Error(`--style-recipe must be one of: ${Object.keys(STYLE_RECIPES).join(", ")}`);
   }
   if (!CAMERA_LOOKS[out.cameraLook]) {
     throw new Error(`--camera-look must be one of: ${Object.keys(CAMERA_LOOKS).join(", ")}`);
@@ -167,6 +319,12 @@ Options:
   --vibe-preset        ${Object.keys(VIBE_PRESETS).join(" | ")}
   --style-notes <text> Optional extra styling notes
   --dry-run            Print scenes/prompts only; no API calls
+  --style-recipe       ${Object.keys(STYLE_RECIPES).join(" | ")}
+  --subject <text>     Variable subject notes for directed/locked-style generation
+  --location <text>    Variable location notes for directed/locked-style generation
+  --gender <text>      Variable gender/look notes for directed/locked-style generation
+  --gear <text>        Variable outfit/gear notes for directed/locked-style generation
+  --action <text>      Variable pose/action notes for directed/locked-style generation
 `;
 }
 
@@ -318,7 +476,18 @@ async function generateSceneFromDirector({ client, model, avoidSignatures }) {
 }
 
 function hasDirection(args) {
-  return Boolean(args.idea || args.styleNotes || args.cameraLook !== "auto" || args.vibePreset !== "auto");
+  return Boolean(
+    args.idea ||
+    args.styleNotes ||
+    args.subject ||
+    args.location ||
+    args.gender ||
+    args.gear ||
+    args.action ||
+    args.styleRecipe !== "none" ||
+    args.cameraLook !== "auto" ||
+    args.vibePreset !== "auto"
+  );
 }
 
 function directionMetadata(args) {
@@ -326,6 +495,13 @@ function directionMetadata(args) {
   return {
     idea: args.idea || null,
     directionMode: args.directionMode,
+    styleRecipe: args.styleRecipe,
+    styleRecipeDescription: STYLE_RECIPES[args.styleRecipe],
+    subject: args.subject || null,
+    location: args.location || null,
+    gender: args.gender || null,
+    gear: args.gear || null,
+    action: args.action || null,
     cameraLook: args.cameraLook,
     cameraLookDescription: CAMERA_LOOKS[args.cameraLook],
     vibePreset: args.vibePreset,
@@ -347,6 +523,9 @@ function buildDirectedScenePrompt({ args, index, count, avoidSignatures }) {
   const modeInstruction = args.directionMode === "exact"
     ? "Preserve the user's core scene as closely as possible while making the photo coherent and text-friendly."
     : "Treat the user's idea as a loose topic/vibe for a related series. This item should clearly belong to the same set, but it must change at least one meaningful element such as subject detail, gesture, camera angle, nearby action, weather, or micro-setting.";
+  const styleLock = args.styleRecipe !== "none"
+    ? `\nLocked style recipe:\n${STYLE_RECIPES[args.styleRecipe]}\n\nThe style recipe is NOT optional. Preserve its camera texture, color family, composition grammar, and emotional vibe across the whole batch. Only vary the variable knobs below and small scene details needed for freshness.`
+    : "";
 
   return `Create ONE scene brief for a square Instagram lock-screen poster background.
 
@@ -354,6 +533,14 @@ This is item ${index} of ${count}.
 
 User idea / topic:
 ${args.idea || "(none provided; use the options below)"}
+
+Variable knobs:
+- subject: ${args.subject || "(open)"}
+- gender/look: ${args.gender || "(open)"}
+- location: ${args.location || "(open)"}
+- gear/outfit: ${args.gear || "(open)"}
+- action/pose: ${args.action || "(open)"}
+${styleLock}
 
 Direction mode:
 ${args.directionMode}
@@ -407,8 +594,125 @@ Return ONLY JSON with these exact fields:
 }`;
 }
 
+function compactJoin(parts) {
+  return parts
+    .map(part => String(part || "").trim())
+    .filter(Boolean)
+    .join(", ");
+}
+
+function buildAlpineTechwearScene({ args, index, count, guidance }) {
+  const variation = fallbackPick(ALPINE_TECHWEAR_VARIATIONS, index);
+  const userLocation = args.location || "";
+  const userGear = args.gear || "";
+  const userAction = args.action || "";
+  const genderLook = args.gender ? `${args.gender} ` : "";
+  const subjectCore = args.subject || fallbackPick(ALPINE_TECHWEAR_SUBJECTS, index);
+  const hasEyewear = /\b(goggle|goggles|sunglasses|shades|visor|lenses|lens|eyewear)\b/i.test(userGear);
+  const hasFaceCovering = /\b(balaclava|neck gaiter|mask|masked|face covering|covered mouth|mouth covered)\b/i.test(userGear);
+  const eyewear = hasEyewear ? null : fallbackPick(ALPINE_EYEWEAR, index);
+  const faceStyling = hasFaceCovering ? null : fallbackPick(ALPINE_FACE_STYLING, index);
+  const subject = compactJoin([
+    `${genderLook}${subjectCore}`.trim(),
+    eyewear && `wearing ${eyewear}`,
+    faceStyling,
+    userGear || "technical shell jacket, gloves, mountain pants, winter/outdoor gear",
+    "generic no-logo styling",
+  ]);
+  const setting = userLocation
+    ? `${userLocation}, rendered in the same alpine/outdoor action-camera world with real terrain, sky, weather, and distance`
+    : variation.setting;
+  const action = userAction || variation.action;
+  const camera = args.cameraLook === "auto"
+    ? "wide-angle early-2000s action-camera snapshot with fisheye distortion, heavy sensor noise, JPEG softness, and accidental framing"
+    : `${CAMERA_LOOKS[args.cameraLook]}, still preserving the wide alpine action-camera look`;
+  const styleNotes = args.styleNotes
+    ? ` Extra locked notes: ${args.styleNotes}.`
+    : "";
+
+  return {
+    ...buildSceneFromDirector({
+      conceptId: `alpine-techwear-${index}`,
+      vibe: "cold alpine techwear nostalgia",
+      subjectKind: "person",
+      subject,
+      action,
+      setting,
+      camera,
+      weather: variation.weather,
+      timeOfDay: variation.weather,
+      prop: "nothing",
+      cameraAngle: variation.composition,
+      composition: variation.composition,
+      colorDirection: `${variation.color}; ${styleNotes}`.trim(),
+      emotion: "perspective",
+      copyFormula: "group-chat line, then iconic/gangsta/real payoff",
+      guidance,
+      seriesIndex: index,
+      seriesCount: count,
+    }),
+    source: "custom-direction",
+  };
+}
+
+function buildAnimalNatureSelfieScene({ args, index, count, guidance }) {
+  const variation = fallbackPick(ANIMAL_NATURE_SELFIE_VARIATIONS, index);
+  const animal = args.subject || args.idea || "happy dog";
+  const look = args.gender ? `${args.gender}, ` : "";
+  const accessory = args.gear
+    ? `${args.gear}, used as a tiny harmless accessory or styling detail`
+    : "maybe one tiny accessory like a cap, flower, bandana, or nothing at all";
+  const subject = compactJoin([
+    `${look}${animal}`.trim(),
+    "the unmistakable hero animal",
+    accessory,
+    "real animal photo, not CGI",
+  ]);
+  const setting = args.location
+    ? `${args.location}, treated as a real outdoor animal-selfie place with visible terrain, sky, horizon, and natural context`
+    : variation.setting;
+  const action = args.action || variation.action;
+  const camera = args.cameraLook === "auto"
+    ? "cheap early-2000s digital camera or action-camera selfie, wide-angle/fisheye distortion, visible sensor noise, blown highlights, JPEG softness"
+    : `${CAMERA_LOOKS[args.cameraLook]}, while preserving the close wide-angle animal selfie look`;
+  const styleNotes = args.styleNotes
+    ? ` Extra locked notes: ${args.styleNotes}.`
+    : "";
+
+  return {
+    ...buildSceneFromDirector({
+      conceptId: `animal-nature-selfie-${index}`,
+      vibe: "goofy animal nature selfie",
+      subjectKind: "animal",
+      subject,
+      action,
+      setting,
+      camera,
+      weather: variation.weather,
+      timeOfDay: variation.weather,
+      prop: "nothing",
+      cameraAngle: variation.composition,
+      composition: variation.composition,
+      colorDirection: `${variation.color}; ${styleNotes}`.trim(),
+      emotion: "funny",
+      copyFormula: "smile/stay/remember opener, then tiny sincere payoff",
+      guidance,
+      seriesIndex: index,
+      seriesCount: count,
+    }),
+    source: "custom-direction",
+  };
+}
+
 async function generateDirectedScene({ client, model, args, index, count, avoidSignatures }) {
   const guidance = directionMetadata(args);
+  if (args.styleRecipe === "alpine-techwear") {
+    return buildAlpineTechwearScene({ args, index, count, guidance });
+  }
+  if (args.styleRecipe === "animal-nature-selfie") {
+    return buildAnimalNatureSelfieScene({ args, index, count, guidance });
+  }
+
   if (!client) return buildDirectedSceneFallback({ args, index, count, guidance });
 
   const prompt = buildDirectedScenePrompt({ args, index, count, avoidSignatures });
@@ -804,6 +1108,15 @@ async function main() {
     if (args.fromPrompts) console.log(`Using prompts from: ${args.fromPromptsDir}/`);
     if (hasDirection(args)) {
       console.log(`Direction: ${args.directionMode} | ${args.idea || "(style-only)"}`);
+      if (args.styleRecipe !== "none") console.log(`Style recipe: ${args.styleRecipe}`);
+      const knobs = [
+        args.subject && `subject=${args.subject}`,
+        args.gender && `gender/look=${args.gender}`,
+        args.location && `location=${args.location}`,
+        args.gear && `gear=${args.gear}`,
+        args.action && `action=${args.action}`,
+      ].filter(Boolean);
+      if (knobs.length) console.log(`Variables: ${knobs.join(" | ")}`);
       console.log(`Camera look: ${args.cameraLook}`);
       console.log(`Scene vibe: ${args.vibePreset}`);
       if (args.styleNotes) console.log(`Style notes: ${args.styleNotes}`);
