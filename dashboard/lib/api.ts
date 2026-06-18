@@ -77,6 +77,13 @@ export const api = {
       captionPrompt: string;
       captionModel: string;
     }>("/api/backgrounds/message-options", { method: "POST", body: JSON.stringify(opts) }),
+  reviseBackground: (opts: { id: string; instruction: string; imageModel?: string; size?: string }) =>
+    request<{
+      success: boolean;
+      background: Draft;
+      imageModel: string;
+      revisionPrompt: string;
+    }>("/api/backgrounds/revise", { method: "POST", body: JSON.stringify(opts) }),
   approveBackground: (opts: {
     id: string;
     caption: CaptionText;
@@ -260,6 +267,14 @@ export interface DraftMeta {
   imageModel?: string;
   promptModel?: string;
   captionModel?: string;
+  size?: string;
+  revision?: {
+    sourceName?: string;
+    sourceStoragePath?: string;
+    instruction?: string;
+    prompt?: string;
+    generatedAt?: string;
+  };
   publishedAt?: string;
   storagePath?: string;
 }
