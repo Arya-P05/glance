@@ -51,8 +51,9 @@ export default function OverviewScreen() {
 
           <Text style={[S.label, { marginTop: 24, marginBottom: 10 }]}>Local Queue</Text>
           <View style={styles.grid}>
-            <StatCard label="Drafts" value={stats.drafts} accent={stats.drafts > 0} onPress={() => router.push("/drafts")} />
             <StatCard label="Backgrounds" value={stats.backgrounds} accent={stats.backgrounds > 0} onPress={() => router.push("/backgrounds")} />
+            <StatCard label="Approved" value={stats.approvedBackgrounds} accent={stats.approvedBackgrounds > 0} onPress={() => router.push("/approved-backgrounds")} />
+            <StatCard label="Drafts" value={stats.drafts} accent={stats.drafts > 0} onPress={() => router.push("/drafts")} />
             <StatCard label="Saved Prompts" value={stats.prompts} onPress={() => router.push("/prompts")} />
             <StatCard label="Discarded" value={stats.discarded} sub="archived" />
           </View>
