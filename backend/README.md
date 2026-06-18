@@ -35,7 +35,7 @@ Schedule `npm run sync` weekly (e.g. cron or GitHub Actions).
 
 ## Motivational generator
 
-The generator builds a high-variety creative brief, asks a prompt model to write the image prompt, and generates text-free nostalgic backgrounds with `gpt-image-2`. In the dashboard, generated backgrounds are reviewed in **Backgrounds**, where the caption model creates five message options from the actual image. After selecting/editing one and approving the layout, the finished poster moves into **Drafts** for publishing.
+The generator builds a high-variety creative brief, asks a prompt model to write the image prompt, and generates text-free nostalgic backgrounds with `gpt-image-2`. In the dashboard, generated backgrounds are reviewed in **Backgrounds**. Approved images move into **Approved**, where the caption model creates five message options from the actual image; after selecting/editing one and saving the layout, the finished poster moves into **Drafts** for publishing.
 
 Local output is written under ignored `backend/content/` folders for inspection, while the dashboard uses Supabase tables/storage as the source of truth.
 
