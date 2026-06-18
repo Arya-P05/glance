@@ -7,6 +7,7 @@ import { useRouter } from "expo-router";
 import { api, StorageImage } from "../lib/api";
 import { Btn } from "../components/Btn";
 import { C, S } from "../lib/theme";
+import { RemoteImage, previewImageUrl } from "../components/RemoteImage";
 
 type Filter = "active" | "inactive";
 const CAROUSEL_SELECTION_KEY = "glance.carouselDraftSelection";
@@ -146,7 +147,7 @@ export default function LibraryScreen() {
           <View style={styles.carouselTrayThumbs}>
             {selectedImages.slice(0, 5).map((img, idx) => (
               <View key={img.id} style={styles.carouselTrayThumbWrap}>
-                <Image source={{ uri: img.publicUrl }} style={styles.carouselTrayThumb} resizeMode="cover" />
+                <RemoteImage uri={img.publicUrl} width={96} style={styles.carouselTrayThumb} resizeMode="cover" priority={idx < 2} />
                 <View style={styles.carouselTrayNumber}><Text style={styles.carouselTrayNumberText}>{idx + 1}</Text></View>
               </View>
             ))}
@@ -202,7 +203,12 @@ export default function LibraryScreen() {
                 onLongPress={() => setDetail(img)}
                 style={[styles.cell, sel && styles.cellSelected, inactive && styles.cellInactive]}
               >
-                <Image source={{ uri: img.publicUrl }} style={styles.thumb} resizeMode="cover" />
+                <RemoteImage
+                  uri={img.publicUrl}
+                  width={Math.ceil(CELL * 1.5)}
+                  style={styles.thumb}
+                  resizeMode="cover"
+                />
                 {inactive && (
                   <View style={styles.inactiveBadge}>
                     <Text style={styles.inactiveBadgeText}>off</Text>
@@ -231,7 +237,7 @@ export default function LibraryScreen() {
           <Pressable style={styles.modalCard} onPress={e => e.stopPropagation?.()}>
             {detail && (
               <>
-                <Image source={{ uri: detail.publicUrl }} style={styles.modalImg} resizeMode="contain" />
+                <Image source={{ uri: previewImageUrl(detail.publicUrl, 1200) }} style={styles.modalImg} resizeMode="contain" />
                 <View style={styles.modalMeta}>
                   <View style={[styles.statusPill, detail.status === "active" ? styles.pillActive : styles.pillInactive]}>
                     <Text style={styles.pillText}>{detail.status}</Text>
