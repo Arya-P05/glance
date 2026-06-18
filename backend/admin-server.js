@@ -918,6 +918,11 @@ function buildBackgroundRevisionPrompt(row, instruction) {
   ].filter(Boolean).join("\n");
 }
 
+function supportsImageInputFidelity(model) {
+  const normalized = String(model || "").toLowerCase();
+  return normalized.startsWith("gpt-image-1") || normalized === "chatgpt-image-latest";
+}
+
 async function revisePendingBackground(supabase, { id, instruction, imageModel, size }) {
   const cleanInstruction = String(instruction || "").trim().slice(0, 700);
   if (!cleanInstruction) {
@@ -926,7 +931,7 @@ async function revisePendingBackground(supabase, { id, instruction, imageModel, 
 
   const row = await loadPendingBackground(supabase, id);
   const metadata = row.metadata && typeof row.metadata === "object" ? row.metadata : {};
-  const model = imageModel || row.image_model || metadata.imageModel || process.env.OPENAI_IMAGE_MODEL || DEFAULT_IMAGE_MODEL;
+  const model = imageModel || process.env.OPENAI_IMAGE_EDIT_MODEL || row.image_model || metadata.imageModel || process.env.OPENAI_IMAGE_MODEL || DEFAULT_IMAGE_MODEL;
   const editSize = size || metadata.size || "1024x1024";
 
   const { data: blob, error: downloadErr } = await supabase.storage.from(BUCKET).download(row.storage_path);
@@ -936,15 +941,18 @@ async function revisePendingBackground(supabase, { id, instruction, imageModel, 
   const openai = new OpenAI({ apiKey: env("OPENAI_API_KEY") });
   const revisionPrompt = buildBackgroundRevisionPrompt(row, cleanInstruction);
   const imageFile = await toFile(imageBytes, `${row.name}.png`, { type: "image/png" });
-  const result = await openai.images.edit({
+  const editParams = {
     model,
     image: imageFile,
     prompt: revisionPrompt,
     size: editSize,
-    input_fidelity: "high",
     quality: "high",
     output_format: "png",
-  });
+  };
+  if (supportsImageInputFidelity(model)) {
+    editParams.input_fidelity = "high";
+  }
+  const result = await openai.images.edit(editParams);
 
   const b64 = result.data?.[0]?.b64_json;
   if (!b64) throw new Error("OpenAI image edit response did not include b64_json");
