@@ -920,6 +920,7 @@ function buildBackgroundRevisionPrompt(row, instruction) {
 
 function supportsImageInputFidelity(model) {
   const normalized = String(model || "").toLowerCase();
+  if (!normalized || normalized.includes("mini")) return false;
   return normalized.startsWith("gpt-image-1") || normalized === "chatgpt-image-latest";
 }
 
