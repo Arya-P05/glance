@@ -27,7 +27,6 @@ import { getDraftForPublish, publishDraftFromDb } from "./publish-draft.js";
 import { getInstagramConnectionStatus, publishInstagramCarousel } from "./instagram-publisher.js";
 import {
   DEFAULT_CAPTION_MODEL,
-  DEFAULT_IMAGE_MODEL,
   buildCaptionPrompt,
   captionSignature,
   completeCaptionOptions,
@@ -42,6 +41,7 @@ import { supabaseServiceRoleKey, supabaseUrl } from "./supabase-env.js";
 
 const BUCKET = IG_BUCKET;
 const PREFIX = "posts";
+const DEFAULT_IMAGE_EDIT_MODEL = "gpt-image-1-mini";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CONTENT_DIR = join(__dirname, "content");
 
@@ -931,7 +931,8 @@ async function revisePendingBackground(supabase, { id, instruction, imageModel, 
 
   const row = await loadPendingBackground(supabase, id);
   const metadata = row.metadata && typeof row.metadata === "object" ? row.metadata : {};
-  const model = imageModel || process.env.OPENAI_IMAGE_EDIT_MODEL || row.image_model || metadata.imageModel || process.env.OPENAI_IMAGE_MODEL || DEFAULT_IMAGE_MODEL;
+  const model = imageModel || process.env.OPENAI_IMAGE_EDIT_MODEL || DEFAULT_IMAGE_EDIT_MODEL;
+  const quality = process.env.OPENAI_IMAGE_EDIT_QUALITY || "medium";
   const editSize = size || metadata.size || "1024x1024";
 
   const { data: blob, error: downloadErr } = await supabase.storage.from(BUCKET).download(row.storage_path);
@@ -946,7 +947,7 @@ async function revisePendingBackground(supabase, { id, instruction, imageModel, 
     image: imageFile,
     prompt: revisionPrompt,
     size: editSize,
-    quality: "high",
+    quality,
     output_format: "png",
   };
   if (supportsImageInputFidelity(model)) {
@@ -986,8 +987,11 @@ async function revisePendingBackground(supabase, { id, instruction, imageModel, 
     revision: {
       sourceName: row.name,
       sourceStoragePath: row.storage_path,
+      sourceImageModel: row.image_model ?? metadata.imageModel ?? null,
       instruction: cleanInstruction,
       prompt: revisionPrompt,
+      imageModel: model,
+      quality,
       generatedAt: now,
     },
   };
