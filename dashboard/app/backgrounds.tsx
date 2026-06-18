@@ -2,20 +2,17 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Platform, TextInput, useWindowDimensions,
 } from "react-native";
-import { useRouter } from "expo-router";
 import { NavArrowLeft, NavArrowRight, RefreshDouble, Trash } from "iconoir-react-native";
-import { API_BASE, api, CaptionText, Draft } from "../lib/api";
+import { API_BASE, api, Draft } from "../lib/api";
 import { Btn } from "../components/Btn";
 import { C, S } from "../lib/theme";
 import { WidgetSmall } from "../components/iPhoneMockup/WidgetSmall";
 import { WidgetMedium } from "../components/iPhoneMockup/WidgetMedium";
 import { WidgetLarge } from "../components/iPhoneMockup/WidgetLarge";
 import { previewImageUrl, RemoteImage } from "../components/RemoteImage";
-import { CaptionEditor } from "../components/CaptionEditor";
-import { CaptionLayout, MediumCaptionLayout } from "../lib/captionLayout";
 import { ActionKey } from "../components/ActionKey";
 
-type Screen = "grid" | "review" | "messages";
+type Screen = "grid" | "review";
 
 const GRID_PADDING = 16;
 const GRID_GAP = 10;
@@ -33,15 +30,7 @@ function backgroundGridImageUri(background: Draft) {
   return `${API_BASE}/content/backgrounds/${background.filename}`;
 }
 
-function normalizeCaption(caption: CaptionText): CaptionText {
-  return {
-    smallText: caption.smallText.trim().toLowerCase(),
-    bigText: caption.bigText.trim().toLowerCase(),
-  };
-}
-
 export default function BackgroundsScreen() {
-  const router = useRouter();
   const { width } = useWindowDimensions();
   const [backgrounds, setBackgrounds] = useState<Draft[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,11 +38,6 @@ export default function BackgroundsScreen() {
   const [reviewIdx, setReviewIdx] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [captionOptions, setCaptionOptions] = useState<CaptionText[]>([]);
-  const [selectedCaptionIndex, setSelectedCaptionIndex] = useState(0);
-  const [caption, setCaption] = useState<CaptionText>({ smallText: "", bigText: "" });
-  const [captionModel, setCaptionModel] = useState<string | undefined>();
-  const [captionPrompt, setCaptionPrompt] = useState<string | undefined>();
   const [tweakInstruction, setTweakInstruction] = useState("");
   const discardLockRef = useRef(false);
   const gridViewportWidth = Math.max(
@@ -82,7 +66,7 @@ export default function BackgroundsScreen() {
     if (screen !== "review" || typeof document === "undefined") return;
     function onKey(e: KeyboardEvent) {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      if (e.key === "a") openMessagesCurrent();
+      if (e.key === "a") approveCurrent();
       else if (e.key === "ArrowLeft") {
         e.preventDefault();
         previousBackground();
@@ -138,66 +122,23 @@ export default function BackgroundsScreen() {
     }
   }
 
-  async function openMessagesCurrent() {
+  async function approveCurrent() {
     const background = backgrounds[reviewIdx];
     if (!background || busy) return;
 
-    const existingOptions = background.meta?.captionOptions?.filter(Boolean) ?? [];
-    if (existingOptions.length) {
-      const index = Math.max(0, Math.min(existingOptions.length - 1, background.meta?.selectedCaptionIndex ?? 0));
-      setCaptionOptions(existingOptions);
-      setSelectedCaptionIndex(index);
-      setCaption(existingOptions[index]);
-      setCaptionModel(background.meta?.captionModel);
-      setCaptionPrompt(background.meta?.captionPrompt ?? undefined);
-      setScreen("messages");
-      return;
-    }
-
+    const id = background.id;
     setBusy(true);
     try {
-      await generateMessagesForBackground(background);
-      setScreen("messages");
+      await api.stageBackground({ id, dbId: background.dbId });
+      const nextLength = Math.max(0, backgrounds.length - 1);
+      setBackgrounds(prev => prev.filter(item => item.id !== id));
+      if (nextLength === 0) setScreen("grid");
+      else setReviewIdx(i => Math.min(i, nextLength - 1));
+      if (nextLength === 0) load();
     } catch (e: any) {
-      alert(e?.message ?? "Failed to generate messages");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function generateMessagesForBackground(background: Draft) {
-    const result = await api.generateBackgroundMessages({ id: background.id });
-    const options = result.captionOptions.length ? result.captionOptions : [{ smallText: "smile today,", bigText: "it helps." }];
-    const index = Math.max(0, Math.min(options.length - 1, result.selectedCaptionIndex ?? 0));
-    setCaptionOptions(options);
-    setSelectedCaptionIndex(index);
-    setCaption(options[index]);
-    setCaptionModel(result.captionModel);
-    setCaptionPrompt(result.captionPrompt);
-    setBackgrounds(prev => prev.map(item =>
-      item.id === background.id
-        ? {
-            ...item,
-            meta: {
-              ...item.meta,
-              captionOptions: options,
-              selectedCaptionIndex: index,
-              captionModel: result.captionModel,
-              captionPrompt: result.captionPrompt,
-            },
-          }
-        : item
-    ));
-  }
-
-  async function regenerateMessagesCurrent() {
-    const background = backgrounds[reviewIdx];
-    if (!background || busy) return;
-    setBusy(true);
-    try {
-      await generateMessagesForBackground(background);
-    } catch (e: any) {
-      alert(e?.message ?? "Failed to regenerate messages");
+      await load();
+      setScreen("grid");
+      alert(e?.message ?? "Failed to approve background");
     } finally {
       setBusy(false);
     }
@@ -224,109 +165,6 @@ export default function BackgroundsScreen() {
     } finally {
       setBusy(false);
     }
-  }
-
-  function selectCaptionOption(index: number) {
-    const option = captionOptions[index];
-    if (!option) return;
-    setSelectedCaptionIndex(index);
-    setCaption(option);
-  }
-
-  function updateCaption(next: CaptionText) {
-    const normalized = normalizeCaption(next);
-    setCaption(normalized);
-    setCaptionOptions(options => options.map((option, idx) =>
-      idx === selectedCaptionIndex ? normalized : option
-    ));
-  }
-
-  async function approveWithLayout(layout: CaptionLayout, mediumLayout: MediumCaptionLayout) {
-    const background = backgrounds[reviewIdx];
-    if (!background) return;
-
-    const finalCaption = normalizeCaption(caption);
-    const finalOptions = captionOptions.map((option, idx) =>
-      idx === selectedCaptionIndex ? finalCaption : normalizeCaption(option)
-    );
-
-    const result = await api.approveBackground({
-      id: background.id,
-      caption: finalCaption,
-      captionOptions: finalOptions,
-      selectedCaptionIndex,
-      captionModel,
-      captionPrompt,
-      layout,
-      mediumLayout,
-    });
-    setBackgrounds(prev => prev.filter(item => item.id !== result.id));
-    router.push("/drafts");
-  }
-
-  if (screen === "messages") {
-    const background = backgrounds[reviewIdx];
-    if (!background) {
-      return (
-        <View style={styles.root}>
-          <View style={styles.reviewHeader}>
-            <Pressable onPress={() => setScreen("grid")} style={styles.backBtn}>
-              <Text style={styles.backBtnText}>Back</Text>
-            </Pressable>
-            <Text style={S.body}>No background selected</Text>
-          </View>
-        </View>
-      );
-    }
-
-    return (
-      <View style={styles.root}>
-        <View style={styles.reviewHeader}>
-          <Pressable onPress={() => setScreen("review")} style={styles.backBtn}>
-            <Text style={styles.backBtnText}>Background</Text>
-          </Pressable>
-          <Text style={styles.reviewCounter}>Choose message</Text>
-          <Text style={[S.body, { color: C.textMuted }]}>
-            {reviewIdx + 1} / {backgrounds.length}
-          </Text>
-          <View style={{ flex: 1 }} />
-          <Btn label="Regenerate" onPress={regenerateMessagesCurrent} loading={busy} small variant="outline" />
-        </View>
-        <View style={styles.messageBody}>
-          <View style={styles.optionPanel}>
-            <Text style={styles.panelTitle}>Messages</Text>
-            <ScrollView contentContainerStyle={styles.optionList}>
-              {captionOptions.map((option, idx) => {
-                const active = idx === selectedCaptionIndex;
-                return (
-                  <Pressable
-                    key={`${option.smallText}-${option.bigText}-${idx}`}
-                    onPress={() => selectCaptionOption(idx)}
-                    style={[styles.optionCard, active && styles.optionCardActive]}
-                  >
-                    <Text style={styles.optionNumber}>{idx + 1}</Text>
-                    <Text style={styles.optionSmall}>{option.smallText}</Text>
-                    <Text style={styles.optionBig}>{option.bigText}</Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </View>
-          <View style={styles.editorWrap}>
-            <CaptionEditor
-              backgroundUri={backgroundImageUri(background, 1200)}
-              caption={caption}
-              initialLayout={background.meta?.captionLayout}
-              initialMediumLayout={background.meta?.mediumCaptionLayout}
-              onCaptionChange={updateCaption}
-              onApply={approveWithLayout}
-              onCancel={() => setScreen("review")}
-              applyLabel="Approve to drafts"
-            />
-          </View>
-        </View>
-      </View>
-    );
   }
 
   if (screen === "review") {
@@ -395,7 +233,7 @@ export default function BackgroundsScreen() {
             <Text style={styles.metaTitle}>Metadata</Text>
             <View style={styles.metaSection}>
               <Text style={styles.metaLabel}>Status</Text>
-              <Text style={styles.metaMissing}>Background only</Text>
+              <Text style={styles.metaMissing}>Pending background</Text>
             </View>
             {scene && (
               <View style={styles.metaSection}>
@@ -451,7 +289,7 @@ export default function BackgroundsScreen() {
 
         <View style={styles.actionBar}>
           <View style={{ flex: 1 }} />
-          <ActionKey label="Approve background" keyHint="A" onPress={openMessagesCurrent} loading={busy} variant="primary" />
+          <ActionKey label="Approve background" keyHint="A" onPress={approveCurrent} loading={busy} variant="primary" />
           <ActionKey label="Skip" keyHint="S" onPress={skipCurrent} variant="outline" />
           <ActionKey keyHint="D" onPress={discardCurrent} loading={busy} variant="danger"
             icon={<Trash color="#fff" width={20} height={20} strokeWidth={1.8} />} />
@@ -670,41 +508,4 @@ const styles = StyleSheet.create({
     borderTopColor: C.border,
     backgroundColor: C.surface,
   },
-  messageBody: {
-    flex: 1,
-    flexDirection: "row",
-    overflow: "hidden",
-  },
-  optionPanel: {
-    width: 300,
-    borderRightWidth: 1,
-    borderRightColor: C.border,
-    backgroundColor: C.surface,
-    padding: 16,
-  },
-  panelTitle: {
-    color: C.textSecondary,
-    fontSize: 11,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-    marginBottom: 12,
-  },
-  optionList: { gap: 10, paddingBottom: 24 },
-  optionCard: {
-    borderWidth: 1,
-    borderColor: C.border,
-    backgroundColor: C.bg,
-    borderRadius: 8,
-    padding: 12,
-    gap: 4,
-  },
-  optionCardActive: {
-    borderColor: C.accent,
-    backgroundColor: "#111A0A",
-  },
-  optionNumber: { color: C.textMuted, fontSize: 10, fontWeight: "700" },
-  optionSmall: { color: C.textPrimary, fontSize: 12, fontWeight: "800" },
-  optionBig: { color: C.textPrimary, fontSize: 18, lineHeight: 22, fontWeight: "900" },
-  editorWrap: { flex: 1, minWidth: 0 },
 });
