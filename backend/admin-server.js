@@ -156,6 +156,18 @@ function hasCompleteCaption(caption) {
   return Boolean(caption?.smallText && caption?.bigText);
 }
 
+const BACKGROUND_STATUSES = new Set(["pending", "staged", "approved", "discarded"]);
+
+function normalizeBackgroundStatus(status, fallback = "pending") {
+  const normalized = String(status || fallback).trim().toLowerCase();
+  return BACKGROUND_STATUSES.has(normalized) ? normalized : fallback;
+}
+
+function normalizeBackgroundQueueStatus(status, fallback = "pending") {
+  const normalized = String(status || fallback).trim().toLowerCase();
+  return ["pending", "staged"].includes(normalized) ? normalized : null;
+}
+
 async function uploadVerifiedObject(supabase, storagePath, bytes) {
   const { error: uploadErr } = await supabase.storage
     .from(BUCKET)
@@ -627,11 +639,12 @@ async function listDrafts(supabase, projectUrl) {
     }));
 }
 
-async function listBackgrounds(supabase, projectUrl) {
+async function listBackgrounds(supabase, projectUrl, status = "pending") {
+  const normalizedStatus = normalizeBackgroundStatus(status);
   const backgroundsResult = await supabase
     .from("backgrounds")
-    .select("id, name, storage_path, scene, image_prompt, image_model, prompt_model, created_at, metadata")
-    .eq("status", "pending")
+    .select("id, name, storage_path, scene, image_prompt, image_model, prompt_model, status, approved_at, created_at, metadata")
+    .eq("status", normalizedStatus)
     .order("created_at", { ascending: true });
   if (backgroundsResult.error) throw backgroundsResult.error;
 
@@ -657,6 +670,9 @@ function backgroundDraftFromRow(row, projectUrl) {
       mediumImageUrl: metadata.mediumStoragePath
         ? publicObjectUrl(projectUrl, metadata.mediumStoragePath)
         : null,
+      backgroundStatus: row.status ?? null,
+      imageApprovedAt: metadata.imageApprovedAt ?? null,
+      approvedAt: row.approved_at ?? null,
       scene: row.scene ?? metadata.scene ?? null,
       imageModel: row.image_model,
       captionModel: metadata.captionModel ?? null,
@@ -845,26 +861,41 @@ function isUuid(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value || ""));
 }
 
-async function loadPendingBackground(supabase, id) {
+async function loadBackgroundWithStatuses(supabase, id, statuses) {
+  const allowedStatuses = statuses
+    .map(status => normalizeBackgroundStatus(status, null))
+    .filter(Boolean);
+  if (!allowedStatuses.length) throw new Error("No valid background statuses provided");
+
   const { data: row, error } = await supabase
     .from("backgrounds")
-    .select("id, name, storage_path, scene, image_prompt, image_model, prompt_model, metadata")
+    .select("id, name, storage_path, scene, image_prompt, image_model, prompt_model, status, approved_at, metadata")
     .eq("name", id)
-    .eq("status", "pending")
+    .in("status", allowedStatuses)
     .maybeSingle();
   if (error) throw error;
   if (!row) throw new Error(`Background not found: ${id}`);
   return row;
 }
 
-async function discardPendingBackground(supabase, { id, dbId }) {
+async function loadPendingBackground(supabase, id) {
+  return loadBackgroundWithStatuses(supabase, id, ["pending"]);
+}
+
+async function findBackgroundMatch(supabase, { id, dbId, statuses }) {
   const target = dbId || id;
   if (!target) throw Object.assign(new Error("Provide id"), { statusCode: 400 });
+  const allowedStatuses = statuses
+    .map(status => normalizeBackgroundStatus(status, null))
+    .filter(Boolean);
+  if (!allowedStatuses.length) {
+    throw Object.assign(new Error("No valid background statuses provided"), { statusCode: 400 });
+  }
 
   let matchQuery = supabase
     .from("backgrounds")
-    .select("id, name")
-    .eq("status", "pending")
+    .select("id, name, metadata, status")
+    .in("status", allowedStatuses)
     .limit(2);
   matchQuery = isUuid(target) ? matchQuery.eq("id", target) : matchQuery.eq("name", target);
 
@@ -877,16 +908,44 @@ async function discardPendingBackground(supabase, { id, dbId }) {
     throw Object.assign(new Error(`Background id is ambiguous: ${target}. Refresh and try again.`), { statusCode: 409 });
   }
 
-  const row = matches[0];
+  return matches[0];
+}
+
+async function stagePendingBackground(supabase, { id, dbId }) {
+  const row = await findBackgroundMatch(supabase, { id, dbId, statuses: ["pending"] });
+  const metadata = row.metadata && typeof row.metadata === "object" ? row.metadata : {};
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("backgrounds")
+    .update({
+      status: "staged",
+      metadata: {
+        ...metadata,
+        imageApprovedAt: metadata.imageApprovedAt ?? now,
+      },
+    })
+    .eq("id", row.id)
+    .eq("status", "pending")
+    .select("id, name, storage_path, scene, image_prompt, image_model, prompt_model, status, approved_at, created_at, metadata")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) {
+    throw Object.assign(new Error(`Background not found: ${id || dbId}`), { statusCode: 404 });
+  }
+  return data;
+}
+
+async function discardBackgroundWithStatuses(supabase, { id, dbId, statuses }) {
+  const row = await findBackgroundMatch(supabase, { id, dbId, statuses });
   const { data, error } = await supabase
     .from("backgrounds")
     .update({ status: "discarded" })
     .eq("id", row.id)
-    .eq("status", "pending")
+    .eq("status", row.status)
     .select("name");
   if (error) throw error;
   if (!data?.length) {
-    throw Object.assign(new Error(`Background not found: ${target}`), { statusCode: 404 });
+    throw Object.assign(new Error(`Background not found: ${id || dbId}`), { statusCode: 404 });
   }
   return data;
 }
@@ -1025,7 +1084,7 @@ async function revisePendingBackground(supabase, { id, instruction, imageModel, 
 }
 
 async function generateCaptionOptionsForBackground(supabase, { id, captionModel }) {
-  const row = await loadPendingBackground(supabase, id);
+  const row = await loadBackgroundWithStatuses(supabase, id, ["staged"]);
   const { scene, metadata } = sceneForBackground(row);
 
   const model = captionModel || process.env.OPENAI_CAPTION_MODEL || DEFAULT_CAPTION_MODEL;
@@ -1063,7 +1122,7 @@ async function generateCaptionOptionsForBackground(supabase, { id, captionModel 
     .from("backgrounds")
     .update({ metadata: nextMetadata })
     .eq("id", row.id)
-    .eq("status", "pending");
+    .eq("status", row.status);
   if (updateErr) throw updateErr;
 
   const { error: optionErr } = await supabase
@@ -1102,7 +1161,7 @@ async function approveBackgroundWithCaption(supabase, {
   layout,
   mediumLayout,
 }) {
-  const row = await loadPendingBackground(supabase, id);
+  const row = await loadBackgroundWithStatuses(supabase, id, ["staged"]);
   const { scene, metadata } = sceneForBackground(row);
   const finalCaption = normalizeSelectedCaption(caption);
   let finalCaptionOptions = Array.isArray(captionOptions) && captionOptions.length
@@ -1205,7 +1264,7 @@ async function approveBackgroundWithCaption(supabase, {
       approved_at: new Date().toISOString(),
     })
     .eq("id", row.id)
-    .eq("status", "pending");
+    .eq("status", row.status);
   if (backgroundErr) throw backgroundErr;
 
   return {
@@ -1328,6 +1387,7 @@ async function main() {
           storagePaths,
           draftsResult,
           backgroundsResult,
+          stagedBackgroundsResult,
           promptsResult,
           discardedDraftsResult,
           discardedBackgroundsResult,
@@ -1337,6 +1397,7 @@ async function main() {
           listAllStoragePaths(supabase),
           supabase.from("drafts").select("id, caption").eq("status", "draft"),
           supabase.from("backgrounds").select("*", { count: "exact", head: true }).eq("status", "pending"),
+          supabase.from("backgrounds").select("*", { count: "exact", head: true }).eq("status", "staged"),
           supabase.from("prompts").select("*", { count: "exact", head: true }),
           supabase.from("drafts").select("*", { count: "exact", head: true }).eq("status", "discarded"),
           supabase.from("backgrounds").select("*", { count: "exact", head: true }).eq("status", "discarded"),
@@ -1352,6 +1413,7 @@ async function main() {
           storageFiles: storagePaths.length,
           drafts: captionedDrafts,
           backgrounds: pendingBackgrounds,
+          approvedBackgrounds: stagedBackgroundsResult.error ? 0 : (stagedBackgroundsResult.count ?? 0),
           prompts: promptsResult.error ? 0 : (promptsResult.count ?? 0),
           discarded:
             (discardedDraftsResult.error ? 0 : (discardedDraftsResult.count ?? 0)) +
@@ -1536,9 +1598,29 @@ async function main() {
 
     if (req.method === "GET" && url.pathname === "/api/backgrounds") {
       try {
-        json(res, 200, { backgrounds: await listBackgrounds(supabase, projectUrl) });
+        const status = normalizeBackgroundQueueStatus(url.searchParams.get("status") || "pending");
+        if (!status) {
+          json(res, 400, { error: "status must be pending or staged" });
+          return;
+        }
+        json(res, 200, { backgrounds: await listBackgrounds(supabase, projectUrl, status) });
       } catch (e) {
         json(res, 500, { error: e.message });
+      }
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/backgrounds/stage") {
+      const payload = await readBody(req);
+      if (!payload?.id && !payload?.dbId) { json(res, 400, { error: "id required" }); return; }
+      try {
+        const row = await stagePendingBackground(supabase, { id: payload.id, dbId: payload.dbId });
+        json(res, 200, {
+          success: true,
+          background: backgroundDraftFromRow(row, projectUrl),
+        });
+      } catch (e) {
+        json(res, e.statusCode || (e.message?.startsWith("Background not found") ? 404 : 500), { error: e.message });
       }
       return;
     }
@@ -1611,15 +1693,29 @@ async function main() {
       try {
         let data;
         if (payload.all) {
+          const status = normalizeBackgroundQueueStatus(payload.status || "pending");
+          if (!status) {
+            json(res, 400, { error: "status must be pending or staged" });
+            return;
+          }
           const result = await supabase
             .from("backgrounds")
             .update({ status: "discarded" })
-            .eq("status", "pending")
+            .eq("status", status)
             .select("name");
           if (result.error) throw result.error;
           data = result.data;
         } else if (payload.id || payload.dbId) {
-          data = await discardPendingBackground(supabase, { id: payload.id, dbId: payload.dbId });
+          const status = normalizeBackgroundQueueStatus(payload.status || "pending");
+          if (!status) {
+            json(res, 400, { error: "status must be pending or staged" });
+            return;
+          }
+          data = await discardBackgroundWithStatuses(supabase, {
+            id: payload.id,
+            dbId: payload.dbId,
+            statuses: [status],
+          });
         } else {
           json(res, 400, { error: "Provide all or id" }); return;
         }
