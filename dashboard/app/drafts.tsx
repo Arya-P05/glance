@@ -9,7 +9,7 @@ import { C, S } from "../lib/theme";
 import { WidgetSmall } from "../components/iPhoneMockup/WidgetSmall";
 import { WidgetMedium } from "../components/iPhoneMockup/WidgetMedium";
 import { WidgetLarge } from "../components/iPhoneMockup/WidgetLarge";
-import { previewImageUrl } from "../components/RemoteImage";
+import { previewImageUrl, RemoteImage } from "../components/RemoteImage";
 import { CaptionEditor } from "../components/CaptionEditor";
 import { CaptionLayout, CaptionText, MediumCaptionLayout } from "../lib/captionLayout";
 import { ActionKey } from "../components/ActionKey";
@@ -453,7 +453,15 @@ export default function DraftsScreen() {
                 onPress={() => openReview(idx)}
                 style={[styles.cell, { width: gridCell, height: gridCell }]}
               >
-                <Image source={{ uri: imgUri }} style={styles.thumb} resizeMode="contain" />
+                <RemoteImage
+                  uri={imgUri}
+                  width={gridCell * 1.5}
+                  height={gridCell * 1.5}
+                  transformResizeMode="contain"
+                  style={styles.thumb}
+                  resizeMode="contain"
+                  priority={idx < gridColumns}
+                />
               </Pressable>
             );
           })
