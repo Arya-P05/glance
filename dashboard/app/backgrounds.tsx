@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
-  View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Image, Platform, useWindowDimensions,
+  View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Platform, TextInput, useWindowDimensions,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { NavArrowLeft, NavArrowRight, RefreshDouble, Trash } from "iconoir-react-native";
@@ -10,7 +10,7 @@ import { C, S } from "../lib/theme";
 import { WidgetSmall } from "../components/iPhoneMockup/WidgetSmall";
 import { WidgetMedium } from "../components/iPhoneMockup/WidgetMedium";
 import { WidgetLarge } from "../components/iPhoneMockup/WidgetLarge";
-import { previewImageUrl } from "../components/RemoteImage";
+import { previewImageUrl, RemoteImage } from "../components/RemoteImage";
 import { CaptionEditor } from "../components/CaptionEditor";
 import { CaptionLayout, MediumCaptionLayout } from "../lib/captionLayout";
 import { ActionKey } from "../components/ActionKey";
@@ -28,7 +28,9 @@ function backgroundImageUri(background: Draft, width: number) {
 }
 
 function backgroundGridImageUri(background: Draft) {
-  return background.rawImageUrl || background.imageUrl || `${API_BASE}/content/backgrounds/${background.filename}`;
+  if (background.rawImageUrl) return background.rawImageUrl;
+  if (background.imageUrl) return background.imageUrl;
+  return `${API_BASE}/content/backgrounds/${background.filename}`;
 }
 
 function normalizeCaption(caption: CaptionText): CaptionText {
@@ -52,6 +54,7 @@ export default function BackgroundsScreen() {
   const [caption, setCaption] = useState<CaptionText>({ smallText: "", bigText: "" });
   const [captionModel, setCaptionModel] = useState<string | undefined>();
   const [captionPrompt, setCaptionPrompt] = useState<string | undefined>();
+  const [tweakInstruction, setTweakInstruction] = useState("");
   const discardLockRef = useRef(false);
   const gridViewportWidth = Math.max(
     320,
@@ -200,6 +203,29 @@ export default function BackgroundsScreen() {
     }
   }
 
+  async function reviseCurrentBackground() {
+    const background = backgrounds[reviewIdx];
+    const instruction = tweakInstruction.trim();
+    if (!background || busy || !instruction) return;
+
+    setBusy(true);
+    try {
+      const result = await api.reviseBackground({ id: background.id, instruction });
+      const insertAt = reviewIdx + 1;
+      setBackgrounds(prev => {
+        const next = prev.filter(item => item.id !== result.background.id);
+        next.splice(Math.min(insertAt, next.length), 0, result.background);
+        return next;
+      });
+      setReviewIdx(insertAt);
+      setTweakInstruction("");
+    } catch (e: any) {
+      alert(e?.message ?? "Failed to tweak background");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function selectCaptionOption(index: number) {
     const option = captionOptions[index];
     if (!option) return;
@@ -288,7 +314,7 @@ export default function BackgroundsScreen() {
           </View>
           <View style={styles.editorWrap}>
             <CaptionEditor
-              backgroundUri={backgroundGridImageUri(background)}
+              backgroundUri={backgroundImageUri(background, 1200)}
               caption={caption}
               initialLayout={background.meta?.captionLayout}
               initialMediumLayout={background.meta?.mediumCaptionLayout}
@@ -394,6 +420,32 @@ export default function BackgroundsScreen() {
                 </Text>
               </View>
             )}
+            <View style={styles.tweakPanel}>
+              <Text style={styles.metaLabel}>Tweak image</Text>
+              <Text style={styles.tweakHint}>Make one small edit and keep this frame.</Text>
+              <TextInput
+                value={tweakInstruction}
+                onChangeText={setTweakInstruction}
+                placeholder="no open mouth"
+                placeholderTextColor={C.textMuted}
+                multiline
+                editable={!busy}
+                textAlignVertical="top"
+                style={styles.tweakInput}
+              />
+              <Btn
+                label="Generate tweak"
+                onPress={reviseCurrentBackground}
+                loading={busy}
+                disabled={!tweakInstruction.trim() || busy}
+                small
+              />
+              {background.meta?.revision?.instruction && (
+                <Text style={styles.tweakSource}>
+                  From: {background.meta.revision.instruction}
+                </Text>
+              )}
+            </View>
           </View>
         </View>
 
@@ -447,7 +499,15 @@ export default function BackgroundsScreen() {
               onPress={() => openReview(idx)}
               style={[styles.cell, { width: gridCell, height: gridCell }]}
             >
-              <Image source={{ uri: backgroundGridImageUri(background) }} style={styles.thumb} resizeMode="contain" />
+              <RemoteImage
+                uri={backgroundGridImageUri(background)}
+                width={gridCell * 1.5}
+                height={gridCell * 1.5}
+                transformResizeMode="contain"
+                style={styles.thumb}
+                resizeMode="contain"
+                priority={idx < gridColumns}
+              />
             </Pressable>
           ))
         )}
@@ -578,6 +638,28 @@ const styles = StyleSheet.create({
   metaValue: { color: C.textPrimary, fontSize: 12, lineHeight: 17 },
   metaValueMuted: { color: C.textSecondary, fontSize: 11, lineHeight: 16 },
   metaMissing: { color: C.textMuted, fontSize: 12, fontStyle: "italic", marginBottom: 16 },
+  tweakPanel: {
+    marginTop: 4,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: C.border,
+    gap: 8,
+  },
+  tweakHint: { color: C.textMuted, fontSize: 11, lineHeight: 15 },
+  tweakInput: {
+    minHeight: 82,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 8,
+    backgroundColor: C.bg,
+    color: C.textPrimary,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    fontSize: 12,
+    lineHeight: 17,
+    outlineStyle: "none",
+  } as any,
+  tweakSource: { color: C.textMuted, fontSize: 10, lineHeight: 14 },
   actionBar: {
     flexDirection: "row",
     alignItems: "center",
