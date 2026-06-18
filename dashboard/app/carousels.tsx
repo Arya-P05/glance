@@ -4,7 +4,6 @@ import {
   Text,
   ScrollView,
   StyleSheet,
-  Image,
   Pressable,
   ActivityIndicator,
   TextInput,
@@ -16,6 +15,7 @@ import { api, InstagramCarousel, InstagramCarouselPackage, InstagramStatus, Stor
 import { Btn } from "../components/Btn";
 import { C, S } from "../lib/theme";
 import { useJobStream } from "../lib/useJobStream";
+import { RemoteImage } from "../components/RemoteImage";
 
 const CAROUSEL_SELECTION_KEY = "glance.carouselDraftSelection";
 const CAROUSEL_SIZE = 5;
@@ -387,9 +387,10 @@ export default function CarouselsScreen() {
                   </View>
                   <View style={styles.queueThumbs}>
                     {carousel.items.slice(0, 5).map(item => (
-                      <Image
+                      <RemoteImage
                         key={item.id}
-                        source={{ uri: item.post?.publicUrl ?? "" }}
+                        uri={item.post?.publicUrl ?? ""}
+                        width={96}
                         style={styles.queueThumb}
                         resizeMode="cover"
                       />
@@ -468,7 +469,7 @@ export default function CarouselsScreen() {
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.previewStrip}>
                   {builder.items.map((item, index) => (
                     <View key={item.id} style={styles.slideCard}>
-                      <Image source={{ uri: item.publicUrl }} style={styles.slideImage} resizeMode="cover" />
+                      <RemoteImage uri={item.publicUrl} width={360} style={styles.slideImage} resizeMode="cover" priority={index === 0} />
                       <View style={styles.slideNumber}><Text style={styles.slideNumberText}>{index + 1}</Text></View>
                       <View style={styles.slideActions}>
                         <Btn label="Left" onPress={() => moveItem(index, -1)} disabled={index === 0} small variant="outline" />
@@ -537,7 +538,7 @@ export default function CarouselsScreen() {
                   <View style={styles.manualGrid}>
                     {manualPackage.items.map(item => (
                       <Pressable key={item.position} onPress={() => downloadPackageItem(item)} style={styles.manualItem}>
-                        <Image source={{ uri: item.url }} style={styles.manualThumb} resizeMode="cover" />
+                        <RemoteImage uri={item.url} width={240} style={styles.manualThumb} resizeMode="cover" />
                         <View style={styles.manualItemMeta}>
                           <Text style={styles.manualItemTitle}>Slide {item.position}</Text>
                           <Text style={styles.manualFilename} numberOfLines={1}>{item.filename}</Text>
@@ -571,7 +572,7 @@ export default function CarouselsScreen() {
                 <ScrollView contentContainerStyle={styles.libraryGrid}>
                   {availableImages.map(image => (
                     <Pressable key={image.id} onPress={() => addOrReplaceImage(image)} style={styles.libraryCell}>
-                      <Image source={{ uri: image.publicUrl }} style={styles.libraryThumb} resizeMode="cover" />
+                      <RemoteImage uri={image.publicUrl} width={180} style={styles.libraryThumb} resizeMode="cover" />
                     </Pressable>
                   ))}
                   {!availableImages.length && <Text style={S.body}>No more active Library posts available.</Text>}
