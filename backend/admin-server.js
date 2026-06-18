@@ -6,7 +6,7 @@
  *   open http://127.0.0.1:3847/
  */
 import "dotenv/config";
-import OpenAI from "openai";
+import OpenAI, { toFile } from "openai";
 import { createClient } from "@supabase/supabase-js";
 import { spawn } from "node:child_process";
 import { createReadStream, readFileSync } from "node:fs";
@@ -27,6 +27,7 @@ import { getDraftForPublish, publishDraftFromDb } from "./publish-draft.js";
 import { getInstagramConnectionStatus, publishInstagramCarousel } from "./instagram-publisher.js";
 import {
   DEFAULT_CAPTION_MODEL,
+  DEFAULT_IMAGE_MODEL,
   buildCaptionPrompt,
   captionSignature,
   completeCaptionOptions,
@@ -144,6 +145,11 @@ function captionedDraftStoragePath(name) {
 function mediumDraftStoragePath(name) {
   const suffix = `${Date.now()}-${randomUUID().slice(0, 8)}`;
   return `${DRAFT_PREFIX}/medium/${name}-${suffix}.png`;
+}
+
+function revisedBackgroundName(sourceName) {
+  const stamp = new Date().toISOString().replace(/\D/g, "").slice(0, 14);
+  return `${sourceName}_tweak_${stamp}_${randomUUID().slice(0, 8)}`;
 }
 
 function hasCompleteCaption(caption) {
@@ -629,7 +635,12 @@ async function listBackgrounds(supabase, projectUrl) {
     .order("created_at", { ascending: true });
   if (backgroundsResult.error) throw backgroundsResult.error;
 
-  return (backgroundsResult.data ?? []).map(row => ({
+  return (backgroundsResult.data ?? []).map(row => backgroundDraftFromRow(row, projectUrl));
+}
+
+function backgroundDraftFromRow(row, projectUrl) {
+  const metadata = row.metadata && typeof row.metadata === "object" ? row.metadata : {};
+  return {
     id: row.name,
     dbId: row.id,
     filename: `${row.name}.png`,
@@ -637,22 +648,22 @@ async function listBackgrounds(supabase, projectUrl) {
     rawImageUrl: publicObjectUrl(projectUrl, row.storage_path),
     meta: {
       caption: null,
-      captionOptions: row.metadata?.captionOptions ?? null,
-      selectedCaptionIndex: row.metadata?.selectedCaptionIndex ?? null,
-      captionPrompt: row.metadata?.captionPrompt ?? null,
-      captionLayout: row.metadata?.captionLayout ?? null,
-      mediumCaptionLayout: row.metadata?.mediumCaptionLayout ?? null,
-      mediumStoragePath: row.metadata?.mediumStoragePath ?? null,
-      mediumImageUrl: row.metadata?.mediumStoragePath
-        ? publicObjectUrl(projectUrl, row.metadata.mediumStoragePath)
+      captionOptions: metadata.captionOptions ?? null,
+      selectedCaptionIndex: metadata.selectedCaptionIndex ?? null,
+      captionPrompt: metadata.captionPrompt ?? null,
+      captionLayout: metadata.captionLayout ?? null,
+      mediumCaptionLayout: metadata.mediumCaptionLayout ?? null,
+      mediumStoragePath: metadata.mediumStoragePath ?? null,
+      mediumImageUrl: metadata.mediumStoragePath
+        ? publicObjectUrl(projectUrl, metadata.mediumStoragePath)
         : null,
-      scene: row.scene,
+      scene: row.scene ?? metadata.scene ?? null,
       imageModel: row.image_model,
-      captionModel: row.metadata?.captionModel ?? null,
+      captionModel: metadata.captionModel ?? null,
       promptModel: row.prompt_model,
       generatedAt: row.created_at,
     },
-  }));
+  };
 }
 
 async function renderDraftCaption(supabase, { id, caption, layout, mediumLayout }) {
@@ -887,6 +898,117 @@ function sceneForBackground(row) {
     throw new Error("Background has no saved scene metadata for caption generation");
   }
   return { scene, metadata };
+}
+
+function buildBackgroundRevisionPrompt(row, instruction) {
+  const metadata = row.metadata && typeof row.metadata === "object" ? row.metadata : {};
+  const scene = row.scene || metadata.scene || {};
+  const sceneBits = ["subject", "setting", "mood", "style"]
+    .map(key => scene?.[key])
+    .filter(Boolean)
+    .join("; ");
+
+  return [
+    "Edit the provided image with the smallest possible visual change.",
+    `Requested edit: ${instruction}`,
+    "Preserve the exact composition, camera angle, crop, subject count, clothing, pose, background, lighting, colors, grain, texture, widget-safe negative space, and overall 2000s digital-camera/photo-real aesthetic.",
+    "Do not add typography, logos, watermarks, borders, stickers, extra people, or new objects unless the requested edit explicitly requires it.",
+    "If the request is about a face or expression, change only that expression detail and keep identity, gear, framing, and scene intact.",
+    sceneBits ? `Original scene context to preserve: ${sceneBits}` : "",
+  ].filter(Boolean).join("\n");
+}
+
+async function revisePendingBackground(supabase, { id, instruction, imageModel, size }) {
+  const cleanInstruction = String(instruction || "").trim().slice(0, 700);
+  if (!cleanInstruction) {
+    throw Object.assign(new Error("instruction required"), { statusCode: 400 });
+  }
+
+  const row = await loadPendingBackground(supabase, id);
+  const metadata = row.metadata && typeof row.metadata === "object" ? row.metadata : {};
+  const model = imageModel || row.image_model || metadata.imageModel || process.env.OPENAI_IMAGE_MODEL || DEFAULT_IMAGE_MODEL;
+  const editSize = size || metadata.size || "1024x1024";
+
+  const { data: blob, error: downloadErr } = await supabase.storage.from(BUCKET).download(row.storage_path);
+  if (downloadErr) throw downloadErr;
+
+  const imageBytes = Buffer.from(await blob.arrayBuffer());
+  const openai = new OpenAI({ apiKey: env("OPENAI_API_KEY") });
+  const revisionPrompt = buildBackgroundRevisionPrompt(row, cleanInstruction);
+  const imageFile = await toFile(imageBytes, `${row.name}.png`, { type: "image/png" });
+  const result = await openai.images.edit({
+    model,
+    image: imageFile,
+    prompt: revisionPrompt,
+    size: editSize,
+    input_fidelity: "high",
+    quality: "high",
+    output_format: "png",
+  });
+
+  const b64 = result.data?.[0]?.b64_json;
+  if (!b64) throw new Error("OpenAI image edit response did not include b64_json");
+
+  const revisedBytes = Buffer.from(b64, "base64");
+  const name = revisedBackgroundName(row.name);
+  const storagePath = `${DRAFT_PREFIX}/backgrounds/${name}.png`;
+  await uploadVerifiedObject(supabase, storagePath, revisedBytes);
+
+  const now = new Date().toISOString();
+  const {
+    captionOptions,
+    selectedCaptionIndex,
+    captionPrompt,
+    captionGeneratedAt,
+    captionModel,
+    captionLayout,
+    mediumCaptionLayout,
+    mediumStoragePath,
+    mediumImageUrl,
+    ...baseMetadata
+  } = metadata;
+  const nextMetadata = {
+    ...baseMetadata,
+    scene: row.scene ?? metadata.scene ?? null,
+    scenePrompt: row.image_prompt ?? metadata.scenePrompt ?? null,
+    imageModel: model,
+    promptModel: row.prompt_model ?? metadata.promptModel ?? null,
+    size: editSize,
+    generatedAt: now,
+    revision: {
+      sourceName: row.name,
+      sourceStoragePath: row.storage_path,
+      instruction: cleanInstruction,
+      prompt: revisionPrompt,
+      generatedAt: now,
+    },
+  };
+
+  const { data: newRow, error: insertErr } = await supabase
+    .from("backgrounds")
+    .insert({
+      name,
+      storage_path: storagePath,
+      scene: row.scene ?? metadata.scene ?? null,
+      image_prompt: row.image_prompt ?? metadata.scenePrompt ?? null,
+      image_model: model,
+      prompt_model: row.prompt_model ?? metadata.promptModel ?? null,
+      metadata: nextMetadata,
+      status: "pending",
+    })
+    .select("id, name, storage_path, scene, image_prompt, image_model, prompt_model, created_at, metadata")
+    .single();
+
+  if (insertErr) {
+    await supabase.storage.from(BUCKET).remove([storagePath]);
+    throw insertErr;
+  }
+
+  return {
+    background: backgroundDraftFromRow(newRow, supabaseUrl()),
+    imageModel: model,
+    revisionPrompt,
+  };
 }
 
 async function generateCaptionOptionsForBackground(supabase, { id, captionModel }) {
@@ -1419,6 +1541,27 @@ async function main() {
         json(res, 200, { success: true, ...result });
       } catch (e) {
         json(res, e.message?.startsWith("Background not found") ? 404 : 500, { error: e.message });
+      }
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/backgrounds/revise") {
+      const payload = await readBody(req);
+      if (!payload?.id) { json(res, 400, { error: "id required" }); return; }
+      if (!String(payload.instruction || "").trim()) {
+        json(res, 400, { error: "instruction required" });
+        return;
+      }
+      try {
+        const result = await revisePendingBackground(supabase, {
+          id: payload.id,
+          instruction: payload.instruction,
+          imageModel: payload.imageModel,
+          size: payload.size,
+        });
+        json(res, 200, { success: true, ...result });
+      } catch (e) {
+        json(res, e.statusCode || (e.message?.startsWith("Background not found") ? 404 : 500), { error: e.message });
       }
       return;
     }
