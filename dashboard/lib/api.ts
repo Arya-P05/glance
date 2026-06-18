@@ -60,12 +60,18 @@ export const api = {
     }),
 
   drafts: () => request<{ drafts: Draft[] }>("/api/drafts"),
-  backgrounds: () => request<{ backgrounds: Draft[] }>("/api/backgrounds"),
+  backgrounds: (opts?: { status?: "pending" | "staged" }) =>
+    request<{ backgrounds: Draft[] }>(`/api/backgrounds${opts?.status ? `?status=${opts.status}` : ""}`),
+  stageBackground: (opts: { id?: string; dbId?: string }) =>
+    request<{ success: boolean; background: Draft }>("/api/backgrounds/stage", {
+      method: "POST",
+      body: JSON.stringify(opts),
+    }),
   publishDraft: (opts: { id?: string; all?: boolean; count?: number; status?: "active" | "inactive" }) =>
     request<PublishDraftResult>("/api/drafts/publish", { method: "POST", body: JSON.stringify(opts) }),
   discardDraft: (opts: { id?: string; all?: boolean }) =>
     request<{ success: boolean; updated: number; ids: string[] }>("/api/drafts/discard", { method: "POST", body: JSON.stringify(opts) }),
-  discardBackground: (opts: { id?: string; dbId?: string; all?: boolean }) =>
+  discardBackground: (opts: { id?: string; dbId?: string; all?: boolean; status?: "pending" | "staged" }) =>
     request<{ success: boolean; updated: number; ids: string[] }>("/api/backgrounds/discard", { method: "POST", body: JSON.stringify(opts) }),
   generateBackgroundMessages: (opts: { id: string; captionModel?: string }) =>
     request<{
@@ -163,6 +169,7 @@ export interface Stats {
   storageFiles: number;
   drafts: number;
   backgrounds: number;
+  approvedBackgrounds: number;
   prompts: number;
   discarded: number;
 }
@@ -260,6 +267,9 @@ export interface DraftMeta {
   captionPrompt?: string | null;
   captionLayout?: CaptionLayout | null;
   mediumCaptionLayout?: MediumCaptionLayout | null;
+  backgroundStatus?: "pending" | "staged" | "approved" | "discarded" | null;
+  imageApprovedAt?: string | null;
+  approvedAt?: string | null;
   mediumStoragePath?: string | null;
   mediumImageUrl?: string | null;
   scene?: Record<string, string>;
