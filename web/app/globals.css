@@ -1,0 +1,329 @@
+:root {
+  --background: #000;
+  --foreground: rgba(255, 255, 255, 0.9);
+  --secondary: rgba(255, 255, 255, 0.68);
+  --action: rgba(255, 255, 255, 0.52);
+  --separator: rgba(255, 255, 255, 0.35);
+  --quiet: rgba(255, 255, 255, 0.44);
+  --disabled: rgba(255, 255, 255, 0.22);
+  --field: rgba(255, 255, 255, 0.06);
+  --field-border: rgba(255, 255, 255, 0.13);
+  --success: rgb(107, 230, 148);
+  --warning: rgb(255, 148, 97);
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  min-width: 320px;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: var(--background);
+}
+
+body {
+  color: var(--foreground);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.page {
+  position: relative;
+  display: grid;
+  width: 100%;
+  height: 100svh;
+  overflow: hidden;
+  background: #000;
+  padding: max(22px, env(safe-area-inset-top)) max(22px, env(safe-area-inset-right))
+    max(18px, env(safe-area-inset-bottom)) max(22px, env(safe-area-inset-left));
+}
+
+.brandRow {
+  position: absolute;
+  top: max(22px, env(safe-area-inset-top));
+  left: max(22px, env(safe-area-inset-left));
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--secondary);
+  font-size: 15px;
+  line-height: 1;
+}
+
+.brandRow img {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+}
+
+.stage {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  width: min(100%, 760px);
+  height: 100%;
+  justify-self: center;
+  padding-top: 44px;
+  padding-bottom: 18px;
+}
+
+.momentWrap {
+  width: clamp(218px, min(42vw, 48svh), 430px);
+  aspect-ratio: 1;
+  transform: translateX(3%);
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--field);
+}
+
+.moment {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.copy {
+  display: grid;
+  gap: 16px;
+  justify-items: center;
+  padding-top: clamp(20px, 3.2svh, 32px);
+}
+
+h1 {
+  margin: 0;
+  color: var(--secondary);
+  font-size: clamp(17px, 2.7vw, 20px);
+  font-weight: 400;
+  line-height: 1.25;
+  letter-spacing: 0;
+  text-align: center;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 11px;
+  color: var(--separator);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.textAction {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--action);
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    transform 160ms var(--ease-out);
+}
+
+.textAction:hover,
+.textAction:focus-visible {
+  color: var(--foreground);
+}
+
+.textAction:focus-visible {
+  outline: 1px solid rgba(255, 255, 255, 0.55);
+  outline-offset: 5px;
+  border-radius: 4px;
+}
+
+.textAction:active {
+  transform: scale(0.97);
+}
+
+.waitlist {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr) auto;
+  gap: 10px;
+  width: min(100%, 540px);
+  max-height: 0;
+  padding-top: 0;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(8px) scale(0.98);
+  transform-origin: top center;
+  transition:
+    max-height 240ms var(--ease-drawer),
+    padding-top 240ms var(--ease-drawer),
+    opacity 180ms var(--ease-out),
+    transform 220ms var(--ease-out);
+}
+
+.waitlistOpen {
+  max-height: 118px;
+  padding-top: 22px;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+}
+
+label {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
+label span {
+  position: absolute;
+  top: 9px;
+  left: 13px;
+  color: var(--quiet);
+  font-size: 11px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+input {
+  width: 100%;
+  height: 54px;
+  border: 1px solid var(--field-border);
+  border-radius: 8px;
+  background: var(--field);
+  color: var(--foreground);
+  padding: 24px 13px 9px;
+  outline: none;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    opacity 160ms ease;
+}
+
+input:focus {
+  border-color: rgba(255, 255, 255, 0.36);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+input:disabled {
+  opacity: 0.55;
+}
+
+.submit {
+  appearance: none;
+  height: 54px;
+  min-width: 72px;
+  border: 1px solid var(--field-border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--action);
+  cursor: pointer;
+  padding: 0 18px;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    transform 160ms var(--ease-out),
+    opacity 160ms ease;
+}
+
+.submit:hover:not(:disabled),
+.submit:focus-visible {
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--foreground);
+}
+
+.submit:focus-visible {
+  outline: 1px solid rgba(255, 255, 255, 0.55);
+  outline-offset: 3px;
+}
+
+.submit:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.submit:disabled {
+  cursor: default;
+  opacity: 0.52;
+}
+
+.formNote {
+  grid-column: 1 / -1;
+  min-height: 16px;
+  margin: 0;
+  color: var(--success);
+  font-size: 13px;
+  line-height: 16px;
+  text-align: center;
+}
+
+.formError {
+  color: var(--warning);
+}
+
+@media (max-width: 620px) {
+  .page {
+    padding-inline: max(24px, env(safe-area-inset-left)) max(24px, env(safe-area-inset-right));
+  }
+
+  .brandRow {
+    left: max(24px, env(safe-area-inset-left));
+  }
+
+  .stage {
+    width: 100%;
+    padding-top: 50px;
+    padding-bottom: 14px;
+  }
+
+  .momentWrap {
+    width: clamp(210px, 68vw, 320px);
+    transform: translateX(2%);
+  }
+
+  .waitlist {
+    grid-template-columns: 1fr;
+    width: min(100%, 330px);
+  }
+
+  .waitlistOpen {
+    max-height: 230px;
+    padding-top: 20px;
+  }
+
+  .submit {
+    width: 100%;
+  }
+}
+
+@media (max-height: 650px) {
+  .stage {
+    padding-top: 42px;
+    padding-bottom: 12px;
+  }
+
+  .momentWrap {
+    width: clamp(172px, min(34vw, 34svh), 300px);
+  }
+
+  .copy {
+    gap: 12px;
+    padding-top: 16px;
+  }
+
+  .waitlistOpen {
+    padding-top: 14px;
+  }
+}
