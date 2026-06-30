@@ -263,7 +263,7 @@ export default function DraftsScreen() {
           caption={caption}
           initialLayout={draft.meta?.captionLayout}
           initialMediumLayout={draft.meta?.mediumCaptionLayout}
-          onCaptionChange={(next) => setDraftEditCaption(normalizeCaption(next))}
+          onCaptionChange={setDraftEditCaption}
           onApply={applyCaptionLayout}
           onCancel={() => {
             setDraftEditCaption(null);

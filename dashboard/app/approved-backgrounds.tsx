@@ -162,10 +162,9 @@ export default function ApprovedBackgroundsScreen() {
   }
 
   function updateCaption(next: CaptionText) {
-    const normalized = normalizeCaption(next);
-    setCaption(normalized);
+    setCaption(next);
     setCaptionOptions(options => options.map((option, idx) =>
-      idx === selectedCaptionIndex ? normalized : option
+      idx === selectedCaptionIndex ? next : option
     ));
   }
 
