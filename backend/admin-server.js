@@ -49,6 +49,7 @@ const CONTENT_DIR = join(__dirname, "content");
 
 const jobs = new Map();
 const sseClients = new Map(); // jobId -> Set<res>
+const backgroundCaptionJobs = new Map(); // background name -> Promise
 
 function createJob(type) {
   const id = randomUUID();
@@ -121,6 +122,32 @@ function runInProcessJob(type, handler) {
     }
   });
   return jobId;
+}
+
+function startBackgroundCaptionJob(supabase, { id, captionModel }) {
+  const key = String(id || "");
+  if (!key) throw new Error("id required");
+  const existing = backgroundCaptionJobs.get(key);
+  if (existing) return existing;
+
+  const job = generateCaptionOptionsForBackground(supabase, { id: key, captionModel })
+    .catch((e) => {
+      console.warn(`Background caption generation failed for ${key}: ${e.message || e}`);
+      throw e;
+    })
+    .finally(() => {
+      if (backgroundCaptionJobs.get(key) === job) {
+        backgroundCaptionJobs.delete(key);
+      }
+    });
+  backgroundCaptionJobs.set(key, job);
+  return job;
+}
+
+function kickOffBackgroundCaptionJob(supabase, { id, captionModel }) {
+  queueMicrotask(() => {
+    startBackgroundCaptionJob(supabase, { id, captionModel }).catch(() => {});
+  });
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1615,6 +1642,10 @@ async function main() {
       if (!payload?.id && !payload?.dbId) { json(res, 400, { error: "id required" }); return; }
       try {
         const row = await stagePendingBackground(supabase, { id: payload.id, dbId: payload.dbId });
+        kickOffBackgroundCaptionJob(supabase, {
+          id: row.name,
+          captionModel: payload.captionModel,
+        });
         json(res, 200, {
           success: true,
           background: backgroundDraftFromRow(row, projectUrl),
@@ -1629,7 +1660,7 @@ async function main() {
       const payload = await readBody(req);
       if (!payload?.id) { json(res, 400, { error: "id required" }); return; }
       try {
-        const result = await generateCaptionOptionsForBackground(supabase, {
+        const result = await startBackgroundCaptionJob(supabase, {
           id: payload.id,
           captionModel: payload.captionModel,
         });
