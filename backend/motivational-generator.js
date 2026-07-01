@@ -143,8 +143,8 @@ const PERSON_ROLES = [
 
 // Actions describe pose/behavior only — location lives in `setting`, never here.
 const WILD_ACTIONS = [
-  "smiling into the camera",
-  "standing way too close to the camera",
+  "smiling while looking slightly past the camera",
+  "standing close to the camera with a relaxed candid expression",
   "jumping over a tiny ramp",
   "riding through golden light",
   "looking out toward the horizon",
@@ -155,11 +155,11 @@ const WILD_ACTIONS = [
   "wearing oversized headphones",
   "sipping from a soda bottle like a tiny menace",
   "raising one paw like it has attitude",
-  "leaning toward the camera with a ridiculous grin",
-  "walking through warm rain and smiling",
+  "leaning toward the camera with a funny candid expression",
+  "walking through warm rain with a quiet smile",
   "singing their heart out with eyes closed",
   "running down the beach in swim clothes and laughing",
-  "hiking uphill with a giant triumphant grin",
+  "hiking uphill with a tired proud expression",
   "dancing in warm rain under flash",
   "making the most of a snowy day",
   "posing like it owns the place",
@@ -179,7 +179,7 @@ const WILD_ACTIONS = [
   "mid-jump with a ridiculous tiny expression",
   "peeking out of a cardboard box like it has a plan",
   "looking proud on a road trip",
-  "walking through fog with a huge smile",
+  "walking through fog with calm confidence",
 ];
 
 const MOODBOARD_SETTINGS = [
@@ -255,7 +255,7 @@ const COMPOSITION_IDEAS = [
   "subject close to the lens, low camera angle, open negative space above",
   "subject slightly off-center with an interesting but low-detail sky, ceiling, mist, or lights above",
   "subject filling the bottom half, horizon low, readable but specific background",
-  "wide-angle close-up with goofy face and lots of empty color above",
+  "wide-angle close-up with expressive body language and lots of empty color above",
   "simple candid frame with one clear focal point and no clutter",
 ];
 
@@ -352,7 +352,7 @@ const SKY_COMPOSITIONS = [
   "subject huge in the lower third with a massive clean sky above",
   "subject close to the lens, low camera angle, open negative space above",
   "subject filling the bottom half, horizon low, readable but specific background",
-  "wide-angle close-up with goofy face and lots of empty color above",
+  "wide-angle close-up with expressive body language and lots of empty color above",
 ];
 
 const WALL_COMPOSITIONS = [
@@ -544,11 +544,11 @@ const FARM_ANIMAL_SETTINGS = [
 const COLD_ANIMAL_SETTINGS = ["a snow field", "a highway rest stop", "a parking lot", "a farm field"];
 
 export const ACTIONS = [
-  "staring into the camera",
+  "looking slightly off camera",
   "holding a flower",
   "sleeping",
   "running",
-  "smiling",
+  "smiling softly",
   "looking confused",
   "watching the sunset",
   "eating grass",
@@ -557,18 +557,18 @@ export const ACTIONS = [
   "sitting quietly",
   "jumping",
   "balancing on something",
-  "standing slightly too close to the camera",
+  "standing close to the camera",
   "wandering through the scene",
   "resting in the open space",
   "looking off into the distance",
 ];
 
 const ANIMAL_ACTIONS = [
-  "staring into the camera",
+  "looking slightly off camera",
   "holding a flower",
   "sleeping",
   "running",
-  "smiling",
+  "looking expressive",
   "looking confused",
   "watching the sunset",
   "eating grass",
@@ -577,18 +577,18 @@ const ANIMAL_ACTIONS = [
   "sitting quietly",
   "jumping",
   "balancing on something",
-  "standing slightly too close to the camera",
+  "standing close to the camera",
   "wandering through the scene",
   "resting in the open space",
   "looking off into the distance",
 ];
 
 const PEOPLE_ACTIONS = [
-  "staring into the camera",
+  "looking slightly off camera",
   "holding a flower",
   "sleeping",
   "running",
-  "smiling",
+  "smiling softly",
   "looking confused",
   "watching the sunset",
   "wearing sunglasses",
@@ -596,7 +596,7 @@ const PEOPLE_ACTIONS = [
   "sitting quietly",
   "jumping",
   "balancing on something",
-  "standing slightly too close to the camera",
+  "standing close to the camera",
   "wandering through the scene",
   "resting in the open space",
   "looking off into the distance",
@@ -607,9 +607,9 @@ const SPECIAL_ACTIONS = {
   "a skateboarder": ["skateboarding", "balancing on a skateboard", "standing with a skateboard", "wearing sunglasses"],
   "a surfer": ["holding a surfboard", "sitting quietly", "watching the sunset", "looking off into the distance"],
   "an angler": ["holding a fishing rod", "sitting quietly", "watching the sunset", "looking confused"],
-  "a hiker": ["standing slightly too close to the camera", "watching the sunset", "resting in the open space", "looking off into the distance"],
-  "a farmer": ["standing slightly too close to the camera", "holding a flower", "smiling", "looking confused"],
-  "a mail carrier": ["standing slightly too close to the camera", "holding a flower", "smiling", "looking confused"],
+  "a hiker": ["standing close to the camera", "watching the sunset", "resting in the open space", "looking off into the distance"],
+  "a farmer": ["standing close to the camera", "holding a flower", "smiling softly", "looking confused"],
+  "a mail carrier": ["standing close to the camera", "holding a flower", "smiling softly", "looking confused"],
 };
 
 export const CAMERA_STYLES = [
@@ -737,7 +737,7 @@ const SCENE_PRESETS = [
   {
     subject: "a golden retriever",
     setting: "a grassy hill",
-    action: "smiling into the camera",
+    action: "looking happily past the camera",
     camera: "fisheye lens photo",
     weather: "clear sky",
     timeOfDay: "afternoon",
@@ -759,7 +759,7 @@ const SCENE_PRESETS = [
   {
     subject: "a cow",
     setting: "a farm field",
-    action: "standing slightly too close to the camera",
+    action: "standing close to the camera with a curious side-eye",
     camera: "fisheye lens photo",
     weather: "clear sky",
     timeOfDay: "noon",
@@ -770,7 +770,7 @@ const SCENE_PRESETS = [
   {
     subject: "a highland cow",
     setting: "a grassy hill",
-    action: "smiling with a confused goofy face",
+    action: "standing with a confused proud look",
     camera: "2006 point and shoot photo",
     weather: "overcast",
     timeOfDay: "late morning",
@@ -825,7 +825,7 @@ const SCENE_PRESETS = [
   {
     subject: "a polar bear",
     setting: "a snow field",
-    action: "standing slightly too close to the camera with a goofy happy face",
+    action: "standing close to the camera with a funny curious posture",
     camera: "early digital camera photo",
     weather: "snowfall",
     timeOfDay: "blue hour",
@@ -1294,7 +1294,7 @@ function harmonizeCreativeBrief(brief, rng = Math.random) {
 
   if (out.subjectKind === "person" && /paw|soda bottle/.test(out.action)) {
     out.action = pick(
-      ["smiling into the camera", "standing way too close to the camera", "looking proud at a rest stop", "walking through warm rain and smiling"],
+      ["looking slightly past the camera with a soft smile", "standing close to the camera with a candid expression", "looking proud at a rest stop", "walking through warm rain with a quiet smile"],
       rng
     );
   }
@@ -1521,7 +1521,7 @@ export function buildPromptWriterPrompt(brief) {
     String(brief.conceptId || "").startsWith("alpine-techwear");
   const expressionRequirement = isAlpineTechwear
     ? "- for alpine techwear scenes, do not force an open-mouth grin. The subject can have a covered mouth, balaclava, neck gaiter, neutral cool expression, closed-mouth smile, subtle grin, or occasional open smile only when the scene calls for it"
-    : "- the subject must look visibly happy, shocked, scream-laughing, goofy, proud, or like the best/wildest second of the moment just happened";
+    : "- choose an expression and gaze that fit the scene naturally: direct eye contact, open-mouth smiles, and scream-laughing are good only when the action calls for them; otherwise use closed-mouth smiles, proud looks, focused movement, looking off-frame, peaceful confidence, or candid mid-action expressions";
 
   return `Write one image-generation prompt for a square Instagram lock-screen poster background.
 
@@ -1534,10 +1534,10 @@ The final image must feel like:
 - ugly-pretty and iconic because it feels found, not because it feels polished
 - sometimes accidentally model-level beautiful or celebrity-adjacent, like a cool person caught by cheap flash, without resembling any real celebrity
 - pop-reference energy is allowed only as broad styling: street-racer ensemble, rapper-stage aura, UK streetwear, homemade superhero cosplay, sci-fi helmet costume, anime fighter costume, tech-garage genius, boxing/MMA/F1/soccer champion energy, 2000s actor red-carpet flash, awkward suit comedy, mascot costume, plush monster battle
-- emotionally loud: huge grin, scream-laugh, shock, wind-blasted joy, full-body confidence, or unhinged but happy reaction
-- happy, positive, and goofy in a believable way, not mellow wellness content
+- emotionally alive: confidence, momentum, wonder, relief, mischief, calm pride, focused movement, or a wild joyful reaction when the scene calls for it
+- positive and believable, with goofy or loud energy only when it fits the subject and action
 - visually eventful: motion, splash, mist, wind, flash, smoke, height, speed, weird scale, huge view, rainbow, sunset, warm rain, night-out singing, hiking victory, or one absurd peak-frame detail
-- for animals, favor single expressive animals first; if using a group, use only 2-3 animals max. Good animal moments: smiling into camera, goofy close-ups, tiny paws, jumping, sprinting, playful piles, bright nature when it fits, cozy flash pet photos, flowers, ice, beach, grass, colorful yards, warm window light, and tight 2-3 animal chaos when it still reads instantly
+- for animals, favor single expressive animals first; if using a group, use only 2-3 animals max. Good animal moments: curious looks, funny side-eyes, goofy close-ups, tiny paws, jumping, sprinting, playful piles, bright nature when it fits, cozy flash pet photos, flowers, ice, beach, grass, colorful yards, warm window light, and tight 2-3 animal chaos when it still reads instantly
 - by default, the image should feel bright, inspiring, funny, optimistic, and happy enough to work as a motivational widget background
 - the situation may be surreal or staged, but every clothing item, prop, and setting detail must make visual sense together
 - grainy early-2000s digital photography with enough resolution to look good
@@ -1558,11 +1558,11 @@ Hard requirements:
 - no text, no letters, no typography, no logo, no watermark
 - do not include any poster quote inside the image
 ${expressionRequirement}
-- if the scene has fog, snow, rain, night, or unusual weather, the subject is still visibly happy and positive
+- if the scene has fog, snow, rain, night, or unusual weather, the subject still feels positive, resilient, proud, playful, or calmly confident
 - avoid gloomy, murky, damp, swampy, muddy, sad, grey-green, low-energy, or documentary-wildlife moods unless the scene explicitly demands them
 - for animal scenes, avoid foggy riverbanks, muddy banks, dark wet fur piles, dull swamp water, or nature-documentary realism; cute indoor flash, dramatic night flash, bright ice, flower fields, blue-sky grass, beaches, and cozy rooms are all good when the animal feels funny or happy
 - keep a clean text-safe zone in the upper third or upper half, but do not make the whole image empty or calm
-- the subject/action can occupy 30-60% of image height when the moment is dramatic; keep the main faces comfortably readable
+- the subject/action can occupy 30-60% of image height when the moment is dramatic; keep any important face or body language comfortably readable
 - keep the subject's face and body comfortably inside the frame; do not crop the face at the edge
 - keep the upper text area simple enough for later text, but make it visually alive: sky, fog, snow, ocean, smoke, mist, arena rafters, convention lights, crowd bokeh, neon reflections, rain, high ceiling, bridge underside, or sunset glow
 - do not use a plain wall, blank beige wall, empty studio backdrop, plain curtain, blank concrete, or featureless indoor background; every background needs a specific place with visual context
@@ -1586,7 +1586,7 @@ Style discipline:
 - use words like snapshot, cheap flash, fisheye, blown-out sky, heavy sensor noise, soft blur, dust, JPEG artifact, accidental framing
 - make the nostalgia texture obvious: visible grain, compression, imperfect focus, old-camera color, slightly ugly digital softness
 - do not use words like cinematic, premium, elegant, luxurious, editorial, professional, dreamy portrait, masterpiece, film still, or commercial
-- avoid over-explaining emotions; describe the visible expression and the weird little camera-roll detail
+- avoid over-explaining emotions; describe the visible expression, gaze direction, body language, and the weird little camera-roll detail
 
 Great outcome examples in spirit:
 - a happy dog huge in the foreground on a blue-sky hill
@@ -1646,7 +1646,7 @@ function sceneSpecificPromptNotes(brief) {
   }
   if (guidanceStyleRecipe === "alpine-techwear" || id.startsWith("alpine-techwear")) {
     notes.push(
-      "ALPINE TECHWEAR DETAILS: do not default to solo men, open mouths, or silver ski goggles. Subjects can be women, men, androgynous people, two girls, a guy and girl, or two friends. Eyewear can be reflective sunglasses, wraparound glacier shades, mirrored shield sunglasses, smoke/amber/blue/green/black lenses, or ski goggles only sometimes. Mouths can be covered by balaclava/neck gaiter or closed with a calm cool expression."
+      "ALPINE TECHWEAR DETAILS: do not default to solo men, open mouths, direct eye contact, or silver ski goggles. Subjects can be women, men, androgynous people, two girls, a guy and girl, or two friends. Eyewear can be reflective sunglasses, wraparound glacier shades, mirrored shield sunglasses, smoke/amber/blue/green/black lenses, or ski goggles only sometimes. Mouths can be covered by balaclava/neck gaiter or closed with a calm cool expression."
     );
   }
   const knobNotes = [
@@ -1665,7 +1665,7 @@ function sceneSpecificPromptNotes(brief) {
 
   if (id === "skydiver-sunset-grin") {
     notes.push(
-      "FREEFALL FRAMING: show the subject's face, torso, and both arms clearly, not an extreme selfie crop. Keep the subject in the lower third with the sunset sky dominating the frame and tiny earth far below. The face should be joyful and readable, but the body should not fill the whole image."
+      "FREEFALL FRAMING: show the subject's face, torso, and both arms clearly, not an extreme selfie crop. Keep the subject in the lower third with the sunset sky dominating the frame and tiny earth far below. The expression should feel joyful and readable, but it does not need direct eye contact or a huge open-mouth grin."
     );
   }
 
@@ -1743,7 +1743,7 @@ function sceneSpecificPromptNotes(brief) {
 
   if (brief.subjectKind === "animal") {
     notes.push(
-      "ANIMAL MEME ENERGY: keep one animal as the hero, or a tight cluster of only 2-3 animals max, low in frame, with a funny expression, camera-facing smile, tiny-paw motion, jump, sprint, or playful posture that feels like a real found internet photo. Good worlds include blue-sky grass, flowers, bright ice, beach, shallow splash, colorful yard, cozy room flash, or warm window light. Avoid animal crowds, big litters, flocks, swarms, glossy wildlife photography, foggy riverbanks, muddy banks, swamp water, dark wet fur piles, grey-green gloom, or documentary nature mood."
+      "ANIMAL MEME ENERGY: keep one animal as the hero, or a tight cluster of only 2-3 animals max, low in frame, with a funny expression, curious gaze, side-eye, tiny-paw motion, jump, sprint, or playful posture that feels like a real found internet photo. Good worlds include blue-sky grass, flowers, bright ice, beach, shallow splash, colorful yard, cozy room flash, or warm window light. Avoid animal crowds, big litters, flocks, swarms, glossy wildlife photography, foggy riverbanks, muddy banks, swamp water, dark wet fur piles, grey-green gloom, or documentary nature mood."
     );
   }
 
