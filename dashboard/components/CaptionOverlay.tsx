@@ -25,6 +25,7 @@ export function CaptionTextBlock({ rect, caption }: { rect: Rect; caption: Capti
   return (
     <>
       <Text
+        selectable={false}
         style={[
           styles.small,
           {
@@ -38,6 +39,7 @@ export function CaptionTextBlock({ rect, caption }: { rect: Rect; caption: Capti
         {caption.smallText}
       </Text>
       <Text
+        selectable={false}
         style={[
           styles.big,
           {
