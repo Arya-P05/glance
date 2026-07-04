@@ -25,6 +25,11 @@ import {
 const EDITOR_SIZE = 420;
 const MEDIUM_EDITOR_WIDTH = 420;
 const MEDIUM_EDITOR_HEIGHT = Math.round(MEDIUM_EDITOR_WIDTH * 155 / 329);
+const WEB_NO_SELECT_STYLE = {
+  userSelect: "none",
+  WebkitUserSelect: "none",
+  touchAction: "none",
+} as const;
 
 type Props = {
   backgroundUri: string;
@@ -67,11 +72,17 @@ export function CaptionEditor({
   const canvasSize = useRef(EDITOR_SIZE);
   const mediumCanvasSize = useRef({ width: MEDIUM_EDITOR_WIDTH, height: MEDIUM_EDITOR_HEIGHT });
 
+  function clearWebTextSelection() {
+    if (typeof window === "undefined") return;
+    window.getSelection?.()?.removeAllRanges();
+  }
+
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
+        clearWebTextSelection();
         setDraggingText(true);
         startLayout.current = layoutRef.current;
       },
@@ -84,9 +95,11 @@ export function CaptionEditor({
         });
       },
       onPanResponderRelease: () => {
+        clearWebTextSelection();
         setDraggingText(false);
       },
       onPanResponderTerminate: () => {
+        clearWebTextSelection();
         setDraggingText(false);
       },
     })
@@ -110,6 +123,7 @@ export function CaptionEditor({
       onMoveShouldSetPanResponder: () => mediumModeRef.current === "text",
       onPanResponderGrant: () => {
         if (mediumModeRef.current !== "text") return;
+        clearWebTextSelection();
         setDraggingMediumText(true);
         startMediumLayout.current = mediumLayoutRef.current;
       },
@@ -123,9 +137,11 @@ export function CaptionEditor({
         });
       },
       onPanResponderRelease: () => {
+        clearWebTextSelection();
         setDraggingMediumText(false);
       },
       onPanResponderTerminate: () => {
+        clearWebTextSelection();
         setDraggingMediumText(false);
       },
     })
@@ -214,6 +230,7 @@ export function CaptionEditor({
               {...panResponder.panHandlers}
               style={[
                 styles.dragHandle,
+                WEB_NO_SELECT_STYLE as any,
                 {
                   left: rect.left - outlinePadH,
                   top: rect.top - outlinePadV,
@@ -341,6 +358,7 @@ export function CaptionEditor({
               {...mediumTextPanResponder.panHandlers}
               style={[
                 styles.mediumDragHandle,
+                WEB_NO_SELECT_STYLE as any,
                 {
                   left: mediumRect.left - mediumOutlinePadH,
                   top: mediumRect.top - mediumOutlinePadV,
