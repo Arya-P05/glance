@@ -1,0 +1,14 @@
+build:
+  name: Build Glance iOS app
+  steps:
+    - eas/checkout
+    - eas/install_node_modules
+    - eas/resolve_build_config
+    - eas/configure_ios_credentials
+    - eas/configure_ios_version
+    - eas/generate_gymfile_from_template:
+        inputs:
+          credentials: ${ eas.job.secrets.buildCredentials }
+          scheme: DailyWidgets
+    - eas/run_fastlane
+    - eas/find_and_upload_build_artifacts

@@ -240,11 +240,11 @@ export default function CarouselsScreen() {
     }
   }
 
-  function downloadPackageItem(item: { url: string; filename: string }) {
+  function triggerBrowserDownload(url: string, filename: string) {
     if (typeof document !== "undefined") {
       const anchor = document.createElement("a");
-      anchor.href = item.url;
-      anchor.download = item.filename;
+      anchor.href = url;
+      anchor.download = filename;
       anchor.target = "_blank";
       anchor.rel = "noreferrer";
       document.body.appendChild(anchor);
@@ -252,13 +252,50 @@ export default function CarouselsScreen() {
       anchor.remove();
       return;
     }
-    Linking.openURL(item.url);
+    Linking.openURL(url);
   }
 
-  function downloadAllItems(pkg: InstagramCarouselPackage) {
-    pkg.items.forEach((item, index) => {
-      setTimeout(() => downloadPackageItem(item), index * 180);
-    });
+  function downloadPackageItem(item: { url: string; downloadUrl?: string; filename: string }) {
+    triggerBrowserDownload(item.downloadUrl ?? item.url, item.filename);
+  }
+
+  async function savePackageToDirectory(pkg: InstagramCarouselPackage): Promise<"saved" | "cancelled" | false> {
+    if (typeof window === "undefined") return false;
+    const showDirectoryPicker = (window as any).showDirectoryPicker;
+    if (typeof showDirectoryPicker !== "function") return false;
+
+    let directory: any;
+    try {
+      directory = await showDirectoryPicker({ mode: "readwrite" });
+    } catch (e: any) {
+      if (e?.name !== "AbortError") throw e;
+      return "cancelled";
+    }
+
+    for (const item of pkg.items) {
+      const res = await fetch(item.downloadUrl);
+      if (!res.ok) throw new Error(`Could not download ${item.filename}`);
+      const blob = await res.blob();
+      const file = await directory.getFileHandle(item.filename, { create: true });
+      const writable = await file.createWritable();
+      await writable.write(blob);
+      await writable.close();
+    }
+    return "saved";
+  }
+
+  async function downloadAllItems(pkg: InstagramCarouselPackage) {
+    try {
+      const directoryResult = await savePackageToDirectory(pkg);
+      if (directoryResult === "saved") {
+        alert("Slides saved.");
+        return;
+      }
+      if (directoryResult === "cancelled") return;
+      triggerBrowserDownload(pkg.zipUrl, "carousel-slides.zip");
+    } catch (e: any) {
+      alert(e.message);
+    }
   }
 
   async function copyCaption(text: string) {
@@ -391,8 +428,10 @@ export default function CarouselsScreen() {
                         key={item.id}
                         uri={item.post?.publicUrl ?? ""}
                         width={96}
+                        height={96}
+                        transformResizeMode="contain"
                         style={styles.queueThumb}
-                        resizeMode="cover"
+                        resizeMode="contain"
                       />
                     ))}
                   </View>
@@ -469,7 +508,15 @@ export default function CarouselsScreen() {
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.previewStrip}>
                   {builder.items.map((item, index) => (
                     <View key={item.id} style={styles.slideCard}>
-                      <RemoteImage uri={item.publicUrl} width={360} style={styles.slideImage} resizeMode="cover" priority={index === 0} />
+                      <RemoteImage
+                        uri={item.publicUrl}
+                        width={360}
+                        height={360}
+                        transformResizeMode="contain"
+                        style={styles.slideImage}
+                        resizeMode="contain"
+                        priority={index === 0}
+                      />
                       <View style={styles.slideNumber}><Text style={styles.slideNumberText}>{index + 1}</Text></View>
                       <View style={styles.slideActions}>
                         <Btn label="Left" onPress={() => moveItem(index, -1)} disabled={index === 0} small variant="outline" />
@@ -538,7 +585,14 @@ export default function CarouselsScreen() {
                   <View style={styles.manualGrid}>
                     {manualPackage.items.map(item => (
                       <Pressable key={item.position} onPress={() => downloadPackageItem(item)} style={styles.manualItem}>
-                        <RemoteImage uri={item.url} width={240} style={styles.manualThumb} resizeMode="cover" />
+                        <RemoteImage
+                          uri={item.url}
+                          width={240}
+                          height={240}
+                          transformResizeMode="contain"
+                          style={styles.manualThumb}
+                          resizeMode="contain"
+                        />
                         <View style={styles.manualItemMeta}>
                           <Text style={styles.manualItemTitle}>Slide {item.position}</Text>
                           <Text style={styles.manualFilename} numberOfLines={1}>{item.filename}</Text>
@@ -572,7 +626,14 @@ export default function CarouselsScreen() {
                 <ScrollView contentContainerStyle={styles.libraryGrid}>
                   {availableImages.map(image => (
                     <Pressable key={image.id} onPress={() => addOrReplaceImage(image)} style={styles.libraryCell}>
-                      <RemoteImage uri={image.publicUrl} width={180} style={styles.libraryThumb} resizeMode="cover" />
+                      <RemoteImage
+                        uri={image.publicUrl}
+                        width={180}
+                        height={180}
+                        transformResizeMode="contain"
+                        style={styles.libraryThumb}
+                        resizeMode="contain"
+                      />
                     </Pressable>
                   ))}
                   {!availableImages.length && <Text style={S.body}>No more active Library posts available.</Text>}

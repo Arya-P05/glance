@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
   View, Text, ScrollView, StyleSheet, Image, Pressable,
-  ActivityIndicator, Modal,
+  ActivityIndicator, Modal, Platform, useWindowDimensions,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { api, StorageImage } from "../lib/api";
@@ -11,9 +11,13 @@ import { RemoteImage, previewImageUrl } from "../components/RemoteImage";
 
 type Filter = "active" | "inactive";
 const CAROUSEL_SELECTION_KEY = "glance.carouselDraftSelection";
+const GRID_PADDING = 16;
+const GRID_GAP = 10;
+const MIN_GRID_CELL = 220;
 
 export default function LibraryScreen() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
   const [images, setImages] = useState<StorageImage[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -101,6 +105,12 @@ export default function LibraryScreen() {
 
   const activeCount = images.filter(i => i.status === "active").length;
   const inactiveCount = images.filter(i => i.status === "inactive").length;
+  const gridViewportWidth = Math.max(
+    320,
+    width - (Platform.OS === "web" && width > 600 ? C.sidebarW : 0) - GRID_PADDING * 2
+  );
+  const gridColumns = Math.max(1, Math.floor((gridViewportWidth + GRID_GAP) / (MIN_GRID_CELL + GRID_GAP)));
+  const gridCell = Math.floor((gridViewportWidth - GRID_GAP * (gridColumns - 1)) / gridColumns);
 
   const selectionHasActive = [...selected].some(p => images.find(i => i.storagePath === p)?.status === "active");
   const selectionHasInactive = [...selected].some(p => images.find(i => i.storagePath === p)?.status === "inactive");
@@ -193,7 +203,7 @@ export default function LibraryScreen() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.grid}>
-          {filtered.map(img => {
+          {filtered.map((img, idx) => {
             const sel = selected.has(img.storagePath);
             const inactive = img.status === "inactive";
             return (
@@ -201,13 +211,16 @@ export default function LibraryScreen() {
                 key={img.storagePath}
                 onPress={() => toggle(img.storagePath)}
                 onLongPress={() => setDetail(img)}
-                style={[styles.cell, sel && styles.cellSelected, inactive && styles.cellInactive]}
+                style={[styles.cell, { width: gridCell, height: gridCell }, sel && styles.cellSelected, inactive && styles.cellInactive]}
               >
                 <RemoteImage
                   uri={img.publicUrl}
-                  width={Math.ceil(CELL * 1.5)}
+                  width={gridCell * 1.5}
+                  height={gridCell * 1.5}
+                  transformResizeMode="contain"
                   style={styles.thumb}
-                  resizeMode="cover"
+                  resizeMode="contain"
+                  priority={idx < gridColumns}
                 />
                 {inactive && (
                   <View style={styles.inactiveBadge}>
@@ -284,8 +297,6 @@ export default function LibraryScreen() {
   );
 }
 
-const CELL = 160;
-
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
   toolbar: {
@@ -361,20 +372,19 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    padding: 16,
-    gap: 10,
+    padding: GRID_PADDING,
+    gap: GRID_GAP,
   },
   cell: {
-    width: CELL,
     borderRadius: 10,
     overflow: "hidden",
-    backgroundColor: C.surface,
-    borderWidth: 2,
-    borderColor: "transparent",
+    backgroundColor: C.bg,
+    borderWidth: 1,
+    borderColor: C.border,
   },
   cellSelected: { borderColor: C.accent },
   cellInactive: { opacity: 0.45 },
-  thumb: { width: CELL, height: CELL },
+  thumb: { width: "100%", height: "100%", backgroundColor: C.bg },
   inactiveBadge: {
     position: "absolute",
     top: 6,

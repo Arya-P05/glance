@@ -7,6 +7,7 @@
  */
 import "dotenv/config";
 import OpenAI, { toFile } from "openai";
+import sharp from "sharp";
 import { createClient } from "@supabase/supabase-js";
 import { spawn } from "node:child_process";
 import { createReadStream, readFileSync } from "node:fs";
@@ -42,6 +43,8 @@ import { supabaseServiceRoleKey, supabaseUrl } from "./supabase-env.js";
 const BUCKET = IG_BUCKET;
 const PREFIX = "posts";
 const DEFAULT_IMAGE_EDIT_MODEL = "gpt-image-1-mini";
+const CAROUSEL_EXPORT_MAX_SIZE = 1440;
+const CAROUSEL_EXPORT_JPEG_QUALITY = 88;
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CONTENT_DIR = join(__dirname, "content");
 
@@ -162,6 +165,15 @@ function publicObjectUrl(supaUrl, storagePath) {
   const base = supaUrl.replace(/\/+$/, "");
   const encoded = storagePath.split("/").map(encodeURIComponent).join("/");
   return `${base}/storage/v1/object/public/${BUCKET}/${encoded}`;
+}
+
+function apiUrl(projectUrl, path) {
+  return `${projectUrl.replace(/\/+$/, "")}${path}`;
+}
+
+function contentDispositionFilename(filename) {
+  const ascii = filename.replace(/[^\x20-\x7E]+/g, "-").replace(/["\\]/g, "");
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
 }
 
 function captionedDraftStoragePath(name) {
@@ -536,31 +548,153 @@ async function archiveCarousel(supabase, projectUrl, id) {
   return await readCarousel(supabase, projectUrl, id);
 }
 
-async function exportCarouselPackage(supabase, projectUrl, id) {
+async function exportCarouselPackage(supabase, projectUrl, id, apiBase = projectUrl) {
   const existing = await readCarousel(supabase, projectUrl, id);
   if (!existing) throw httpError("Carousel not found", 404);
   if (existing.items.length !== CAROUSEL_ITEM_COUNT || existing.items.some(item => !item.post)) {
     throw httpError(`Carousel must have exactly ${CAROUSEL_ITEM_COUNT} Library posts before export`, 400);
   }
 
-  const safeTitle = (existing.title || "carousel")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 48) || "carousel";
+  const safeTitle = carouselSafeTitle(existing.title);
 
   return {
     id: existing.id,
     title: existing.title,
     caption: existing.caption,
     status: existing.status,
+    zipUrl: apiUrl(apiBase, `/api/carousels/${encodeURIComponent(existing.id)}/export.zip`),
     items: existing.items.map((item, index) => ({
       position: index + 1,
       postId: item.postId,
       storagePath: item.post.storagePath,
       url: item.post.publicUrl,
-      filename: `${String(index + 1).padStart(2, "0")}-${safeTitle}.${item.post.storagePath.split(".").pop() || "jpg"}`,
+      downloadUrl: apiUrl(apiBase, `/api/carousels/${encodeURIComponent(existing.id)}/export/${index + 1}.jpg`),
+      filename: carouselSlideFilename(index + 1, safeTitle),
     })),
+  };
+}
+
+function carouselSafeTitle(title) {
+  return (title || "carousel")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48) || "carousel";
+}
+
+function carouselSlideFilename(position, safeTitle) {
+  return `${String(position).padStart(2, "0")}-${safeTitle}.jpg`;
+}
+
+async function compressedCarouselSlide(supabase, carousel, position) {
+  if (!Number.isInteger(position) || position < 1 || position > carousel.items.length) {
+    throw httpError("Slide not found", 404);
+  }
+  const item = carousel.items[position - 1];
+  if (!item?.post) throw httpError("Slide not found", 404);
+  const { data: blob, error } = await supabase.storage.from(BUCKET).download(item.post.storagePath);
+  if (error) throw error;
+  const source = Buffer.from(await blob.arrayBuffer());
+  return await sharp(source, { failOn: "none" })
+    .rotate()
+    .resize({
+      width: CAROUSEL_EXPORT_MAX_SIZE,
+      height: CAROUSEL_EXPORT_MAX_SIZE,
+      fit: "inside",
+      withoutEnlargement: true,
+    })
+    .jpeg({
+      quality: CAROUSEL_EXPORT_JPEG_QUALITY,
+      mozjpeg: true,
+      chromaSubsampling: "4:4:4",
+    })
+    .toBuffer();
+}
+
+function crc32(buffer) {
+  let crc = -1;
+  for (let i = 0; i < buffer.length; i += 1) {
+    crc = (crc >>> 8) ^ CRC32_TABLE[(crc ^ buffer[i]) & 0xff];
+  }
+  return (crc ^ -1) >>> 0;
+}
+
+const CRC32_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let i = 0; i < 256; i += 1) {
+    let value = i;
+    for (let bit = 0; bit < 8; bit += 1) {
+      value = (value & 1) ? (0xedb88320 ^ (value >>> 1)) : (value >>> 1);
+    }
+    table[i] = value >>> 0;
+  }
+  return table;
+})();
+
+function dosDateTime(date = new Date()) {
+  const year = Math.max(1980, date.getFullYear());
+  const time = (date.getHours() << 11) | (date.getMinutes() << 5) | Math.floor(date.getSeconds() / 2);
+  const day = (date.getDate()) | ((date.getMonth() + 1) << 5) | ((year - 1980) << 9);
+  return { time, day };
+}
+
+function u16(value) {
+  const buffer = Buffer.allocUnsafe(2);
+  buffer.writeUInt16LE(value);
+  return buffer;
+}
+
+function u32(value) {
+  const buffer = Buffer.allocUnsafe(4);
+  buffer.writeUInt32LE(value >>> 0);
+  return buffer;
+}
+
+function createZip(files) {
+  const localParts = [];
+  const centralParts = [];
+  let offset = 0;
+  const { time, day } = dosDateTime();
+
+  for (const file of files) {
+    const name = Buffer.from(file.name, "utf8");
+    const data = file.data;
+    const checksum = crc32(data);
+    const localHeader = Buffer.concat([
+      u32(0x04034b50), u16(20), u16(0x0800), u16(0), u16(time), u16(day),
+      u32(checksum), u32(data.length), u32(data.length), u16(name.length), u16(0), name,
+    ]);
+    const centralHeader = Buffer.concat([
+      u32(0x02014b50), u16(20), u16(20), u16(0x0800), u16(0), u16(time), u16(day),
+      u32(checksum), u32(data.length), u32(data.length), u16(name.length), u16(0), u16(0),
+      u16(0), u16(0), u32(0), u32(offset), name,
+    ]);
+    localParts.push(localHeader, data);
+    centralParts.push(centralHeader);
+    offset += localHeader.length + data.length;
+  }
+
+  const centralDirectory = Buffer.concat(centralParts);
+  const end = Buffer.concat([
+    u32(0x06054b50), u16(0), u16(0), u16(files.length), u16(files.length),
+    u32(centralDirectory.length), u32(offset), u16(0),
+  ]);
+  return Buffer.concat([...localParts, centralDirectory, end]);
+}
+
+async function createCarouselExportZip(supabase, projectUrl, id, apiBase = projectUrl) {
+  const pkg = await exportCarouselPackage(supabase, projectUrl, id, apiBase);
+  const existing = await readCarousel(supabase, projectUrl, id);
+  const files = [];
+  for (const item of pkg.items) {
+    files.push({
+      name: item.filename,
+      data: await compressedCarouselSlide(supabase, existing, item.position),
+    });
+  }
+  return {
+    filename: `${carouselSafeTitle(pkg.title)}-slides.zip`,
+    bytes: createZip(files),
   };
 }
 
@@ -1357,6 +1491,8 @@ async function main() {
 
   const port = Number(process.env.ADMIN_PORT || "3847");
   const host = process.env.ADMIN_HOST || "127.0.0.1";
+  const publicHost = host === "0.0.0.0" ? "127.0.0.1" : host;
+  const adminBaseUrl = process.env.ADMIN_PUBLIC_URL || `http://${publicHost}:${port}`;
 
   const server = createServer(async (req, res) => {
     const url = new URL(req.url || "/", `http://${host}`);
@@ -1568,7 +1704,51 @@ async function main() {
     const carouselExportMatch = url.pathname.match(/^\/api\/carousels\/([^/]+)\/export$/);
     if (req.method === "GET" && carouselExportMatch) {
       try {
-        json(res, 200, { package: await exportCarouselPackage(supabase, projectUrl, carouselExportMatch[1]) });
+        json(res, 200, { package: await exportCarouselPackage(supabase, projectUrl, carouselExportMatch[1], adminBaseUrl) });
+      } catch (e) {
+        json(res, e.statusCode || 500, { error: e.message });
+      }
+      return;
+    }
+
+    const carouselExportSlideMatch = url.pathname.match(/^\/api\/carousels\/([^/]+)\/export\/([1-9][0-9]*)\.jpg$/);
+    if (req.method === "GET" && carouselExportSlideMatch) {
+      try {
+        const existing = await readCarousel(supabase, projectUrl, carouselExportSlideMatch[1]);
+        if (!existing) { json(res, 404, { error: "Carousel not found" }); return; }
+        if (existing.items.length !== CAROUSEL_ITEM_COUNT || existing.items.some(item => !item.post)) {
+          throw httpError(`Carousel must have exactly ${CAROUSEL_ITEM_COUNT} Library posts before export`, 400);
+        }
+        const safeTitle = carouselSafeTitle(existing.title);
+        const position = Number(carouselExportSlideMatch[2]);
+        const bytes = await compressedCarouselSlide(supabase, existing, position);
+        const filename = carouselSlideFilename(position, safeTitle);
+        res.writeHead(200, {
+          "Content-Type": "image/jpeg",
+          "Content-Length": bytes.length,
+          "Content-Disposition": contentDispositionFilename(filename),
+          "Cache-Control": "no-store",
+          ...CORS,
+        });
+        res.end(bytes);
+      } catch (e) {
+        json(res, e.statusCode || 500, { error: e.message });
+      }
+      return;
+    }
+
+    const carouselExportZipMatch = url.pathname.match(/^\/api\/carousels\/([^/]+)\/export\.zip$/);
+    if (req.method === "GET" && carouselExportZipMatch) {
+      try {
+        const { filename, bytes } = await createCarouselExportZip(supabase, projectUrl, carouselExportZipMatch[1], adminBaseUrl);
+        res.writeHead(200, {
+          "Content-Type": "application/zip",
+          "Content-Length": bytes.length,
+          "Content-Disposition": contentDispositionFilename(filename),
+          "Cache-Control": "no-store",
+          ...CORS,
+        });
+        res.end(bytes);
       } catch (e) {
         json(res, e.statusCode || 500, { error: e.message });
       }

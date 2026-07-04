@@ -216,6 +216,7 @@ export interface InstagramCarouselPackageItem {
   postId: string;
   storagePath: string;
   url: string;
+  downloadUrl: string;
   filename: string;
 }
 
@@ -224,6 +225,7 @@ export interface InstagramCarouselPackage {
   title: string;
   caption: string;
   status: InstagramCarouselStatus;
+  zipUrl: string;
   items: InstagramCarouselPackageItem[];
 }
 

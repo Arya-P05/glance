@@ -21,7 +21,7 @@
     },
     "web": {
       "bundler": "metro",
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/mobile-app-icon.png"
     },
     "experiments": {
       "typedRoutes": true

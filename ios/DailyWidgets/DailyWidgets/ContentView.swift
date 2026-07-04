@@ -35,6 +35,8 @@ private struct PhotoHomeView: View {
     @State private var feedback: ActionHighlight = .none
 
     @State private var showIntro = true
+    @State private var onboardingSnapshotBaseline: Date?
+    @State private var widgetPresenceConfirmedBySnapshot = false
     /// True while the in-app fetch + snapshot write is in progress.
     @State private var isForceRefreshing = false
 
@@ -86,8 +88,8 @@ private struct PhotoHomeView: View {
         }
         .onAppear {
             loadRefreshInterval()
-            checkWidgetPresence()
-            refreshSharedWidgetImage()
+            onboardingSnapshotBaseline = SharedPhotoSnapshot.lastUpdated
+            handleForegroundActivation()
 
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                 withAnimation(.easeOut(duration: 0.6)) {
@@ -95,16 +97,18 @@ private struct PhotoHomeView: View {
                 }
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            handleForegroundActivation()
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
-                checkWidgetPresence()
-                scheduleWidgetPresenceRechecks()
-                refreshSharedWidgetImage()
+                handleForegroundActivation()
             }
         }
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
             while !Task.isCancelled {
+                refreshSharedWidgetImage()
                 checkWidgetPresence()
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
             }
@@ -318,20 +322,49 @@ private struct PhotoHomeView: View {
             guard case let .success(configs) = result else { return }
             DispatchQueue.main.async {
                 let installed = configs.contains { $0.kind == Self.photoWidgetKind }
-                guard hasPhotoWidget != installed else { return }
+                let widgetRenderedAfterOnboarding = didWidgetRenderAfterOnboardingBaseline()
+                if widgetRenderedAfterOnboarding {
+                    widgetPresenceConfirmedBySnapshot = true
+                }
+                let shouldShowInstalledState = installed || widgetPresenceConfirmedBySnapshot
+                guard hasPhotoWidget != shouldShowInstalledState else { return }
                 withAnimation(.easeOut(duration: 0.28)) {
-                    hasPhotoWidget = installed
+                    hasPhotoWidget = shouldShowInstalledState
                 }
             }
         }
     }
 
     private func scheduleWidgetPresenceRechecks() {
-        for delay in [0.8, 2.0, 4.0] {
+        for delay in [0.3, 0.8, 1.6, 3.0, 5.0, 8.0, 13.0] {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                refreshSharedWidgetImage()
                 checkWidgetPresence()
             }
         }
+    }
+
+    private func handleForegroundActivation() {
+        refreshSharedWidgetImage()
+        checkWidgetPresence()
+        scheduleWidgetPresenceRechecks()
+
+        if !hasPhotoWidget {
+            WidgetCenter.shared.reloadTimelines(ofKind: Self.photoWidgetKind)
+        }
+    }
+
+    private func didWidgetRenderAfterOnboardingBaseline() -> Bool {
+        guard !hasPhotoWidget,
+              let latest = SharedPhotoSnapshot.lastUpdated else {
+            return false
+        }
+
+        guard let baseline = onboardingSnapshotBaseline else {
+            return true
+        }
+
+        return latest > baseline
     }
 
     private func loadRefreshInterval() {

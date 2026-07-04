@@ -1,0 +1,19 @@
+{
+  "expo": {
+    "name": "Glance",
+    "owner": "patelarya",
+    "slug": "glance",
+    "version": "1.0.3",
+    "orientation": "portrait",
+    "ios": {
+      "bundleIdentifier": "com.aryapatel.glance1234",
+      "buildNumber": "6",
+      "supportsTablet": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "ecad5e1b-9757-4c83-9ff7-740f099f950e"
+      }
+    }
+  }
+}
