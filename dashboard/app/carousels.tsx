@@ -67,7 +67,7 @@ export default function CarouselsScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
-  const [manualPackage, setManualPackage] = useState<InstagramCarouselPackage | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const job = useJobStream(jobId);
 
   const selectedIds = useMemo(() => new Set(builder?.items.map(item => item.id) ?? []), [builder]);
@@ -138,7 +138,6 @@ export default function CarouselsScreen() {
 
   function editCarousel(carousel: InstagramCarousel) {
     setBuilder(carouselToBuilder(carousel));
-    setManualPackage(null);
     setReplaceIndex(null);
   }
 
@@ -255,22 +254,34 @@ export default function CarouselsScreen() {
     Linking.openURL(url);
   }
 
-  function downloadPackageItem(item: { url: string; downloadUrl?: string; filename: string }) {
-    triggerBrowserDownload(item.downloadUrl ?? item.url, item.filename);
+  function downloadFolderName(title: string) {
+    const safeTitle = (title || "carousel")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 48) || "carousel";
+    return `${safeTitle}-slides`;
   }
 
-  async function savePackageToDirectory(pkg: InstagramCarouselPackage): Promise<"saved" | "cancelled" | false> {
+  async function pickDownloadDirectory(): Promise<any | "cancelled" | false> {
     if (typeof window === "undefined") return false;
     const showDirectoryPicker = (window as any).showDirectoryPicker;
     if (typeof showDirectoryPicker !== "function") return false;
 
-    let directory: any;
     try {
-      directory = await showDirectoryPicker({ mode: "readwrite" });
+      return await showDirectoryPicker({ mode: "readwrite" });
     } catch (e: any) {
       if (e?.name !== "AbortError") throw e;
       return "cancelled";
     }
+  }
+
+  async function savePackageToDirectory(
+    pkg: InstagramCarouselPackage,
+    parentDirectory: any,
+  ): Promise<{ status: "saved"; folderName: string }> {
+    const folderName = downloadFolderName(pkg.title);
+    const directory = await parentDirectory.getDirectoryHandle(folderName, { create: true });
 
     for (const item of pkg.items) {
       const res = await fetch(item.downloadUrl);
@@ -281,50 +292,55 @@ export default function CarouselsScreen() {
       await writable.write(blob);
       await writable.close();
     }
-    return "saved";
+    return { status: "saved", folderName };
   }
 
-  async function downloadAllItems(pkg: InstagramCarouselPackage) {
+  async function downloadAllItems(pkg: InstagramCarouselPackage, parentDirectory: any | false) {
     try {
-      const directoryResult = await savePackageToDirectory(pkg);
-      if (directoryResult === "saved") {
-        alert("Slides saved.");
+      if (parentDirectory) {
+        const directoryResult = await savePackageToDirectory(pkg, parentDirectory);
+        alert(`Slides saved to "${directoryResult.folderName}".`);
         return;
       }
-      if (directoryResult === "cancelled") return;
-      triggerBrowserDownload(pkg.zipUrl, "carousel-slides.zip");
+      triggerBrowserDownload(pkg.zipUrl, `${downloadFolderName(pkg.title)}.zip`);
     } catch (e: any) {
       alert(e.message);
     }
   }
 
-  async function copyCaption(text: string) {
+  async function downloadCarousel(id: string) {
+    setDownloadingId(id);
     try {
-      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text);
-        alert("Caption copied.");
-        return;
-      }
-    } catch {}
-    alert(text || "No caption yet.");
-  }
-
-  async function openManualKit(id?: string) {
-    let targetId = id;
-    if (!targetId) {
-      const saved = await saveBuilder("ready");
-      if (!saved) return;
-      targetId = saved.id;
-    }
-
-    setBusy(true);
-    try {
-      const { package: pkg } = await api.exportCarousel(targetId);
-      setManualPackage(pkg);
+      const parentDirectory = await pickDownloadDirectory();
+      if (parentDirectory === "cancelled") return;
+      const { package: pkg } = await api.exportCarousel(id);
+      await downloadAllItems(pkg, parentDirectory);
     } catch (e: any) {
       alert(e.message);
     } finally {
-      setBusy(false);
+      setDownloadingId(null);
+    }
+  }
+
+  async function downloadBuilderCarousel() {
+    if (!builder) return;
+    const downloadKey = builder.id ?? "new";
+    setDownloadingId(downloadKey);
+    try {
+      const parentDirectory = await pickDownloadDirectory();
+      if (parentDirectory === "cancelled") return;
+      let targetId = builder.id;
+      if (!targetId || ["draft", "ready", "failed"].includes(builder.status)) {
+        const saved = await saveBuilder();
+        if (!saved) return;
+        targetId = saved.id;
+      }
+      const { package: pkg } = await api.exportCarousel(targetId);
+      await downloadAllItems(pkg, parentDirectory);
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setDownloadingId(null);
     }
   }
 
@@ -340,7 +356,6 @@ export default function CarouselsScreen() {
     try {
       const { carousel } = await api.markCarouselPosted(targetId);
       setBuilder(carouselToBuilder(carousel));
-      setManualPackage(null);
       await loadAll({ consumeSelection: false });
     } catch (e: any) {
       alert(e.message);
@@ -439,9 +454,10 @@ export default function CarouselsScreen() {
                   {!!carousel.lastError && <Text style={styles.queueError} numberOfLines={2}>{carousel.lastError}</Text>}
                   <View style={styles.queueActions}>
                     <Btn
-                      label="Manual kit"
-                      onPress={() => openManualKit(carousel.id)}
+                      label="Download"
+                      onPress={() => downloadCarousel(carousel.id)}
                       disabled={carousel.status === "posting"}
+                      loading={downloadingId === carousel.id}
                       small
                       variant="outline"
                     />
@@ -557,7 +573,13 @@ export default function CarouselsScreen() {
               <View style={styles.actionBar}>
                 <Btn label="Save draft" onPress={() => saveBuilder("draft")} loading={busy} disabled={builder.items.length !== CAROUSEL_SIZE} variant="outline" />
                 <Btn label="Mark ready" onPress={() => saveBuilder("ready")} loading={busy} disabled={builder.items.length !== CAROUSEL_SIZE} />
-                <Btn label="Manual kit" onPress={() => openManualKit(builder.id)} loading={busy} disabled={builder.items.length !== CAROUSEL_SIZE} variant="outline" />
+                <Btn
+                  label="Download"
+                  onPress={downloadBuilderCarousel}
+                  loading={downloadingId === (builder.id ?? "new")}
+                  disabled={builder.items.length !== CAROUSEL_SIZE}
+                  variant="outline"
+                />
                 <Btn
                   label={builder.status === "failed" ? "Retry post" : "Post now"}
                   onPress={() => postNow(builder.id)}
@@ -569,39 +591,6 @@ export default function CarouselsScreen() {
                 )}
                 {builder.permalink && <Btn label="Open Instagram" onPress={() => Linking.openURL(builder.permalink!)} variant="outline" />}
               </View>
-
-              {manualPackage && (
-                <View style={styles.manualBox}>
-                  <View style={styles.sectionHeader}>
-                    <View>
-                      <Text style={styles.manualTitle}>Manual posting kit</Text>
-                      <Text style={styles.smallMuted}>Download these in order, then paste the caption in Instagram.</Text>
-                    </View>
-                    <View style={styles.manualActions}>
-                      <Btn label="Copy caption" onPress={() => copyCaption(manualPackage.caption)} small />
-                      <Btn label="Download slides" onPress={() => downloadAllItems(manualPackage)} small variant="outline" />
-                    </View>
-                  </View>
-                  <View style={styles.manualGrid}>
-                    {manualPackage.items.map(item => (
-                      <Pressable key={item.position} onPress={() => downloadPackageItem(item)} style={styles.manualItem}>
-                        <RemoteImage
-                          uri={item.url}
-                          width={240}
-                          height={240}
-                          transformResizeMode="contain"
-                          style={styles.manualThumb}
-                          resizeMode="contain"
-                        />
-                        <View style={styles.manualItemMeta}>
-                          <Text style={styles.manualItemTitle}>Slide {item.position}</Text>
-                          <Text style={styles.manualFilename} numberOfLines={1}>{item.filename}</Text>
-                        </View>
-                      </Pressable>
-                    ))}
-                  </View>
-                </View>
-              )}
 
               {jobId && (
                 <View style={styles.jobBox}>
@@ -804,29 +793,6 @@ const styles = StyleSheet.create({
   status_posted: { backgroundColor: "#113021", borderColor: C.success },
   status_failed: { backgroundColor: C.dangerDim, borderColor: C.danger },
   status_archived: { backgroundColor: C.surfaceHigh, borderColor: C.border },
-  manualBox: {
-    gap: 12,
-    borderWidth: 1,
-    borderColor: C.accentDim,
-    backgroundColor: "#111807",
-    borderRadius: 10,
-    padding: 14,
-  },
-  manualTitle: { color: C.textPrimary, fontSize: 15, fontWeight: "800" },
-  manualActions: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
-  manualGrid: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
-  manualItem: {
-    width: 132,
-    borderRadius: 9,
-    overflow: "hidden",
-    backgroundColor: C.bg,
-    borderWidth: 1,
-    borderColor: C.border,
-  },
-  manualThumb: { width: "100%", height: 132, backgroundColor: C.surfaceHigh },
-  manualItemMeta: { padding: 8, gap: 2 },
-  manualItemTitle: { color: C.textPrimary, fontSize: 12, fontWeight: "800" },
-  manualFilename: { color: C.textMuted, fontSize: 10 },
   jobBox: { gap: 10 },
   jobLog: {
     maxHeight: 180,
