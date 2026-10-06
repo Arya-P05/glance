@@ -30,35 +30,59 @@ const APP_ICON = require("../assets/mobile-app-icon.png");
 function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const [reduceMotion, setReduceMotion] = useState(false);
+  const expanded = !collapsed || hovered || focused;
+
+  useEffect(() => {
+    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => setReduceMotion(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+
+  function togglePinned() {
+    setHovered(false);
+    setFocused(false);
+    onToggle();
+  }
 
   return (
-    <View style={[styles.sidebar, collapsed && styles.sidebarCollapsed]}>
+    <div
+      data-testid="sidebar"
+      onPointerEnter={event => {
+        if (event.pointerType === "mouse") setHovered(true);
+      }}
+      onPointerLeave={() => setHovered(false)}
+      onFocusCapture={event => {
+        if (event.target.matches(":focus-visible")) setFocused(true);
+      }}
+      onBlurCapture={event => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false);
+      }}
+      style={{ position: "relative", width: collapsed ? 54 : C.sidebarW, flexShrink: 0, zIndex: 10 }}
+    >
+    <View style={[
+      styles.sidebar,
+      !expanded && styles.sidebarCollapsed,
+      (reduceMotion || focused) && { transitionDuration: "0ms" } as any,
+    ]}>
       <View style={styles.brand}>
-        {collapsed ? (
-          <Pressable
-            accessibilityLabel="Open sidebar"
-            onPress={onToggle}
-            style={styles.logoSlot}
-          >
+        <View style={styles.brandTitle}>
+          <Pressable accessibilityLabel={collapsed ? "Pin sidebar open" : "Collapse sidebar"} onPress={togglePinned} style={styles.logoSlot}>
             <Image source={APP_ICON} style={styles.logoImage} />
           </Pressable>
-        ) : (
-          <>
-            <View style={styles.brandTitle}>
-              <View style={styles.logoSlot}>
-                <Image source={APP_ICON} style={styles.logoImage} />
-              </View>
-              <Text style={styles.brandName}>glance</Text>
-            </View>
-            <Pressable
-              accessibilityLabel="Close sidebar"
-              onPress={onToggle}
-              style={styles.sidebarToggle}
-            >
-              <NavArrowLeft color={C.textSecondary} width={16} height={16} strokeWidth={2} />
-            </Pressable>
-          </>
-        )}
+          <Text numberOfLines={1} style={[styles.brandName, { opacity: expanded ? 1 : 0 }]}>glance</Text>
+        </View>
+        <Pressable
+          accessibilityLabel={collapsed ? "Pin sidebar open" : "Collapse sidebar"}
+          onPress={togglePinned}
+          style={[styles.sidebarToggle, { opacity: expanded ? 1 : 0 }]}
+        >
+          <NavArrowLeft color={C.textSecondary} width={16} height={16} strokeWidth={2} style={{ transform: [{ rotate: collapsed ? "180deg" : "0deg" }] }} />
+        </Pressable>
       </View>
 
       <View style={styles.nav}>
@@ -68,7 +92,7 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
             styles.navItem,
             active ? styles.navItemActive : null,
           ]);
-          const labelStyle = StyleSheet.flatten([styles.navLabel, active ? styles.navLabelActive : null]);
+          const labelStyle = StyleSheet.flatten([styles.navLabel, active ? styles.navLabelActive : null, { opacity: expanded ? 1 : 0 }, (reduceMotion || focused) ? { transitionDuration: "0ms" } as any : null]);
           return (
             <Pressable
               key={item.href}
@@ -84,13 +108,14 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
                   strokeWidth={1.8}
                 />
               </View>
-              {!collapsed && <Text style={labelStyle}>{item.label}</Text>}
+              <Text numberOfLines={1} style={labelStyle}>{item.label}</Text>
             </Pressable>
           );
         })}
       </View>
 
     </View>
+    </div>
   );
 }
 
@@ -142,6 +167,10 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   root: { flex: 1, flexDirection: "row", backgroundColor: C.bg },
   sidebar: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    left: 0,
     width: C.sidebarW,
     backgroundColor: C.surface,
     borderRightWidth: 1,
@@ -151,13 +180,14 @@ const styles = StyleSheet.create({
     justifyContent: "flex-start",
     overflow: "hidden",
     transitionProperty: "width" as any,
-    transitionDuration: "180ms" as any,
+    transitionDuration: "220ms" as any,
     transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)" as any,
   },
   sidebarCollapsed: {
     width: 54,
   },
   brand: {
+    width: C.sidebarW,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -194,7 +224,7 @@ const styles = StyleSheet.create({
     backgroundColor: C.surfaceHigh,
   },
 
-  nav: { gap: 2, paddingHorizontal: 8 },
+  nav: { gap: 2, paddingHorizontal: 8, width: C.sidebarW },
   navItem: {
     flexDirection: "row",
     alignItems: "center",
@@ -213,7 +243,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   navItemActive: { backgroundColor: C.surfaceHigh },
-  navLabel: { color: C.textSecondary, fontSize: 13, fontWeight: "500" },
+  navLabel: { color: C.textSecondary, fontSize: 13, fontWeight: "500", transitionProperty: "opacity" as any, transitionDuration: "150ms" as any },
   navLabelActive: { color: C.textPrimary },
 
   content: { flex: 1, backgroundColor: C.bg },
