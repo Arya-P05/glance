@@ -58,6 +58,8 @@ export default function CarouselWorkspace({ mode }: { mode: "queue" | "editor" }
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const isEditor = mode === "editor";
+  const [queueWidth, setQueueWidth] = useState(0);
+  const compactQueue = queueWidth < 900;
 
   const [images, setImages] = useState<StorageImage[]>([]);
   const [carousels, setCarousels] = useState<InstagramCarousel[]>([]);
@@ -284,11 +286,7 @@ export default function CarouselWorkspace({ mode }: { mode: "queue" | "editor" }
       {error && <Text style={styles.error}>{error}</Text>}
 
       <View style={styles.body}>
-        {!isEditor && <View style={styles.queuePane}>
-          <View style={styles.paneHeader}>
-            <Text style={S.h2}>Queue</Text>
-            <Text style={styles.smallMuted}>Saved drafts and ready carousels. Open one to edit or publish it here.</Text>
-          </View>
+        {!isEditor && <View style={styles.queuePane} onLayout={event => setQueueWidth(event.nativeEvent.layout.width)}>
           {loading && !carousels.length ? (
             <View style={styles.center}>
               <ActivityIndicator color={C.accent} />
@@ -299,36 +297,39 @@ export default function CarouselWorkspace({ mode }: { mode: "queue" | "editor" }
               {carousels.map(carousel => (
                 <View
                   key={carousel.id}
-                  style={[styles.queueCard, builder?.id === carousel.id && styles.queueCardActive]}
+                  style={[styles.queueCard, compactQueue && styles.queueCardCompact]}
                 >
+                  <View style={[styles.queueThumbs, compactQueue && styles.queueThumbsCompact]}>
+                    {carousel.items.slice(0, 5).map(item => (
+                      <View key={item.id} style={styles.queueThumb}>
+                      <RemoteImage
+                        uri={item.post?.publicUrl ?? ""}
+                        width={96}
+                        height={96}
+                        transformResizeMode="contain"
+                        style={styles.queueThumbImage}
+                        resizeMode="contain"
+                      />
+                      </View>
+                    ))}
+                  </View>
+                  <View style={styles.queueDetails}>
                   <View style={styles.queueTop}>
                     <Text style={styles.queueTitle} numberOfLines={1}>{carousel.title || "Untitled carousel"}</Text>
                     <View style={[styles.statusPill, styles[`status_${carousel.status}` as keyof typeof styles] as any]}>
                       <Text style={styles.statusText}>{statusLabel(carousel.status)}</Text>
                     </View>
                   </View>
-                  <View style={styles.queueThumbs}>
-                    {carousel.items.slice(0, 5).map(item => (
-                      <RemoteImage
-                        key={item.id}
-                        uri={item.post?.publicUrl ?? ""}
-                        width={96}
-                        height={96}
-                        transformResizeMode="contain"
-                        style={styles.queueThumb}
-                        resizeMode="contain"
-                      />
-                    ))}
+                    {!!carousel.caption && <Text style={styles.queueCaption} numberOfLines={2}>{carousel.caption.split("\n").filter(line => /[\p{L}\p{N}]/u.test(line)).join(" ")}</Text>}
+                    {!!carousel.lastError && <Text style={styles.queueError} numberOfLines={2}>{carousel.lastError}</Text>}
                   </View>
-                  {!!carousel.caption && <Text style={styles.queueCaption} numberOfLines={2}>{carousel.caption}</Text>}
-                  {!!carousel.lastError && <Text style={styles.queueError} numberOfLines={2}>{carousel.lastError}</Text>}
-                  <View style={styles.queueActions}>
+                  <View style={[styles.queueActions, compactQueue && styles.queueActionsCompact]}>
                     <Btn label="Edit" onPress={() => editCarousel(carousel)} small variant="outline" />
                     <Btn label="Archive" onPress={() => archive(carousel.id)} small variant="ghost" />
                     {carousel.permalink && (
                       <Btn label="Open" onPress={() => Linking.openURL(carousel.permalink!)} small variant="outline" />
                     )}
-                    <View style={{ flex: 1 }} />
+                    {compactQueue && <View style={{ flex: 1 }} />}
                     {carousel.status !== "posted" && (
                       <Btn
                         label={carousel.status === "failed" ? "Retry" : "Post now"}
@@ -506,24 +507,29 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: C.surface,
   },
-  paneHeader: { padding: 16, borderBottomWidth: 1, borderBottomColor: C.border, gap: 4 },
-  queueList: { padding: 12, gap: 10 },
+  queueList: { padding: 20, gap: 12, width: "100%", maxWidth: 1320, alignSelf: "center" },
   queueCard: {
+    flexDirection: "row",
+    alignItems: "center",
     borderWidth: 1,
     borderColor: C.border,
     backgroundColor: C.bg,
-    borderRadius: 10,
-    padding: 10,
-    gap: 9,
+    borderRadius: 12,
+    padding: 16,
+    gap: 20,
   },
-  queueCardActive: { borderColor: C.accent, backgroundColor: "#101a08" },
-  queueTop: { flexDirection: "row", alignItems: "center", gap: 8 },
-  queueTitle: { flex: 1, color: C.textPrimary, fontSize: 13, fontWeight: "700" },
-  queueThumbs: { flexDirection: "row", gap: 5 },
-  queueThumb: { width: 62, height: 62, borderRadius: 7, backgroundColor: C.surfaceHigh },
-  queueCaption: { color: C.textSecondary, fontSize: 12, lineHeight: 16 },
-  queueError: { color: C.danger, fontSize: 11, lineHeight: 15 },
-  queueActions: { flexDirection: "row", gap: 6, flexWrap: "wrap" },
+  queueCardCompact: { flexDirection: "column", alignItems: "stretch", gap: 14 },
+  queueTop: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
+  queueDetails: { flex: 1, minWidth: 0, gap: 8 },
+  queueTitle: { color: C.textPrimary, fontSize: 14, fontWeight: "600", flexShrink: 1 },
+  queueThumbs: { flexDirection: "row", gap: 5, width: 320, flexShrink: 0 },
+  queueThumbsCompact: { width: "100%", maxWidth: 420 },
+  queueThumb: { flex: 1, aspectRatio: 1, borderRadius: 6, overflow: "hidden", backgroundColor: C.surfaceHigh },
+  queueThumbImage: { width: "100%", height: "100%" },
+  queueCaption: { color: C.textSecondary, fontSize: 12, lineHeight: 18 },
+  queueError: { color: C.danger, fontSize: 11, lineHeight: 16 },
+  queueActions: { flexDirection: "row", alignItems: "center", gap: 8, flexShrink: 0 },
+  queueActionsCompact: { width: "100%", flexWrap: "wrap" },
   editorPane: { flex: 1 },
   editorContent: { padding: 24, gap: 22 },
   editorEmpty: {
