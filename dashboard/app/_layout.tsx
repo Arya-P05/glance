@@ -4,7 +4,7 @@ import { View, Text, StyleSheet, Pressable, Platform, useWindowDimensions, Image
 import { usePathname } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
-  Home, MediaImage, Frame, List, Sparks, Import, Settings, NavArrowLeft, AlbumCarousel, Check,
+  Home, MediaImage, Frame, List, Sparks, Import, Settings, AlbumCarousel, Check,
 } from "iconoir-react-native";
 import { C } from "../lib/theme";
 
@@ -76,13 +76,6 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
           </Pressable>
           <Text numberOfLines={1} style={[styles.brandName, { opacity: expanded ? 1 : 0 }]}>glance</Text>
         </View>
-        <Pressable
-          accessibilityLabel={collapsed ? "Pin sidebar open" : "Collapse sidebar"}
-          onPress={togglePinned}
-          style={[styles.sidebarToggle, { opacity: expanded ? 1 : 0 }]}
-        >
-          <NavArrowLeft color={C.textSecondary} width={16} height={16} strokeWidth={2} style={{ transform: [{ rotate: collapsed ? "180deg" : "0deg" }] }} />
-        </Pressable>
       </View>
 
       <View style={styles.nav}>
@@ -213,17 +206,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 8,
   },
-  sidebarToggle: {
-    width: 28,
-    height: 28,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: C.border,
-    backgroundColor: C.surfaceHigh,
-  },
-
   nav: { gap: 2, paddingHorizontal: 8, width: C.sidebarW },
   navItem: {
     flexDirection: "row",
