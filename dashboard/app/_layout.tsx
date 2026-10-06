@@ -4,7 +4,7 @@ import { View, Text, StyleSheet, Pressable, Platform, useWindowDimensions, Image
 import { usePathname } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
-  Home, MediaImage, Frame, List, Sparks, Download, Import, Eye, Settings, NavArrowLeft, AlbumCarousel, Check,
+  Home, MediaImage, Frame, List, Sparks, Import, Settings, NavArrowLeft, AlbumCarousel, Check,
 } from "iconoir-react-native";
 import { C } from "../lib/theme";
 
@@ -18,9 +18,8 @@ const NAV: { href: string; label: string; Icon: NavIcon }[] = [
   { href: "/approved-backgrounds", label: "Approved", Icon: Check },
   { href: "/drafts",     label: "Drafts",      Icon: Frame },
   { href: "/library",    label: "Library",     Icon: MediaImage },
-  { href: "/carousels",  label: "Carousels",   Icon: AlbumCarousel },
-  { href: "/preview",    label: "Preview",     Icon: Eye },
-  { href: "/scrape",     label: "Scrape",      Icon: Download },
+  { href: "/carousels",  label: "Post queue",   Icon: List },
+  { href: "/carousel-editor", label: "Create carousel", Icon: AlbumCarousel },
   { href: "/import",     label: "Import",      Icon: Import },
   { href: "/maintenance",label: "Maintenance", Icon: Settings },
 ];
@@ -91,12 +90,6 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
         })}
       </View>
 
-      <View style={styles.footer}>
-        <View style={styles.footerDotSlot}>
-          <View style={styles.footerDot} />
-        </View>
-        {!collapsed && <Text style={styles.footerText}>localhost:3847</Text>}
-      </View>
     </View>
   );
 }
@@ -155,7 +148,7 @@ const styles = StyleSheet.create({
     borderRightColor: C.border,
     paddingTop: 24,
     paddingBottom: 16,
-    justifyContent: "space-between",
+    justifyContent: "flex-start",
     overflow: "hidden",
     transitionProperty: "width" as any,
     transitionDuration: "180ms" as any,
@@ -222,16 +215,6 @@ const styles = StyleSheet.create({
   navItemActive: { backgroundColor: C.surfaceHigh },
   navLabel: { color: C.textSecondary, fontSize: 13, fontWeight: "500" },
   navLabelActive: { color: C.textPrimary },
-
-  footer: {
-    flexDirection: "row",
-    alignItems: "center",
-    height: 38,
-    paddingHorizontal: 8,
-  },
-  footerDotSlot: { width: 38, height: 38, alignItems: "center", justifyContent: "center" },
-  footerDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: C.success },
-  footerText: { color: C.textMuted, fontSize: 11, marginLeft: 6 },
 
   content: { flex: 1, backgroundColor: C.bg },
 });

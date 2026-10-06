@@ -94,7 +94,7 @@ export default function LibraryScreen() {
     if (typeof window !== "undefined") {
       sessionStorage.setItem(CAROUSEL_SELECTION_KEY, JSON.stringify(activeSelected.map(i => i.id)));
     }
-    router.push("/carousels");
+    router.push("/carousel-editor");
   }
 
   const filtered = images.filter(i => i.status === filter);

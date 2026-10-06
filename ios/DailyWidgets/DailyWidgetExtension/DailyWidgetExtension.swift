@@ -32,17 +32,19 @@ struct RandomPostProvider: TimelineProvider {
     private let retryIntervalNoImage: TimeInterval = 300
 
     func placeholder(in context: Context) -> RandomPostEntry {
-        RandomPostEntry(
+        let variant = snapshotVariant(for: context.family)
+        return RandomPostEntry(
             date: Date(),
-            imageData: SharedPhotoSnapshot.loadSnapshotJPEGData(),
+            imageData: SharedPhotoSnapshot.loadSnapshotJPEGData(for: variant),
             caption: SharedPhotoSnapshot.loadCaption()
         )
     }
 
     func getSnapshot(in context: Context, completion: @escaping (RandomPostEntry) -> Void) {
+        let variant = snapshotVariant(for: context.family)
         let entry = RandomPostEntry(
             date: Date(),
-            imageData: SharedPhotoSnapshot.loadSnapshotJPEGData(),
+            imageData: SharedPhotoSnapshot.loadSnapshotJPEGData(for: variant),
             caption: SharedPhotoSnapshot.loadCaption()
         )
         completion(entry)
@@ -51,14 +53,13 @@ struct RandomPostProvider: TimelineProvider {
     func getTimeline(in context: Context, completion: @escaping (Timeline<RandomPostEntry>) -> Void) {
         Task {
             let normalRefresh = Date().addingTimeInterval(currentRefreshInterval())
+            let variant = snapshotVariant(for: context.family)
 
-            let canUseSharedSnapshot = context.family != .systemMedium
-            let useSharedFileOnly = canUseSharedSnapshot && (
-                SharedPhotoSnapshot.consumeNextWidgetTimelineUsesSharedSnapshotOnlyIfReady()
-                || SharedPhotoSnapshot.widgetShouldReuseSnapshotInsteadOfRandomFetchIncludingFreshFile()
-            )
+            let useSharedFileOnly =
+                SharedPhotoSnapshot.consumeNextWidgetTimelineUsesSharedSnapshotOnlyIfReady(for: variant)
+                || SharedPhotoSnapshot.widgetShouldReuseSnapshotInsteadOfRandomFetchIncludingFreshFile(for: variant)
             if useSharedFileOnly {
-                let fileData = SharedPhotoSnapshot.loadSnapshotJPEGData()
+                let fileData = SharedPhotoSnapshot.loadSnapshotJPEGData(for: variant)
                 let caption = SharedPhotoSnapshot.loadCaption()
                 let entry = RandomPostEntry(date: Date(), imageData: fileData, caption: caption)
                 let next = nextReloadDate(after: entry, normalRefresh: normalRefresh)
@@ -86,20 +87,16 @@ struct RandomPostProvider: TimelineProvider {
                     : row.storage_path
                 let imageURL = SupabaseConfig.publicImageURL(storagePath: storagePath)
                 let rawData = await loadImageData(from: imageURL)
-                let resizedData: Data?
-                if let rawData,
-                   let uiImage = UIImage(data: rawData) {
-                    let resized = uiImage.resized(maxDimension: 800)
-                    resizedData = resized.jpegData(compressionQuality: 0.9)
-                } else {
-                    resizedData = rawData
-                }
+                let resizedData = resizedJPEGData(from: rawData)
 
                 let entry = RandomPostEntry(date: Date(), imageData: resizedData, caption: row.caption)
 
-                if let data = resizedData {
-                    SharedPhotoSnapshot.writeJPEGData(data, caption: row.caption, postId: row.id)
-                }
+                await writeSharedSnapshots(
+                    for: row,
+                    displayData: resizedData,
+                    displayStoragePath: storagePath,
+                    family: context.family
+                )
 
                 let next = nextReloadDate(after: entry, normalRefresh: normalRefresh)
                 DispatchQueue.main.async {
@@ -120,6 +117,62 @@ struct RandomPostProvider: TimelineProvider {
         if hasImage { return normalRefresh }
         let retry = Date().addingTimeInterval(retryIntervalNoImage)
         return min(normalRefresh, retry)
+    }
+
+    private func snapshotVariant(for family: WidgetFamily) -> SharedPhotoSnapshot.SnapshotVariant {
+        family == .systemMedium ? .medium : .standard
+    }
+
+    private func resizedJPEGData(from rawData: Data?) -> Data? {
+        guard let rawData else { return nil }
+        if let uiImage = UIImage(data: rawData) {
+            let resized = uiImage.resized(maxDimension: 800)
+            return resized.jpegData(compressionQuality: 0.9)
+        }
+        return rawData
+    }
+
+    private func loadResizedJPEGData(storagePath: String) async -> Data? {
+        let imageURL = SupabaseConfig.publicImageURL(storagePath: storagePath)
+        return resizedJPEGData(from: await loadImageData(from: imageURL))
+    }
+
+    private func writeSharedSnapshots(
+        for row: RandomPostRow,
+        displayData: Data?,
+        displayStoragePath: String,
+        family: WidgetFamily
+    ) async {
+        guard let displayData else { return }
+
+        let standardData: Data
+        let mediumData: Data
+
+        if family == .systemMedium {
+            mediumData = displayData
+            if displayStoragePath == row.storage_path {
+                standardData = displayData
+            } else {
+                standardData = await loadResizedJPEGData(storagePath: row.storage_path) ?? displayData
+            }
+        } else {
+            standardData = displayData
+            if let mediumStoragePath = row.medium_storage_path,
+               mediumStoragePath != row.storage_path {
+                mediumData = await loadResizedJPEGData(storagePath: mediumStoragePath) ?? displayData
+            } else {
+                mediumData = displayData
+            }
+        }
+
+        SharedPhotoSnapshot.writeJPEGData(standardData, caption: row.caption, postId: row.id)
+        SharedPhotoSnapshot.writeJPEGData(
+            mediumData,
+            caption: row.caption,
+            postId: row.id,
+            variant: .medium,
+            recordRecent: false
+        )
     }
 
     private func loadImageData(from url: URL) async -> Data? {
@@ -149,13 +202,19 @@ struct RandomPostProvider: TimelineProvider {
 }
 
 struct DailyWidgetExtensionEntryView: View {
+    @Environment(\.widgetFamily) private var family
+
     let entry: RandomPostEntry
 
-    /// Prefer the shared app-group file so the widget matches the main app preview pixel-for-pixel.
+    /// Prefer the family-specific app-group file so timeline reloads and app refreshes stay on the same post.
     private var displayUIImage: UIImage? {
-        if let fromDisk = SharedPhotoSnapshot.loadImage() { return fromDisk }
+        if let fromDisk = SharedPhotoSnapshot.loadImage(for: snapshotVariant) { return fromDisk }
         if let data = entry.imageData { return UIImage(data: data) }
         return nil
+    }
+
+    private var snapshotVariant: SharedPhotoSnapshot.SnapshotVariant {
+        family == .systemMedium ? .medium : .standard
     }
 
     var body: some View {
@@ -168,7 +227,7 @@ struct DailyWidgetExtensionEntryView: View {
                         .aspectRatio(contentMode: .fill)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .clipped()
-                        .id(SharedPhotoSnapshot.lastUpdated?.timeIntervalSince1970 ?? 0)
+                        .id(SharedPhotoSnapshot.snapshotLastUpdated(for: snapshotVariant)?.timeIntervalSince1970 ?? entry.date.timeIntervalSince1970)
                 } else {
                     ZStack {
                         Color.gray.opacity(0.2)

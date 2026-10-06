@@ -7,6 +7,7 @@ enum GlancePhotoRefresh {
     private struct RandomPostRow: Decodable {
         let id: UUID
         let storage_path: String
+        let medium_storage_path: String?
         let caption: String?
     }
 
@@ -19,30 +20,46 @@ enum GlancePhotoRefresh {
             let rows: [RandomPostRow] = try await client.rpc("get_random_post").execute().value
             guard let row = rows.first else { return false }
 
-            let imageURL = SupabaseConfig.publicImageURL(storagePath: row.storage_path)
-            let rawData = await Task.detached(priority: .userInitiated) {
-                try? Data(contentsOf: imageURL)
-            }.value
-
-            guard let rawData, !rawData.isEmpty else { return false }
-
-            let resizedData: Data?
-            if let uiImage = UIImage(data: rawData) {
-                let resized = uiImage.resized(maxDimension: 800)
-                resizedData = resized.jpegData(compressionQuality: 0.9)
+            guard let data = await loadResizedJPEGData(storagePath: row.storage_path) else { return false }
+            let mediumData: Data
+            if let mediumStoragePath = row.medium_storage_path,
+               mediumStoragePath != row.storage_path,
+               let loadedMediumData = await loadResizedJPEGData(storagePath: mediumStoragePath) {
+                mediumData = loadedMediumData
             } else {
-                resizedData = rawData
+                mediumData = data
             }
 
-            guard let data = resizedData else { return false }
-
             SharedPhotoSnapshot.writeJPEGData(data, caption: row.caption, postId: row.id)
+            SharedPhotoSnapshot.writeJPEGData(
+                mediumData,
+                caption: row.caption,
+                postId: row.id,
+                variant: .medium,
+                recordRecent: false
+            )
             SharedPhotoSnapshot.recordMainAppWroteSnapshot()
             SharedPhotoSnapshot.markNextWidgetTimelineReloadUsesSharedSnapshotOnly()
             return true
         } catch {
             return false
         }
+    }
+
+    private static func loadResizedJPEGData(storagePath: String) async -> Data? {
+        let imageURL = SupabaseConfig.publicImageURL(storagePath: storagePath)
+        let rawData = await Task.detached(priority: .userInitiated) {
+            try? Data(contentsOf: imageURL)
+        }.value
+
+        guard let rawData, !rawData.isEmpty else { return nil }
+
+        if let uiImage = UIImage(data: rawData) {
+            let resized = uiImage.resized(maxDimension: 800)
+            return resized.jpegData(compressionQuality: 0.9)
+        }
+
+        return rawData
     }
 }
 
