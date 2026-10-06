@@ -396,23 +396,12 @@ export default function CarouselWorkspace({ mode }: { mode: "queue" | "editor" }
     }
   }
 
-  const connectionText = instagramStatus
-    ? instagramStatus.publishEnabled
-      ? `Connected${instagramStatus.username ? ` as @${instagramStatus.username}` : ""}`
-      : instagramStatus.error || (instagramStatus.missing?.length ? `Missing ${instagramStatus.missing.join(", ")}` : "Not connected")
-    : "Checking Instagram...";
-
   return (
     <View style={styles.root}>
       <View style={styles.toolbar}>
         <Text style={S.h1}>{isEditor ? "Carousel editor" : "Carousel queue"}</Text>
         {!isEditor && <Text style={[S.body, { marginLeft: 8 }]}>{carousels.length} queued</Text>}
         <View style={{ flex: 1 }} />
-        <View style={[styles.integrationPill, instagramStatus?.publishEnabled && styles.integrationPillOn]}>
-          <Text style={[styles.integrationText, instagramStatus?.publishEnabled && styles.integrationTextOn]}>
-            {connectionText}
-          </Text>
-        </View>
         {isEditor && <Btn label="View queue" onPress={() => router.push("/carousels")} small variant="outline" />}
         <Btn label="New carousel" onPress={newCarousel} small />
         <Btn label="Refresh" onPress={() => loadAll({ consumeSelection: false })} loading={loading} small variant="ghost" />
@@ -461,6 +450,11 @@ export default function CarouselWorkspace({ mode }: { mode: "queue" | "editor" }
                   {!!carousel.lastError && <Text style={styles.queueError} numberOfLines={2}>{carousel.lastError}</Text>}
                   <View style={styles.queueActions}>
                     <Btn label="Edit" onPress={() => editCarousel(carousel)} small variant="outline" />
+                    <Btn label="Archive" onPress={() => archive(carousel.id)} small variant="ghost" />
+                    {carousel.permalink && (
+                      <Btn label="Open" onPress={() => Linking.openURL(carousel.permalink!)} small variant="outline" />
+                    )}
+                    <View style={{ flex: 1 }} />
                     {carousel.status !== "posted" && (
                       <Btn
                         label={carousel.status === "failed" ? "Retry" : "Post now"}
@@ -470,10 +464,6 @@ export default function CarouselWorkspace({ mode }: { mode: "queue" | "editor" }
                         small
                       />
                     )}
-                    {carousel.permalink && (
-                      <Btn label="Open" onPress={() => Linking.openURL(carousel.permalink!)} small variant="outline" />
-                    )}
-                    <Btn label="Archive" onPress={() => archive(carousel.id)} small variant="ghost" />
                   </View>
                 </View>
               ))}
@@ -761,18 +751,6 @@ const styles = StyleSheet.create({
     borderColor: C.border,
   },
   libraryThumb: { width: "100%", height: "100%" },
-  integrationPill: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: C.border,
-    backgroundColor: C.surface,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    maxWidth: 440,
-  },
-  integrationPillOn: { borderColor: C.accentDim, backgroundColor: C.successDim },
-  integrationText: { color: C.textSecondary, fontSize: 11, fontWeight: "700" },
-  integrationTextOn: { color: C.textPrimary },
   statusPill: {
     borderRadius: 999,
     paddingHorizontal: 8,
