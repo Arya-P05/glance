@@ -25,6 +25,7 @@ import {
   resizeForWidget,
 } from "./instagram-helper.js";
 import { getDraftForPublish, publishDraftFromDb } from "./publish-draft.js";
+import { addReferences, listReferences, updateReference } from "./creative-references.js";
 import { getInstagramConnectionStatus, publishInstagramCarousel } from "./instagram-publisher.js";
 import {
   DEFAULT_CAPTION_MODEL,
@@ -1537,6 +1538,26 @@ async function main() {
 
     if (!checkToken(req)) {
       json(res, 401, { error: "Unauthorized" });
+      return;
+    }
+
+    if (url.pathname === "/api/references" && ["GET", "POST"].includes(req.method)) {
+      try {
+        if (req.method === "GET") {
+          json(res, 200, { references: await listReferences(supabase, path => publicObjectUrl(projectUrl, path)) });
+        } else {
+          const payload = await readBody(req);
+          json(res, 200, await addReferences(supabase, payload?.sourceType, payload?.sourceIds));
+        }
+      } catch (e) { json(res, e.status || 500, { error: e.message }); }
+      return;
+    }
+    const referenceMatch = url.pathname.match(/^\/api\/references\/([^/]+)$/);
+    if (referenceMatch && req.method === "PATCH") {
+      try {
+        const reference = await updateReference(supabase, referenceMatch[1], await readBody(req));
+        json(res, 200, { reference: { ...reference, publicUrl: publicObjectUrl(projectUrl, reference.storage_path) } });
+      } catch (e) { json(res, e.status || 500, { error: e.message }); }
       return;
     }
 
