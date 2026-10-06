@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Platform, TextInput, useWindowDimensions,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { NavArrowLeft, NavArrowRight, RefreshDouble, Trash } from "iconoir-react-native";
 import { API_BASE, api, Draft } from "../lib/api";
 import { Btn } from "../components/Btn";
@@ -11,6 +11,7 @@ import { WidgetSmall } from "../components/iPhoneMockup/WidgetSmall";
 import { WidgetMedium } from "../components/iPhoneMockup/WidgetMedium";
 import { WidgetLarge } from "../components/iPhoneMockup/WidgetLarge";
 import { previewImageUrl, RemoteImage } from "../components/RemoteImage";
+import { normalizeCaptionLayout } from "../lib/captionLayout";
 import { ActionKey } from "../components/ActionKey";
 
 type Screen = "grid" | "review";
@@ -33,6 +34,7 @@ function backgroundGridImageUri(background: Draft) {
 
 export default function BackgroundsScreen() {
   const router = useRouter();
+  const { batch } = useLocalSearchParams<{batch?: string}>();
   const { width } = useWindowDimensions();
   const [backgrounds, setBackgrounds] = useState<Draft[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,7 +66,7 @@ export default function BackgroundsScreen() {
       setLoading(true);
       setError(null);
       const { backgrounds: b } = await api.backgrounds();
-      setBackgrounds(b);
+      setBackgrounds(batch ? b.filter(item => item.meta?.reviewBatchId === batch) : b);
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -72,7 +74,7 @@ export default function BackgroundsScreen() {
     }
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [batch]);
 
   useEffect(() => {
     if (screen !== "review" || typeof document === "undefined") return;
@@ -196,6 +198,8 @@ export default function BackgroundsScreen() {
 
     const imgUri = backgroundImageUri(background, 1024);
     const scene = background.meta?.scene;
+    const candidateCaption = background.meta?.reviewBatchId ? background.meta.captionOptions?.[background.meta.selectedCaptionIndex ?? 0] : undefined;
+    const posterPreview = candidateCaption ? {backgroundUri:imgUri,caption:candidateCaption,layout:normalizeCaptionLayout(background.meta?.captionLayout)} : undefined;
 
     return (
       <View style={styles.root}>
@@ -229,15 +233,15 @@ export default function BackgroundsScreen() {
             <View style={styles.previewRow}>
               <View style={styles.previewBlock}>
                 <Text style={styles.previewLabel}>Large</Text>
-                <WidgetLarge imageUri={imgUri} />
+                <WidgetLarge imageUri={imgUri} posterPreview={posterPreview} />
               </View>
               <View style={styles.previewBlock}>
                 <Text style={styles.previewLabel}>Small</Text>
-                <WidgetSmall imageUri={imgUri} />
+                <WidgetSmall imageUri={imgUri} posterPreview={posterPreview} />
               </View>
               <View style={styles.previewBlock}>
                 <Text style={styles.previewLabel}>Medium</Text>
-                <WidgetMedium imageUri={imgUri} />
+                <WidgetMedium imageUri={imgUri} posterPreview={posterPreview} />
               </View>
             </View>
           </View>
@@ -248,6 +252,11 @@ export default function BackgroundsScreen() {
               <Text style={styles.metaLabel}>Status</Text>
               <Text style={styles.metaMissing}>Pending background</Text>
             </View>
+            {candidateCaption && <View style={styles.metaSection}>
+              <Text style={styles.metaLabel}>Review batch · proposed wording</Text>
+              <Text style={styles.metaValue}>{candidateCaption.smallText} / {candidateCaption.bigText}</Text>
+              <Text style={styles.metaValueMuted}>Generated from your reviewed references. Approve the background to choose or edit its caption.</Text>
+            </View>}
             {scene && (
               <View style={styles.metaSection}>
                 <Text style={styles.metaLabel}>Scene</Text>
