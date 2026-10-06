@@ -91,12 +91,6 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
         })}
       </View>
 
-      <View style={styles.footer}>
-        <View style={styles.footerDotSlot}>
-          <View style={styles.footerDot} />
-        </View>
-        {!collapsed && <Text style={styles.footerText}>localhost:3847</Text>}
-      </View>
     </View>
   );
 }
@@ -155,7 +149,7 @@ const styles = StyleSheet.create({
     borderRightColor: C.border,
     paddingTop: 24,
     paddingBottom: 16,
-    justifyContent: "space-between",
+    justifyContent: "flex-start",
     overflow: "hidden",
     transitionProperty: "width" as any,
     transitionDuration: "180ms" as any,
@@ -222,16 +216,6 @@ const styles = StyleSheet.create({
   navItemActive: { backgroundColor: C.surfaceHigh },
   navLabel: { color: C.textSecondary, fontSize: 13, fontWeight: "500" },
   navLabelActive: { color: C.textPrimary },
-
-  footer: {
-    flexDirection: "row",
-    alignItems: "center",
-    height: 38,
-    paddingHorizontal: 8,
-  },
-  footerDotSlot: { width: 38, height: 38, alignItems: "center", justifyContent: "center" },
-  footerDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: C.success },
-  footerText: { color: C.textMuted, fontSize: 11, marginLeft: 6 },
 
   content: { flex: 1, backgroundColor: C.bg },
 });
