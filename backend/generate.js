@@ -13,11 +13,15 @@
  */
 import "dotenv/config";
 import OpenAI from "openai";
+import { loadTaste, positiveReferences, tasteInstructions, referenceImages } from "./generation-taste.js";
+import { generateReviewedCaptions } from "./reviewed-captions.js";
 import { createClient } from "@supabase/supabase-js";
-import { readdir, readFile } from "node:fs/promises";
+import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   DEFAULT_IMAGE_MODEL,
+  DEFAULT_CAPTION_MODEL,
+  overlayCaption,
   DEFAULT_PROMPT_MODEL,
   buildHighConceptScene,
   buildIconicEnergyScene,
@@ -216,6 +220,7 @@ function parseArgs(argv) {
     promptModel: process.env.OPENAI_PROMPT_MODEL || DEFAULT_PROMPT_MODEL,
     size: process.env.OPENAI_IMAGE_SIZE || "1024x1024",
     dryRun: false,
+    reviewBatch: false,
     idea: "",
     directionMode: "series",
     styleRecipe: "none",
@@ -245,6 +250,7 @@ function parseArgs(argv) {
     else if (arg === "--prompt-model") out.promptModel = next();
     else if (arg === "--size") out.size = next();
     else if (arg === "--dry-run") out.dryRun = true;
+    else if (arg === "--review-batch") out.reviewBatch = true;
     else if (arg === "--idea") out.idea = cleanOptionText(next(), 700);
     else if (arg === "--direction-mode") out.directionMode = next();
     else if (arg === "--style-recipe") out.styleRecipe = next();
@@ -282,6 +288,10 @@ function parseArgs(argv) {
     throw new Error(`--vibe-preset must be one of: ${Object.keys(VIBE_PRESETS).join(", ")}`);
   }
 
+  if (out.reviewBatch && (out.mode !== "images" || out.fromPrompts || out.count > 5)) {
+    throw new Error("Review batches require 1–5 new images, not saved prompts");
+  }
+
   if (!out.outDir) {
     out.outDir = out.mode === "prompts" ? PROMPTS_DIR : BACKGROUNDS_DIR;
   }
@@ -306,6 +316,7 @@ function usage() {
   npm run publish                                   push drafts   → Supabase
 
 Options:
+  --review-batch       Save captioned review previews; max 5 images, never publish
   --count, -n <n>      Number to generate. Default: 10
   --mode <mode>        prompts | images. Default: images
   --from-prompts [dir] Load scene+prompt from content/prompts/ instead of generating
@@ -393,11 +404,11 @@ async function generateImage({ client, model, prompt, size }) {
   return Buffer.from(b64, "base64");
 }
 
-async function generateDetailedPrompt({ client, model, scene }) {
-  const promptWriterPrompt = buildPromptWriterPrompt(scene);
+async function generateDetailedPrompt({ client, model, scene, taste, visualReferences = [] }) {
+  const promptWriterPrompt = buildPromptWriterPrompt(scene) + tasteInstructions(taste);
   const response = await client.responses.create({
     model,
-    input: [{ role: "user", content: [{ type: "input_text", text: promptWriterPrompt }] }],
+    input: [{ role: "user", content: [{ type: "input_text", text: promptWriterPrompt }, ...visualReferences] }],
   });
   return {
     prompt: cleanGeneratedPrompt(responseText(response)),
@@ -465,8 +476,9 @@ async function loadRecentScenesFromDb(supabase, limit = 40) {
   return keys;
 }
 
-async function generateSceneFromDirector({ client, model, avoidSignatures }) {
-  const prompt = buildSceneDirectorPrompt({ avoidSignatures });
+async function generateSceneFromDirector({ client, model, avoidSignatures, taste, batchScenes = [] }) {
+  const prompt = buildSceneDirectorPrompt({ avoidSignatures }) + tasteInstructions(taste)
+    + `\nScenes already selected in this batch: ${JSON.stringify(batchScenes)}. Change the subject, expression, action and camera distance as well as the setting. Do not default to another scream-laughing face. Calm or understated expressions are welcome.`;
   const response = await client.responses.create({
     model,
     input: [{ role: "user", content: [{ type: "input_text", text: prompt }] }],
@@ -704,7 +716,7 @@ function buildAnimalNatureSelfieScene({ args, index, count, guidance }) {
   };
 }
 
-async function generateDirectedScene({ client, model, args, index, count, avoidSignatures }) {
+async function generateDirectedScene({ client, model, args, index, count, avoidSignatures, taste }) {
   const guidance = directionMetadata(args);
   if (args.styleRecipe === "alpine-techwear") {
     return buildAlpineTechwearScene({ args, index, count, guidance });
@@ -715,7 +727,7 @@ async function generateDirectedScene({ client, model, args, index, count, avoidS
 
   if (!client) return buildDirectedSceneFallback({ args, index, count, guidance });
 
-  const prompt = buildDirectedScenePrompt({ args, index, count, avoidSignatures });
+  const prompt = buildDirectedScenePrompt({ args, index, count, avoidSignatures }) + tasteInstructions(taste);
   const response = await client.responses.create({
     model,
     input: [{ role: "user", content: [{ type: "input_text", text: prompt }] }],
@@ -881,7 +893,7 @@ function buildDirectedSceneFallback({ args, index, count, guidance }) {
   };
 }
 
-async function pickUniqueScene({ client, promptModel, avoidSignatures, preferEnergy = false }) {
+async function pickUniqueScene({ client, promptModel, avoidSignatures, preferEnergy = false, taste }) {
   for (let attempt = 0; attempt < 28; attempt++) {
     const roll = Math.random();
     let scene;
@@ -906,7 +918,7 @@ async function pickUniqueScene({ client, promptModel, avoidSignatures, preferEne
       scene = buildScene(Math.random, { avoidSignatures });
     } else if (client) {
       try {
-        scene = await generateSceneFromDirector({ client, model: promptModel, avoidSignatures });
+        scene = await generateSceneFromDirector({ client, model: promptModel, avoidSignatures, taste });
       } catch {
         scene = buildSceneFromArchetype();
       }
@@ -961,6 +973,7 @@ async function loadFromPromptsDir(dir, count, filterIds = null) {
         scene: data.scene,
         prompt: data.prompt,
         promptWriterPrompt: data.promptWriterPrompt || "",
+        generationTaste: data.generationTaste ?? null,
       });
     }
   }
@@ -998,6 +1011,7 @@ async function loadFromPromptsDb(supabase, count, filterIds = null) {
       scene: row.scene,
       prompt: row.image_prompt,
       promptWriterPrompt: row.metadata?.promptWriterPrompt || "",
+      generationTaste: row.metadata?.generationTaste ?? null,
     }));
 }
 
@@ -1098,6 +1112,13 @@ async function main() {
   } catch {
     console.warn("Supabase not configured — drafts/prompts won't be saved to DB");
   }
+  const taste = await loadTaste(supabase);
+  if (args.reviewBatch && !positiveReferences(taste).length) throw new Error("Accept some positive references before generating a review batch");
+  const publicUrl = path => supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
+  console.log(`Reviewed taste: ${positiveReferences(taste).length} positive references; snapshot ${taste.hash.slice(0,12)}`);
+  const batchCaptions = [];
+  const batchScenes = [];
+  const reviewBatchId = args.reviewBatch ? `review_${new Date().toISOString().replace(/\D/g,'').slice(0,14)}` : null;
   const startedAt = Date.now();
   let saved = 0;
   let failed = 0;
@@ -1139,7 +1160,11 @@ async function main() {
     console.log("");
   }
 
-  const avoidSceneSignatures = supabase ? await loadRecentScenesFromDb(supabase) : new Set();
+  const recentSceneKeys = supabase ? await loadRecentScenesFromDb(supabase) : new Set();
+  // Preserve exact historical concepts, but reserve broad-family bans for this batch.
+  const avoidSceneSignatures = args.reviewBatch
+    ? new Set([...recentSceneKeys].filter(key => !key.startsWith("family:")))
+    : recentSceneKeys;
 
   let completed = 0;
   let attempted = 0;
@@ -1153,11 +1178,13 @@ async function main() {
     const prefix = `[${itemNumber}/${args.count}]`;
 
     let scene, scenePrompt, promptWriterPrompt, name;
+    let generationTaste = taste;
 
     if (promptSources) {
       const source = promptSources[completed];
       if (!source) break;
       ({ scene, prompt: scenePrompt, promptWriterPrompt, name } = source);
+      generationTaste = source.generationTaste;
     } else {
       name = makeBackgroundName(attempted);
       if (hasDirection(args)) {
@@ -1168,16 +1195,26 @@ async function main() {
           index: itemNumber,
           count: args.count,
           avoidSignatures: avoidSceneSignatures,
+          taste,
         });
+      } else if (args.reviewBatch && openai) {
+        // Review batches use the director on every item; normal generation keeps its existing variety logic.
+        scene = await generateSceneFromDirector({client:openai,model:args.promptModel,avoidSignatures:avoidSceneSignatures,taste,batchScenes});
+        if (!isAllowedScene(scene, avoidSceneSignatures)) {
+          console.log(`${prefix} repeated scene; trying another concept`);
+          continue;
+        }
       } else {
         scene = await pickUniqueScene({
           client: openai,
           promptModel: args.promptModel,
           avoidSignatures: avoidSceneSignatures,
           preferEnergy: itemNumber % 3 === 1,
+          taste,
         });
       }
       rememberScene(scene, avoidSceneSignatures);
+      batchScenes.push({subject:scene.subject,action:scene.action,setting:scene.setting,emotion:scene.emotion});
     }
 
     const fallbackPrompt = buildMotivationalPrompt(scene);
@@ -1185,7 +1222,7 @@ async function main() {
     if (args.dryRun) {
       console.log(`\n--- ${name ?? `item_${itemNumber}`} scene ---\n${JSON.stringify(scene, null, 2)}`);
       if (!promptSources) {
-        console.log(`\n--- prompt-writer request ---\n${buildPromptWriterPrompt(scene)}`);
+        console.log(`\n--- prompt-writer request ---\n${buildPromptWriterPrompt(scene) + tasteInstructions(taste)}`);
       }
       completed++;
       continue;
@@ -1196,7 +1233,7 @@ async function main() {
 
       if (!promptSources && !scenePrompt) {
         const result = await withProgress(`${prefix} writing image prompt`, () =>
-          generateDetailedPrompt({ client: openai, model: args.promptModel, scene })
+          generateDetailedPrompt({ client: openai, model: args.promptModel, scene, taste, visualReferences: referenceImages(taste,publicUrl,itemNumber-1) })
         );
         scenePrompt = result.prompt || fallbackPrompt;
         promptWriterPrompt = result.promptWriterPrompt;
@@ -1209,6 +1246,7 @@ async function main() {
           scene,
           generationDirection: directionMetadata(args),
           promptWriterPrompt,
+          generationTaste,
         };
         const paths = await withProgress(`${prefix} saving prompt`, () =>
           savePromptAsset({
@@ -1233,6 +1271,14 @@ async function main() {
         generateImage({ client: openai, model: args.model, prompt: scenePrompt, size: args.size })
       );
 
+      let review = null;
+      if (args.reviewBatch) {
+        review = await withProgress(`${prefix} writing reviewed caption options`, () => generateReviewedCaptions({
+          client:openai,model:process.env.OPENAI_CAPTION_MODEL || DEFAULT_CAPTION_MODEL,
+          scene,imageBytes:rawImageBytes,taste,recentCaptions:batchCaptions,
+        }));
+        batchCaptions.push(review.caption);
+      }
       const draftMetadata = {
         imageModel: args.model,
         promptModel: args.promptModel,
@@ -1242,6 +1288,9 @@ async function main() {
         generationDirection: directionMetadata(args),
         scenePrompt,
         promptWriterPrompt,
+        generationTaste,
+        reviewBatchId,
+        ...(review ? {captionOptions:review.options,selectedCaptionIndex:0,captionPrompt:review.prompt,captionTaste:taste} : {}),
       };
       const paths = await withProgress(`${prefix} saving background`, () =>
         saveGeneratedAsset({
@@ -1254,6 +1303,11 @@ async function main() {
           metadata: draftMetadata,
         })
       );
+      if (review) {
+        const previewPath = join(args.outDir, `${name}.review.png`);
+        await writeFile(previewPath, await overlayCaption(rawImageBytes,review.caption));
+        console.log(`${prefix} review preview → ${previewPath}`);
+      }
       if (supabase) {
         await withProgress(`${prefix} saving background to DB`, () =>
           uploadBackgroundToDb(supabase, {
@@ -1284,6 +1338,7 @@ async function main() {
     if (saved < args.count) {
       console.log(`Stopped after ${attempted} attempt${attempted === 1 ? "" : "s"} before reaching ${args.count} saved item${args.count === 1 ? "" : "s"}.`);
     }
+    if (saved < args.count) process.exitCode = 1;
     if (saved > 0 && args.mode !== "prompts") {
       console.log(`\nReview generated backgrounds in the dashboard Backgrounds tab.`);
     }
