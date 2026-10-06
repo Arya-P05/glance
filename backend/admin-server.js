@@ -25,6 +25,8 @@ import {
   resizeForWidget,
 } from "./instagram-helper.js";
 import { getDraftForPublish, publishDraftFromDb } from "./publish-draft.js";
+import { loadTaste } from "./generation-taste.js";
+import { generateReviewedCaptions } from "./reviewed-captions.js";
 import { addReferences, listReferences, updateReference } from "./creative-references.js";
 import { getInstagramConnectionStatus, publishInstagramCarousel } from "./instagram-publisher.js";
 import {
@@ -833,6 +835,8 @@ function backgroundDraftFromRow(row, projectUrl) {
         ? publicObjectUrl(projectUrl, metadata.mediumStoragePath)
         : null,
       backgroundStatus: row.status ?? null,
+      reviewBatchId: metadata.reviewBatchId ?? null,
+      tasteSnapshot: metadata.generationTaste?.hash ?? null,
       imageApprovedAt: metadata.imageApprovedAt ?? null,
       approvedAt: row.approved_at ?? null,
       scene: row.scene ?? metadata.scene ?? null,
@@ -1256,7 +1260,9 @@ async function generateCaptionOptionsForBackground(supabase, { id, captionModel 
   const imageBytes = Buffer.from(await blob.arrayBuffer());
   const openai = new OpenAI({ apiKey: env("OPENAI_API_KEY") });
   const recentCaptions = await loadRecentCaptions(supabase);
-  const captionResult = await generateCaptionForScene({
+  const taste = await loadTaste(supabase);
+  const captionResult = await (taste.references.length ? generateReviewedCaptions : generateCaptionForScene)({
+    taste,
     client: openai,
     model,
     scene,
@@ -1275,6 +1281,7 @@ async function generateCaptionOptionsForBackground(supabase, { id, captionModel 
     captionOptions,
     selectedCaptionIndex,
     captionPrompt: captionResult.prompt,
+    captionTaste: taste,
     captionModel: model,
     captionGeneratedAt: new Date().toISOString(),
     scene,
@@ -1309,6 +1316,7 @@ async function generateCaptionOptionsForBackground(supabase, { id, captionModel 
     captionOptions,
     selectedCaptionIndex,
     captionPrompt: captionResult.prompt,
+    captionTaste: taste,
     captionModel: model,
   };
 }
@@ -1843,10 +1851,12 @@ async function main() {
       if (!payload?.id && !payload?.dbId) { json(res, 400, { error: "id required" }); return; }
       try {
         const row = await stagePendingBackground(supabase, { id: payload.id, dbId: payload.dbId });
-        kickOffBackgroundCaptionJob(supabase, {
-          id: row.name,
-          captionModel: payload.captionModel,
-        });
+        if (!row.metadata?.captionOptions?.some(hasCompleteCaption)) {
+          kickOffBackgroundCaptionJob(supabase, {
+            id: row.name,
+            captionModel: payload.captionModel,
+          });
+        }
         json(res, 200, {
           success: true,
           background: backgroundDraftFromRow(row, projectUrl),
@@ -2087,6 +2097,7 @@ async function main() {
       if (payload.promptModel) args.push("--prompt-model", payload.promptModel);
       if (payload.size) args.push("--size", payload.size);
       if (payload.dryRun) args.push("--dry-run");
+      if (payload.reviewBatch) args.push("--review-batch");
       if (payload.idea && String(payload.idea).trim()) args.push("--idea", String(payload.idea));
       if (payload.directionMode) args.push("--direction-mode", String(payload.directionMode));
       if (payload.styleRecipe) args.push("--style-recipe", String(payload.styleRecipe));
