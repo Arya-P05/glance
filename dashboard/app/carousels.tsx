@@ -19,6 +19,7 @@ import { RemoteImage } from "../components/RemoteImage";
 
 const CAROUSEL_SELECTION_KEY = "glance.carouselDraftSelection";
 const CAROUSEL_SIZE = 5;
+const DEFAULT_CAPTION = "little reminders for your lock screen\n.\n.\n.\nsomething to glance at when life gets loud";
 
 type Builder = {
   id?: string;
@@ -87,7 +88,11 @@ export default function CarouselsScreen() {
       ]);
       const activeImages = imageRes.items.filter(item => item.status === "active");
       setImages(activeImages);
-      setCarousels(carouselRes.carousels);
+      setCarousels(carouselRes.carousels.filter(carousel => carousel.status !== "posted"));
+      setBuilder(current => {
+        const saved = carouselRes.carousels.find(carousel => carousel.id === current?.id);
+        return saved?.status === "posted" ? null : current;
+      });
       setInstagramStatus(statusRes);
 
       if (consumeSelection && typeof window !== "undefined") {
@@ -101,7 +106,7 @@ export default function CarouselsScreen() {
           if (picked.length) {
             setBuilder({
               title: `Carousel ${new Date().toLocaleDateString()}`,
-              caption: "",
+              caption: DEFAULT_CAPTION,
               status: "draft",
               items: picked,
             });
@@ -129,7 +134,7 @@ export default function CarouselsScreen() {
   function newCarousel() {
     setBuilder({
       title: `Carousel ${new Date().toLocaleDateString()}`,
-      caption: "",
+      caption: DEFAULT_CAPTION,
       status: "draft",
       items: [],
     });
@@ -165,7 +170,7 @@ export default function CarouselsScreen() {
     if (!builder) {
       setBuilder({
         title: `Carousel ${new Date().toLocaleDateString()}`,
-        caption: "",
+        caption: DEFAULT_CAPTION,
         status: "draft",
         items: [image],
       });
@@ -399,7 +404,7 @@ export default function CarouselsScreen() {
     <View style={styles.root}>
       <View style={styles.toolbar}>
         <Text style={S.h1}>Carousels</Text>
-        <Text style={[S.body, { marginLeft: 8 }]}>{carousels.length} saved</Text>
+        <Text style={[S.body, { marginLeft: 8 }]}>{carousels.length} queued</Text>
         <View style={{ flex: 1 }} />
         <View style={[styles.integrationPill, instagramStatus?.publishEnabled && styles.integrationPillOn]}>
           <Text style={[styles.integrationText, instagramStatus?.publishEnabled && styles.integrationTextOn]}>
@@ -483,7 +488,7 @@ export default function CarouselsScreen() {
               ))}
               {!carousels.length && !loading && (
                 <View style={styles.emptyState}>
-                  <Text style={styles.emptyTitle}>No carousel drafts yet.</Text>
+                  <Text style={styles.emptyTitle}>No carousels in the queue.</Text>
                   <Text style={styles.emptyCopy}>Go to Library, select 5 posts, then create a carousel.</Text>
                 </View>
               )}
