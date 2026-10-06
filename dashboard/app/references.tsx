@@ -57,7 +57,7 @@ export default function ReferencesScreen() {
     <View style={styles.intro}>
       <Text style={S.h2}>Teach Glance what works.</Text>
       <Text style={styles.copy}>Review the suggested examples, keep what fits, and correct what doesn’t. Accepting a near miss means keeping it as an example of what to avoid.</Text>
-      <Text style={styles.copy}>The benchmark is a fixed set you explicitly choose from accepted references. These notes do not change generation or publish anything yet.</Text>
+      <Text style={styles.copy}>Accepted examples and your feedback now guide new images and captions. Benchmark items are held out from generation. Generated candidates still need your review before publishing.</Text>
     </View>
     <View style={styles.filters}>
       {(["pending", "accepted", "benchmark", "rejected", "all"] as Filter[]).map(value => <Btn key={value} label={value === "pending" ? `To review (${items.filter(x => x.review_status === "pending").length})` : value[0].toUpperCase()+value.slice(1)} onPress={() => setFilter(value)} small variant={filter === value ? "primary" : "ghost"} />)}
