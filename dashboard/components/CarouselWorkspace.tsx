@@ -10,7 +10,7 @@ import {
   Linking,
 } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { api, InstagramCarousel, InstagramCarouselPackage, InstagramStatus, StorageImage } from "../lib/api";
+import { api, InstagramCarousel, InstagramStatus, StorageImage } from "../lib/api";
 import { Btn } from "../components/Btn";
 import { C, S } from "../lib/theme";
 import { useJobStream } from "../lib/useJobStream";
@@ -68,7 +68,6 @@ export default function CarouselWorkspace({ mode }: { mode: "queue" | "editor" }
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const job = useJobStream(jobId);
 
   const selectedIds = useMemo(() => new Set(builder?.items.map(item => item.id) ?? []), [builder]);
@@ -238,131 +237,6 @@ export default function CarouselWorkspace({ mode }: { mode: "queue" | "editor" }
     try {
       await api.archiveCarousel(id);
       if (builder?.id === id) setBuilder(null);
-      await loadAll({ consumeSelection: false });
-    } catch (e: any) {
-      alert(e.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function triggerBrowserDownload(url: string, filename: string) {
-    if (typeof document !== "undefined") {
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = filename;
-      anchor.target = "_blank";
-      anchor.rel = "noreferrer";
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      return;
-    }
-    Linking.openURL(url);
-  }
-
-  function downloadFolderName(title: string) {
-    const safeTitle = (title || "carousel")
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 48) || "carousel";
-    return `${safeTitle}-slides`;
-  }
-
-  async function pickDownloadDirectory(): Promise<any | "cancelled" | false> {
-    if (typeof window === "undefined") return false;
-    const showDirectoryPicker = (window as any).showDirectoryPicker;
-    if (typeof showDirectoryPicker !== "function") return false;
-
-    try {
-      return await showDirectoryPicker({ mode: "readwrite" });
-    } catch (e: any) {
-      if (e?.name !== "AbortError") throw e;
-      return "cancelled";
-    }
-  }
-
-  async function savePackageToDirectory(
-    pkg: InstagramCarouselPackage,
-    parentDirectory: any,
-  ): Promise<{ status: "saved"; folderName: string }> {
-    const folderName = downloadFolderName(pkg.title);
-    const directory = await parentDirectory.getDirectoryHandle(folderName, { create: true });
-
-    for (const item of pkg.items) {
-      const res = await fetch(item.downloadUrl);
-      if (!res.ok) throw new Error(`Could not download ${item.filename}`);
-      const blob = await res.blob();
-      const file = await directory.getFileHandle(item.filename, { create: true });
-      const writable = await file.createWritable();
-      await writable.write(blob);
-      await writable.close();
-    }
-    return { status: "saved", folderName };
-  }
-
-  async function downloadAllItems(pkg: InstagramCarouselPackage, parentDirectory: any | false) {
-    try {
-      if (parentDirectory) {
-        const directoryResult = await savePackageToDirectory(pkg, parentDirectory);
-        alert(`Slides saved to "${directoryResult.folderName}".`);
-        return;
-      }
-      triggerBrowserDownload(pkg.zipUrl, `${downloadFolderName(pkg.title)}.zip`);
-    } catch (e: any) {
-      alert(e.message);
-    }
-  }
-
-  async function downloadCarousel(id: string) {
-    setDownloadingId(id);
-    try {
-      const parentDirectory = await pickDownloadDirectory();
-      if (parentDirectory === "cancelled") return;
-      const { package: pkg } = await api.exportCarousel(id);
-      await downloadAllItems(pkg, parentDirectory);
-    } catch (e: any) {
-      alert(e.message);
-    } finally {
-      setDownloadingId(null);
-    }
-  }
-
-  async function downloadBuilderCarousel() {
-    if (!builder) return;
-    const downloadKey = builder.id ?? "new";
-    setDownloadingId(downloadKey);
-    try {
-      const parentDirectory = await pickDownloadDirectory();
-      if (parentDirectory === "cancelled") return;
-      let targetId = builder.id;
-      if (!targetId || ["draft", "ready", "failed"].includes(builder.status)) {
-        const saved = await saveBuilder();
-        if (!saved) return;
-        targetId = saved.id;
-      }
-      const { package: pkg } = await api.exportCarousel(targetId);
-      await downloadAllItems(pkg, parentDirectory);
-    } catch (e: any) {
-      alert(e.message);
-    } finally {
-      setDownloadingId(null);
-    }
-  }
-
-  async function markPosted(id?: string) {
-    let targetId = id;
-    if (!targetId) {
-      const saved = await saveBuilder("ready");
-      if (!saved) return;
-      targetId = saved.id;
-    }
-    if (!confirm("Mark this carousel as posted in the dashboard?")) return;
-    setBusy(true);
-    try {
-      const { carousel } = await api.markCarouselPosted(targetId);
-      setBuilder(carouselToBuilder(carousel));
       await loadAll({ consumeSelection: false });
     } catch (e: any) {
       alert(e.message);
@@ -557,27 +431,16 @@ export default function CarouselWorkspace({ mode }: { mode: "queue" | "editor" }
               )}
 
               <View style={styles.actionBar}>
-                <Btn label="Save draft" onPress={() => saveBuilder("draft")} loading={busy} disabled={builder.items.length !== CAROUSEL_SIZE} variant="outline" />
                 <Btn label="Mark ready" onPress={async () => {
                   const saved = await saveBuilder("ready");
                   if (saved) newCarousel();
                 }} loading={busy} disabled={builder.items.length !== CAROUSEL_SIZE} />
-                <Btn
-                  label="Download"
-                  onPress={downloadBuilderCarousel}
-                  loading={downloadingId === (builder.id ?? "new")}
-                  disabled={builder.items.length !== CAROUSEL_SIZE}
-                  variant="outline"
-                />
                 <Btn
                   label={builder.status === "failed" ? "Retry post" : "Post now"}
                   onPress={() => postNow()}
                   loading={busy}
                   disabled={!instagramStatus?.publishEnabled || builder.items.length !== CAROUSEL_SIZE || builder.status === "posting" || builder.status === "posted"}
                 />
-                {builder.status !== "posted" && (
-                  <Btn label="Mark posted" onPress={() => markPosted(builder.id)} loading={busy} disabled={builder.items.length !== CAROUSEL_SIZE} variant="ghost" />
-                )}
                 {builder.permalink && <Btn label="Open Instagram" onPress={() => Linking.openURL(builder.permalink!)} variant="outline" />}
               </View>
 
