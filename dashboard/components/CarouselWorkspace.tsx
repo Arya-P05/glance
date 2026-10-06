@@ -246,19 +246,6 @@ export default function CarouselWorkspace({ mode }: { mode: "queue" | "editor" }
     }
   }
 
-  async function duplicate(id: string) {
-    setBusy(true);
-    try {
-      const { carousel } = await api.duplicateCarousel(id);
-      editCarousel(carousel);
-      await loadAll({ consumeSelection: false });
-    } catch (e: any) {
-      alert(e.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
   function triggerBrowserDownload(url: string, filename: string) {
     if (typeof document !== "undefined") {
       const anchor = document.createElement("a");
@@ -474,14 +461,6 @@ export default function CarouselWorkspace({ mode }: { mode: "queue" | "editor" }
                   {!!carousel.lastError && <Text style={styles.queueError} numberOfLines={2}>{carousel.lastError}</Text>}
                   <View style={styles.queueActions}>
                     <Btn label="Edit" onPress={() => editCarousel(carousel)} small variant="outline" />
-                    <Btn
-                      label="Download"
-                      onPress={() => downloadCarousel(carousel.id)}
-                      disabled={carousel.status === "posting"}
-                      loading={downloadingId === carousel.id}
-                      small
-                      variant="outline"
-                    />
                     {carousel.status !== "posted" && (
                       <Btn
                         label={carousel.status === "failed" ? "Retry" : "Post now"}
@@ -491,13 +470,9 @@ export default function CarouselWorkspace({ mode }: { mode: "queue" | "editor" }
                         small
                       />
                     )}
-                    {carousel.status !== "posted" && (
-                      <Btn label="Mark posted" onPress={() => markPosted(carousel.id)} small variant="ghost" />
-                    )}
                     {carousel.permalink && (
                       <Btn label="Open" onPress={() => Linking.openURL(carousel.permalink!)} small variant="outline" />
                     )}
-                    <Btn label="Copy" onPress={() => duplicate(carousel.id)} small variant="outline" />
                     <Btn label="Archive" onPress={() => archive(carousel.id)} small variant="ghost" />
                   </View>
                 </View>
