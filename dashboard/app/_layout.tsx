@@ -4,7 +4,7 @@ import { View, Text, StyleSheet, Pressable, Platform, useWindowDimensions, Image
 import { usePathname } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
-  Home, MediaImage, Frame, List, Sparks, Import, Eye, Settings, NavArrowLeft, AlbumCarousel, Check,
+  Home, MediaImage, Frame, List, Sparks, Import, Settings, NavArrowLeft, AlbumCarousel, Check,
 } from "iconoir-react-native";
 import { C } from "../lib/theme";
 
@@ -20,7 +20,6 @@ const NAV: { href: string; label: string; Icon: NavIcon }[] = [
   { href: "/library",    label: "Library",     Icon: MediaImage },
   { href: "/carousels",  label: "Post queue",   Icon: List },
   { href: "/carousel-editor", label: "Create carousel", Icon: AlbumCarousel },
-  { href: "/preview",    label: "Preview",     Icon: Eye },
   { href: "/import",     label: "Import",      Icon: Import },
   { href: "/maintenance",label: "Maintenance", Icon: Settings },
 ];
