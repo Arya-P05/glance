@@ -113,3 +113,13 @@ pip3 install instaloader
 ```
 
 Reference: [Instaloader docs](https://instaloader.github.io)
+
+## Creative references
+
+Apply `supabase/migrations/20261006000000_add_creative_references.sql` to the same Supabase project used by the admin server. The table is accessible through the service role only. Restart the admin server, then open `/references` in the dashboard.
+
+Select posts in Library and choose **Add to references**, or add a saved background from its review panel. References begin pending. Review the image, save your feedback, and accept or reject it. A near miss is an accepted example of what to avoid. Benchmark membership is explicit and requires acceptance; returning an item to review or rejecting it removes that membership.
+
+Assistant analysis remains separate from user feedback. The initial curated collection can be inspected with `node seed-creative-references.js` and inserted with `node seed-creative-references.js --apply` from `backend/`. Its source IDs belong to the original Glance library; other databases must curate their own seed. Re-running the seed preserves existing reviews. Run `node --test creative-references.test.js` for validation tests.
+
+This foundation stores references and review decisions only; generation, evaluation and scheduling do not consume them yet. References retain the source storage path, so deleting the underlying media will also make its reference image unavailable.

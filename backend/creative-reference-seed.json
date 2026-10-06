@@ -1,0 +1,602 @@
+{
+  "reviewed": {
+    "finishedPosts": 82,
+    "backgrounds": 20
+  },
+  "references": [
+    {
+      "source_type": "post",
+      "source_id": "34309276-55aa-4526-b839-9164fdfd1edd",
+      "title": "Keep moving \u00b7 woodland walk",
+      "role": "exemplar",
+      "rationale": "The walking action supports the message; warm light gives encouragement a physical setting.",
+      "preserve": "Small setup above a bold payoff; readable text away from faces.",
+      "vary": "Location, season and people; keep the feeling of forward movement.",
+      "caution": "Check white lettering against the bright foliage.",
+      "tags": [
+        "people",
+        "nature",
+        "progress",
+        "warm light"
+      ]
+    },
+    {
+      "source_type": "post",
+      "source_id": "87a67b8a-db56-46a9-846c-ba27e03714dc",
+      "title": "Life is a game \u00b7 basketball",
+      "role": "exemplar",
+      "rationale": "Motion and candid expressions make playfulness feel specific rather than stock.",
+      "preserve": "Energetic action, low camera angle and open space for type.",
+      "vary": "Sport, setting and cast.",
+      "caution": "Review apostrophes in the finished lettering; slang is optional.",
+      "tags": [
+        "people",
+        "play",
+        "motion",
+        "golden hour"
+      ]
+    },
+    {
+      "source_type": "post",
+      "source_id": "2950a153-cca5-4f18-9aa5-d3a2bd105721",
+      "title": "Stay playful \u00b7 cats at home",
+      "role": "exemplar",
+      "rationale": "A domestic scene adds a quieter kind of humor to outdoor-heavy batches.",
+      "preserve": "Grouped characters and a clear pale area for the caption.",
+      "vary": "Animals, room, props and exact phrase.",
+      "caution": "Do not repeat the same slang ending on every slide.",
+      "tags": [
+        "animals",
+        "indoor",
+        "play",
+        "soft light"
+      ]
+    },
+    {
+      "source_type": "post",
+      "source_id": "e34f6caf-b2f2-475a-aff2-d414b31f2a61",
+      "title": "Smile \u00b7 close-up dog",
+      "role": "exemplar",
+      "rationale": "The exaggerated close-up gives the gentle message an immediate emotional hook.",
+      "preserve": "Expressive foreground subject and short two-line hierarchy.",
+      "vary": "Animal, lens angle and landscape.",
+      "caution": "Avoid using the same smiling-dog composition throughout a carousel.",
+      "tags": [
+        "animals",
+        "joy",
+        "wide angle",
+        "outdoor"
+      ]
+    },
+    {
+      "source_type": "post",
+      "source_id": "7c2a8280-707a-4492-9b4f-becbc0a7411e",
+      "title": "Not alone \u00b7 paired alpacas",
+      "role": "exemplar",
+      "rationale": "Two subjects reinforce companionship without a literal illustration of loneliness.",
+      "preserve": "Relationship between subjects and readable sky.",
+      "vary": "Species, setting and time of day.",
+      "caution": "Keep the support message conversational.",
+      "tags": [
+        "animals",
+        "companionship",
+        "sky",
+        "reassurance"
+      ]
+    },
+    {
+      "source_type": "post",
+      "source_id": "18d524b0-21fa-47cb-b73e-68afbb3d50c0",
+      "title": "Gets better \u00b7 mountain selfie",
+      "role": "exemplar",
+      "rationale": "A shared outdoor moment gives reassurance a believable personal context.",
+      "preserve": "Candid framing, human connection and simple statement.",
+      "vary": "Activity, weather and people.",
+      "caution": "Do not make every reassurance message a mountain selfie.",
+      "tags": [
+        "people",
+        "companionship",
+        "mountains",
+        "reassurance"
+      ]
+    },
+    {
+      "source_type": "post",
+      "source_id": "3c4ae8d9-aba5-4755-8ff3-cf38ad9a3d72",
+      "title": "One step at a time \u00b7 alpine pause",
+      "role": "exemplar",
+      "rationale": "The resting pose and open landscape suit a slower message.",
+      "preserve": "Calm pacing and uncluttered text placement.",
+      "vary": "Terrain, person and camera distance.",
+      "caution": "Keep adequate contrast over clouds.",
+      "tags": [
+        "people",
+        "calm",
+        "mountains",
+        "progress"
+      ]
+    },
+    {
+      "source_type": "post",
+      "source_id": "6eaff8a2-1328-4681-8bf4-9b06fce464c8",
+      "title": "No rush \u00b7 fairground friends",
+      "role": "exemplar",
+      "rationale": "Warm dusk and a group moment provide a cheerful alternative to animals and landscapes.",
+      "preserve": "Natural interaction and balanced space above the group.",
+      "vary": "Event, cast and message wording.",
+      "caution": "The energetic fairground can compete with a calm message; test the pairing.",
+      "tags": [
+        "people",
+        "friendship",
+        "night",
+        "joy"
+      ]
+    },
+    {
+      "source_type": "post",
+      "source_id": "97324f92-938f-4579-a6e6-91e7134214d9",
+      "title": "Stay loud \u00b7 sunset crowd",
+      "role": "exemplar",
+      "rationale": "A close social moment gives expressive energy without needing an elaborate scene.",
+      "preserve": "Candid gesture and concise headline.",
+      "vary": "Location, faces and time of day.",
+      "caution": "Treat slang as a flavor, not a mandatory template.",
+      "tags": [
+        "people",
+        "friendship",
+        "sunset",
+        "energy"
+      ]
+    },
+    {
+      "source_type": "post",
+      "source_id": "19e518c1-7107-4b77-8066-142cbd54f60e",
+      "title": "Still moving \u00b7 beach puppy",
+      "role": "exemplar",
+      "rationale": "Low-angle motion and a bright horizon make this easy to read at a glance.",
+      "preserve": "Friendly expression and a short reassuring message.",
+      "vary": "Animal, shoreline and framing.",
+      "caution": "Avoid repeating another blue-sky dog immediately beside it.",
+      "tags": [
+        "animals",
+        "beach",
+        "progress",
+        "bright"
+      ]
+    },
+    {
+      "source_type": "post",
+      "source_id": "3698d7f0-fe0e-46c3-a126-a10a58f9689c",
+      "title": "No filter needed \u00b7 rainy night",
+      "role": "exemplar",
+      "rationale": "Flash-lit faces and wet city reflections add texture missing from clean-sky images.",
+      "preserve": "Candid intimacy and white text on a dark quiet area.",
+      "vary": "City, group and weather.",
+      "caution": "Keep busy highlights away from lettering.",
+      "tags": [
+        "people",
+        "city",
+        "rain",
+        "night"
+      ]
+    },
+    {
+      "source_type": "post",
+      "source_id": "0c0af87a-89de-435d-94e2-745f0a203a0e",
+      "title": "No filter needed \u00b7 waterfall",
+      "role": "exemplar",
+      "rationale": "The open stance matches the message and provides a distinct cool-weather palette.",
+      "preserve": "Natural gesture and simple visual hierarchy.",
+      "vary": "Setting and wording; keep the physical feeling of openness.",
+      "caution": "Check fine text over pale mist at phone size.",
+      "tags": [
+        "people",
+        "waterfall",
+        "cool palette",
+        "openness"
+      ]
+    },
+    {
+      "source_type": "post",
+      "source_id": "a113dee2-9113-434e-8b79-8e445ab08834",
+      "title": "You\u2019re learning \u00b7 lakeside",
+      "role": "exemplar",
+      "rationale": "A still moment expands the collection beyond celebration and comic characters.",
+      "preserve": "Quiet composition, spacious sky and compassionate wording.",
+      "vary": "Water, season, subject and pose.",
+      "caution": "Avoid implying every message must be euphoric.",
+      "tags": [
+        "people",
+        "calm",
+        "lake",
+        "learning"
+      ]
+    },
+    {
+      "source_type": "post",
+      "source_id": "a175696f-a499-405c-8d9a-a237f393d2f7",
+      "title": "Life\u2019s awesome \u00b7 living room",
+      "role": "exemplar",
+      "rationale": "An ordinary indoor scene makes everyday friendship part of the visual vocabulary.",
+      "preserve": "Relaxed group arrangement and uncluttered wall for type.",
+      "vary": "Room, activity and cast.",
+      "caution": "Preserve readable typography despite foreground clutter.",
+      "tags": [
+        "people",
+        "indoor",
+        "friendship",
+        "everyday"
+      ]
+    },
+    {
+      "source_type": "post",
+      "source_id": "c07f992b-2e80-4714-8a01-aaa5d86cc7e7",
+      "title": "Keep the joy alive \u00b7 beach run",
+      "role": "exemplar",
+      "rationale": "Movement and interaction support the sentiment without over-explaining it.",
+      "preserve": "Candid energy and a brief headline above the subjects.",
+      "vary": "Activity, landscape and cast.",
+      "caution": "Avoid overusing the same selfie viewpoint.",
+      "tags": [
+        "people",
+        "beach",
+        "motion",
+        "joy"
+      ]
+    },
+    {
+      "source_type": "post",
+      "source_id": "6f613000-eb4f-4ca2-95e1-cdd2adca6b24",
+      "title": "Through thick and thin \u00b7 shared meal",
+      "role": "exemplar",
+      "rationale": "A warm indoor meal gives the relationship message a concrete scene.",
+      "preserve": "Specific shared moment and direct supportive voice.",
+      "vary": "Relationship, meal, room and wording.",
+      "caution": "Do not force the same familiar address into every caption.",
+      "tags": [
+        "people",
+        "indoor",
+        "companionship",
+        "warm light"
+      ]
+    },
+    {
+      "source_type": "post",
+      "source_id": "888d7338-f647-476c-ac80-371581ce1bcb",
+      "title": "Take it slow \u00b7 outdoor rest",
+      "role": "exemplar",
+      "rationale": "The smaller text block and relaxed posture create a calmer pace.",
+      "preserve": "Gentle voice and breathing room around the message.",
+      "vary": "Subject, setting and framing.",
+      "caution": "Check the smaller setup text at lock-screen size.",
+      "tags": [
+        "people",
+        "calm",
+        "nature",
+        "rest"
+      ]
+    },
+    {
+      "source_type": "post",
+      "source_id": "a9f60aa7-5304-4310-82f1-9119dfdc2cce",
+      "title": "Exactly on time \u00b7 desert road",
+      "role": "exemplar",
+      "rationale": "A quiet symmetrical road and pastel horizon support reassurance with restraint.",
+      "preserve": "Short compassionate statement and restrained palette.",
+      "vary": "Location and subject while keeping the mood.",
+      "caution": "Avoid a formula of placing every person under centered text.",
+      "tags": [
+        "people",
+        "desert",
+        "pastel",
+        "reassurance"
+      ]
+    },
+    {
+      "source_type": "post",
+      "source_id": "a83d8ec5-c85a-4ac9-897d-ef610e0a3b7f",
+      "title": "Doing great \u00b7 rooftop",
+      "role": "exemplar",
+      "rationale": "The clear gesture and clean sky produce an instantly legible positive message.",
+      "preserve": "Simple hierarchy and expressive body language.",
+      "vary": "Setting, gesture, cast and exact phrase.",
+      "caution": "Check sentence variety across a batch of pep talks.",
+      "tags": [
+        "people",
+        "city",
+        "encouragement",
+        "daylight"
+      ]
+    },
+    {
+      "source_type": "post",
+      "source_id": "4ccd7a8a-1b54-437e-8962-5fb42ad1967e",
+      "title": "You\u2019re alive \u00b7 bear and car",
+      "role": "exemplar",
+      "rationale": "An unexpected pairing supplies novelty while the layout stays simple.",
+      "preserve": "Surprising but readable visual idea and concise headline.",
+      "vary": "Animal, prop and palette; the specific car is not a rule.",
+      "caution": "Use surreal scenes sparingly so novelty stays effective.",
+      "tags": [
+        "animals",
+        "surreal",
+        "car",
+        "sunset"
+      ]
+    },
+    {
+      "source_type": "post",
+      "source_id": "34385c7b-30e8-45af-b736-f319185b4267",
+      "title": "It adds up \u00b7 roadside stop",
+      "role": "exemplar",
+      "rationale": "A road-trip scene offers movement and possibility without reusing animal humor.",
+      "preserve": "Candid outdoor framing and clean hierarchy.",
+      "vary": "Vehicle, setting, person and message.",
+      "caution": "Keep the background from becoming more important than the message.",
+      "tags": [
+        "people",
+        "travel",
+        "progress",
+        "warm light"
+      ]
+    },
+    {
+      "source_type": "post",
+      "source_id": "0a7388f0-bc90-4a6f-8941-73a51e418b6a",
+      "title": "Again homie \u00b7 bear in flowers",
+      "role": "exemplar",
+      "rationale": "The flowers provide a literal sensory link to the reminder and a different color palette.",
+      "preserve": "A concrete visual-message connection and compact wording.",
+      "vary": "Creature, flowers, location and wording.",
+      "caution": "Do not require a literal illustration for every abstract message.",
+      "tags": [
+        "animals",
+        "flowers",
+        "pink",
+        "calm"
+      ]
+    },
+    {
+      "source_type": "post",
+      "source_id": "152f1ef2-abd5-4d7f-9ce9-dbc09918ad00",
+      "title": "It gets better \u00b7 front porch",
+      "role": "exemplar",
+      "rationale": "A domestic outdoor scene offers grounded warmth outside the usual scenic locations.",
+      "preserve": "Ordinary companionship and concise reassurance.",
+      "vary": "People, house and time of day.",
+      "caution": "Type overlaps architectural lines; inspect at small size.",
+      "tags": [
+        "people",
+        "everyday",
+        "companionship",
+        "reassurance"
+      ]
+    },
+    {
+      "source_type": "post",
+      "source_id": "a0429292-a236-45ce-adb5-ab3825c084a3",
+      "title": "Stay grateful \u00b7 curious cow",
+      "role": "exemplar",
+      "rationale": "A tilted close-up creates personality from a simple scene.",
+      "preserve": "Offbeat framing and a short direct reminder.",
+      "vary": "Species, angle, location and wording.",
+      "caution": "Do not recycle the same cow image or catchphrase.",
+      "tags": [
+        "animals",
+        "gratitude",
+        "wide angle",
+        "sky"
+      ]
+    },
+    {
+      "source_type": "post",
+      "source_id": "9b0c6742-fe00-431f-9211-51e2cc3edc1e",
+      "title": "Repetition watch \u00b7 blue-sky goats",
+      "role": "near_miss",
+      "rationale": "Several sampled posts reuse goats, open blue sky and the same \u201clife\u2019s goated\u201d payoff. This is a batch-diversity counterexample, not a claim that this individual post is bad.",
+      "preserve": "The playful action and quick readability.",
+      "vary": "Change message, species, setting and composition together.",
+      "caution": "Avoid selecting this beside the other jumping-goat variations.",
+      "tags": [
+        "repetition",
+        "animals",
+        "blue sky"
+      ]
+    },
+    {
+      "source_type": "post",
+      "source_id": "bc6ac2cc-38e5-4145-bc96-aca40ba79d63",
+      "title": "Copy watch \u00b7 vague hype",
+      "role": "near_miss",
+      "rationale": "\u201cMaking chaos look easy\u201d is visually readable, but the setup and payoff can feel like generic praise rather than a useful reminder.",
+      "preserve": "The candid group moment and vivid setting.",
+      "vary": "Write a more specific emotional takeaway.",
+      "caution": "This is a subjective writing concern for you to confirm.",
+      "tags": [
+        "writing",
+        "generic praise",
+        "people"
+      ]
+    },
+    {
+      "source_type": "post",
+      "source_id": "baff04f0-7579-4d74-b8bc-2ea43c660232",
+      "title": "Typography miss \u00b7 overlapping lines",
+      "role": "near_miss",
+      "rationale": "The small setup visibly collides with the bold headline above the cow.",
+      "preserve": "The memorable character and soft horizon.",
+      "vary": "Reposition the type and change the message as needed.",
+      "caution": "Reject overlapping text regardless of how appealing the background is.",
+      "tags": [
+        "typography",
+        "overlap",
+        "animals"
+      ]
+    },
+    {
+      "source_type": "post",
+      "source_id": "f86025a0-5059-4ec8-9b27-e4ed43955b51",
+      "title": "Typography miss \u00b7 dark-on-dark",
+      "role": "near_miss",
+      "rationale": "The small line overlaps the headline and black lettering sits over a deep blue sky.",
+      "preserve": "The friendly foreground subject.",
+      "vary": "Use a clearer text area and increase line separation.",
+      "caution": "Check contrast and line spacing at phone size.",
+      "tags": [
+        "typography",
+        "contrast",
+        "overlap"
+      ]
+    },
+    {
+      "source_type": "post",
+      "source_id": "513fe6b6-2635-403a-b5f3-79458df58611",
+      "title": "Readability watch \u00b7 fireworks",
+      "role": "near_miss",
+      "rationale": "Fireworks and bright smoke run through the white lettering, making the message compete with the background.",
+      "preserve": "The celebration and candid expression.",
+      "vary": "Move the text or use a quieter area of the scene.",
+      "caution": "Do not treat a busy bright background as automatically suitable for white text.",
+      "tags": [
+        "typography",
+        "contrast",
+        "night"
+      ]
+    },
+    {
+      "source_type": "post",
+      "source_id": "323dda4c-af82-491b-8225-0eccb393a6bf",
+      "title": "Tone watch \u00b7 mortality hook",
+      "role": "near_miss",
+      "rationale": "The message about people not waking up introduces a grim comparison, unlike the gentler encouragement elsewhere in the sample.",
+      "preserve": "The idea of appreciating an ordinary day.",
+      "vary": "Use appreciation without guilt or fear as the hook.",
+      "caution": "A proposed tone boundary, not an established user preference.",
+      "tags": [
+        "writing",
+        "tone",
+        "comparison"
+      ]
+    },
+    {
+      "source_type": "background",
+      "source_id": "3cdac19c-3992-4e95-9ab5-95097fe7d3c4",
+      "title": "Snowy companionship",
+      "role": "exemplar",
+      "rationale": "A paired winter scene with a large clear sky.",
+      "preserve": "Companionship, crisp cool palette and space for lettering.",
+      "vary": "People, weather, mountain and camera distance.",
+      "caution": "Avoid placing pale type over bright snow.",
+      "tags": [
+        "people",
+        "winter",
+        "companionship"
+      ]
+    },
+    {
+      "source_type": "background",
+      "source_id": "907fe97a-c1ad-436b-846c-1dbd91023120",
+      "title": "Playful wide-angle dog",
+      "role": "exemplar",
+      "rationale": "An expressive close-up with strong lens character.",
+      "preserve": "An immediate emotional hook and clean sky.",
+      "vary": "Species, beach, prop and camera angle.",
+      "caution": "Keep lettering away from the face.",
+      "tags": [
+        "animals",
+        "beach",
+        "wide angle"
+      ]
+    },
+    {
+      "source_type": "background",
+      "source_id": "1c77ebbb-24cb-40dc-a8a6-2c7367f7c0d8",
+      "title": "Quiet mountain space",
+      "role": "exemplar",
+      "rationale": "A solitary outdoor moment offers breathing room for a calm message.",
+      "preserve": "Open upper image area and restrained visual mood.",
+      "vary": "Location, pose and clothing.",
+      "caution": "The subject is small; confirm the crop still reads well.",
+      "tags": [
+        "people",
+        "mountains",
+        "calm"
+      ]
+    },
+    {
+      "source_type": "background",
+      "source_id": "e2f5242d-9518-46df-9122-9eebebe922e1",
+      "title": "Movement by the waterfall",
+      "role": "exemplar",
+      "rationale": "An action pose gives the collection a different visual rhythm.",
+      "preserve": "Body movement and environmental texture.",
+      "vary": "Activity, subject and landscape.",
+      "caution": "Busy water and bright sky need deliberate text placement.",
+      "tags": [
+        "people",
+        "waterfall",
+        "motion"
+      ]
+    },
+    {
+      "source_type": "background",
+      "source_id": "50905eae-8f3b-4d2a-88e5-bc2a805aee12",
+      "title": "Warm forest journey",
+      "role": "exemplar",
+      "rationale": "Backlit foliage and a shared walk can ground a progress message.",
+      "preserve": "Warm directional light and interaction.",
+      "vary": "Cast, season and route.",
+      "caution": "Keep foliage from competing with the caption.",
+      "tags": [
+        "people",
+        "forest",
+        "warm light"
+      ]
+    },
+    {
+      "source_type": "background",
+      "source_id": "60a9f93a-2ee1-4705-9ea3-bd4a52c82a2d",
+      "title": "Play on the court",
+      "role": "exemplar",
+      "rationale": "A lively basketball moment adds everyday action and friendship.",
+      "preserve": "Low viewpoint, movement and warm light.",
+      "vary": "Sport, setting and cast.",
+      "caution": "Check hands, ball and limbs before accepting the final render.",
+      "tags": [
+        "people",
+        "sport",
+        "motion"
+      ]
+    },
+    {
+      "source_type": "background",
+      "source_id": "d05698b1-2c29-444b-9d98-80bbcf20f76a",
+      "title": "Quiet rooftop horizon",
+      "role": "exemplar",
+      "rationale": "A still figure and city skyline support reflective messages.",
+      "preserve": "Pastel palette, breathing room and a calm pose.",
+      "vary": "City, time and person.",
+      "caution": "Avoid repeating this same horizon for several posts.",
+      "tags": [
+        "people",
+        "city",
+        "pastel"
+      ]
+    },
+    {
+      "source_type": "background",
+      "source_id": "4fe7349f-0307-4873-a307-2b20efbeff26",
+      "title": "Expressive sunset close-up",
+      "role": "exemplar",
+      "rationale": "A strong expression provides an energetic counterpoint to calmer scenes.",
+      "preserve": "Candid framing and expressive character.",
+      "vary": "Cast, environment and emotional register.",
+      "caution": "The face and skyline are busy; reserve a clear area for type.",
+      "tags": [
+        "people",
+        "city",
+        "energy"
+      ]
+    }
+  ]
+}

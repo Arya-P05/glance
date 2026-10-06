@@ -439,6 +439,7 @@ export default function CarouselWorkspace({ mode }: { mode: "queue" | "editor" }
                 <Btn
                   label={builder.status === "failed" ? "Retry post" : "Post now"}
                   onPress={() => postNow()}
+                  variant="outline"
                   loading={busy}
                   disabled={!instagramStatus?.publishEnabled || builder.items.length !== CAROUSEL_SIZE || builder.status === "posting" || builder.status === "posted"}
                 />

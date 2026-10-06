@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Platform, TextInput, useWindowDimensions,
 } from "react-native";
+import { useRouter } from "expo-router";
 import { NavArrowLeft, NavArrowRight, RefreshDouble, Trash } from "iconoir-react-native";
 import { API_BASE, api, Draft } from "../lib/api";
 import { Btn } from "../components/Btn";
@@ -31,6 +32,7 @@ function backgroundGridImageUri(background: Draft) {
 }
 
 export default function BackgroundsScreen() {
+  const router = useRouter();
   const { width } = useWindowDimensions();
   const [backgrounds, setBackgrounds] = useState<Draft[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,6 +48,16 @@ export default function BackgroundsScreen() {
   );
   const gridColumns = Math.max(1, Math.floor((gridViewportWidth + GRID_GAP) / (MIN_GRID_CELL + GRID_GAP)));
   const gridCell = Math.floor((gridViewportWidth - GRID_GAP * (gridColumns - 1)) / gridColumns);
+
+  async function addReference(background: Draft) {
+    if (!background.dbId) return;
+    setBusy(true);
+    try {
+      await api.addReferences("background", [background.dbId]);
+      router.push("/references");
+    } catch (e: any) { setError(e.message); }
+    finally { setBusy(false); }
+  }
 
   async function load() {
     try {
@@ -195,6 +207,7 @@ export default function BackgroundsScreen() {
             {reviewIdx + 1} <Text style={{ color: C.textMuted }}>/ {backgrounds.length}</Text>
           </Text>
           <View style={{ flex: 1 }} />
+          <Btn label="Add to references" onPress={() => addReference(background)} loading={busy} disabled={!background.dbId} small variant="outline" />
           <Pressable
             onPress={previousBackground}
             style={[styles.navArrow, reviewIdx === 0 && styles.navArrowDisabled]}

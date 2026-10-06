@@ -85,6 +85,16 @@ export default function LibraryScreen() {
     }
   }
 
+  async function addSelectedReferences() {
+    setBusy(true);
+    try {
+      await api.addReferences("post", selectedImages.map(image => image.id));
+      setSelected(new Set());
+      router.push("/references");
+    } catch (e: any) { setError(e.message); }
+    finally { setBusy(false); }
+  }
+
   function createCarouselFromSelection() {
     const activeSelected = selectedImages.filter(i => i.status === "active");
     if (activeSelected.length !== 5 || activeSelected.length !== selectedImages.length) {
@@ -126,6 +136,7 @@ export default function LibraryScreen() {
         <View style={{ flex: 1 }} />
         {selected.size > 0 && (
           <>
+            <Btn label="Add to references" onPress={addSelectedReferences} loading={busy} disabled={selected.size > 50} small variant="outline" />
             {filter === "active" && (
               <Btn
                 label={canCreateCarousel ? "Create carousel" : `${selectedImages.length}/5 for carousel`}

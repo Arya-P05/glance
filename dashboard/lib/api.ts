@@ -18,6 +18,11 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  references: () => request<{ references: CreativeReference[] }>("/api/references"),
+  addReferences: (sourceType: "post" | "background", sourceIds: string[]) =>
+    request<{ added: number; existing: number }>("/api/references", { method: "POST", body: JSON.stringify({ sourceType, sourceIds }) }),
+  updateReference: (id: string, patch: Partial<Pick<CreativeReference, "title" | "role" | "review_status" | "user_notes" | "benchmark">>) =>
+    request<{ reference: CreativeReference }>(`/api/references/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
   stats: () => request<Stats>("/api/stats"),
 
   images: () => request<{ items: StorageImage[] }>("/api/images"),
@@ -373,4 +378,23 @@ export interface ImportResult {
   ok: boolean;
   storagePath?: string;
   error?: string;
+}
+
+export interface CreativeReference {
+  id: string;
+  source_type: "post" | "background";
+  source_id: string;
+  source_caption: string | null;
+  title: string;
+  role: "exemplar" | "near_miss";
+  review_status: "pending" | "accepted" | "rejected";
+  suggested_by: "assistant" | "user";
+  rationale: string;
+  preserve: string;
+  vary: string;
+  caution: string;
+  tags: string[];
+  user_notes: string;
+  benchmark: boolean;
+  publicUrl: string;
 }
