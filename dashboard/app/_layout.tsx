@@ -17,6 +17,7 @@ const NAV: { href: string; label: string; Icon: NavIcon }[] = [
   { href: "/backgrounds",label: "Backgrounds", Icon: MediaImage },
   { href: "/approved-backgrounds", label: "Approved", Icon: Check },
   { href: "/drafts",     label: "Drafts",      Icon: Frame },
+  { href: "/references", label: "References", Icon: AlbumCarousel },
   { href: "/library",    label: "Library",     Icon: MediaImage },
   { href: "/carousels",  label: "Post queue",   Icon: List },
   { href: "/carousel-editor", label: "Create carousel", Icon: AlbumCarousel },
