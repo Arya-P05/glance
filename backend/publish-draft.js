@@ -17,6 +17,7 @@ function postStoragePathForDraft(draft) {
 
 function mediumDraftStoragePath(draft) {
   const metadata = draft.metadata && typeof draft.metadata === "object" ? draft.metadata : {};
+  if (metadata.mediumRejected === true) return null;
   return typeof metadata.mediumStoragePath === "string" && metadata.mediumStoragePath
     ? metadata.mediumStoragePath
     : null;
@@ -95,6 +96,7 @@ async function upsertPostAndMarkPublished(supabase, draft, storagePath, mediumSt
       instagram_id: `generated_${draft.name}`,
       storage_path: storagePath,
       medium_storage_path: mediumStoragePath,
+      medium_eligible: draft.metadata?.mediumRejected !== true,
       caption: captionText(draft.caption),
       posted_at: null,
       status,
