@@ -1,7 +1,7 @@
 import {loadRunInspiration, validateInspirationIds, runInspirationImages, isDistinctFromInspiration} from './run-inspiration.js';
 import { visualSetupKeys } from './poster-concepts.js';
 import { feedbackHash } from './generation-feedback.js';
-import { rememberGeneration } from './generation-history.js';
+import { rememberGeneration, recentSceneAvoidance } from './generation-history.js';
 /**
  * Content generator — prompts or raw background images.
  *
@@ -1124,11 +1124,8 @@ async function main() {
     console.log("");
   }
 
-  const recentSceneKeys = new Set((taste.recentGenerations || []).flatMap(item => [...sceneDedupKeys(item.scene)]));
-  // Preserve exact historical concepts, but reserve broad-family bans for this batch.
-  const avoidSceneSignatures = args.reviewBatch
-    ? new Set([...recentSceneKeys].filter(key => !key.startsWith("family:")))
-    : recentSceneKeys;
+  // Historical cooldown applies to concepts/setups, not whole setting categories.
+  const avoidSceneSignatures = recentSceneAvoidance(taste.recentGenerations);
 
   let completed = 0;
   let attempted = 0;
@@ -1165,7 +1162,7 @@ async function main() {
         // Review batches use the director on every item; normal generation keeps its existing variety logic.
         scene = await generateSceneFromDirector({client:openai,model:args.promptModel,avoidSignatures:avoidSceneSignatures,taste,batchScenes});
         if (!isAllowedScene(scene, avoidSceneSignatures)) {
-          console.log(`${prefix} repeated scene; trying another concept`);
+          console.log(`${prefix} repeated scene (${[...sceneDedupKeys(scene)].filter(key=>avoidSceneSignatures.has(key)).join(", ")}); trying another concept`);
           continue;
         }
       } else {
