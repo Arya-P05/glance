@@ -1,3 +1,5 @@
+import { feedbackHash } from './generation-feedback.js';
+import { rememberGeneration } from './generation-history.js';
 /**
  * Content generator — prompts or raw background images.
  *
@@ -429,52 +431,6 @@ function responseText(response) {
     }
   }
   return chunks.join("\n");
-}
-
-async function loadRecentScenesFromDb(supabase, limit = 40) {
-  if (!supabase) return new Set();
-  const keys = new Set();
-
-  const { data: drafts } = await supabase
-    .from("drafts")
-    .select("scene")
-    .not("scene", "is", null)
-    .order("created_at", { ascending: false })
-    .limit(limit);
-
-  for (const row of drafts ?? []) {
-    if (row.scene && typeof row.scene === "object") {
-      for (const key of sceneDedupKeys(row.scene)) keys.add(key);
-    }
-  }
-
-  const { data: backgrounds } = await supabase
-    .from("backgrounds")
-    .select("scene")
-    .not("scene", "is", null)
-    .order("created_at", { ascending: false })
-    .limit(limit);
-
-  for (const row of backgrounds ?? []) {
-    if (row.scene && typeof row.scene === "object") {
-      for (const key of sceneDedupKeys(row.scene)) keys.add(key);
-    }
-  }
-
-  const { data: prompts } = await supabase
-    .from("prompts")
-    .select("scene")
-    .not("scene", "is", null)
-    .order("created_at", { ascending: false })
-    .limit(limit);
-
-  for (const row of prompts ?? []) {
-    if (row.scene && typeof row.scene === "object") {
-      for (const key of sceneDedupKeys(row.scene)) keys.add(key);
-    }
-  }
-
-  return keys;
 }
 
 async function generateSceneFromDirector({ client, model, avoidSignatures, taste, batchScenes = [] }) {
@@ -1113,7 +1069,7 @@ async function main() {
   } catch {
     console.warn("Supabase not configured — drafts/prompts won't be saved to DB");
   }
-  const taste = await loadTaste(supabase);
+  let taste = await loadTaste(supabase);
   if (args.reviewBatch && !positiveReferences(taste).length) throw new Error("Accept some positive references before generating a review batch");
   const publicUrl = path => supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
   console.log(`Reviewed taste: ${positiveReferences(taste).length} positive references; snapshot ${taste.hash.slice(0,12)}`);
@@ -1161,7 +1117,7 @@ async function main() {
     console.log("");
   }
 
-  const recentSceneKeys = supabase ? await loadRecentScenesFromDb(supabase) : new Set();
+  const recentSceneKeys = new Set((taste.recentGenerations || []).flatMap(item => [...sceneDedupKeys(item.scene)]));
   // Preserve exact historical concepts, but reserve broad-family bans for this batch.
   const avoidSceneSignatures = args.reviewBatch
     ? new Set([...recentSceneKeys].filter(key => !key.startsWith("family:")))
@@ -1326,6 +1282,8 @@ async function main() {
         }
       }
 
+      const recentGenerations=rememberGeneration(taste.recentGenerations || [],{name,scene,image_prompt:scenePrompt,created_at:draftMetadata.generatedAt});
+      taste = {...taste,recentGenerations,hash:feedbackHash({previousHash:taste.hash,recentGenerations})};
       saved++;
       completed++;
       console.log(`${prefix} → ${paths.imagePath}`);
