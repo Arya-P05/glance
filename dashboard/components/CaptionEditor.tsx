@@ -37,9 +37,10 @@ type Props = {
   initialLayout?: CaptionLayoutInput | null;
   initialMediumLayout?: MediumCaptionLayoutInput | null;
   onCaptionChange?: (caption: CaptionText) => void;
-  onApply: (layout: CaptionLayout, mediumLayout: MediumCaptionLayout) => Promise<void>;
+  onApply: (layout: CaptionLayout, mediumLayout: MediumCaptionLayout, mediumRejected?: boolean, mediumReason?: string) => Promise<void>;
   onCancel: () => void;
   applyLabel?: string;
+  allowMediumRejection?: boolean;
   placementReason?: string;
   onPlacementReasonChange?: (value:string)=>void;
 };
@@ -53,6 +54,7 @@ export function CaptionEditor({
   onApply,
   onCancel,
   applyLabel = "Apply to poster",
+  allowMediumRejection = false,
   placementReason,
   onPlacementReasonChange,
 }: Props) {
@@ -60,6 +62,8 @@ export function CaptionEditor({
   const [mediumLayout, setMediumLayout] = useState<MediumCaptionLayout>(() =>
     normalizeMediumCaptionLayout(initialMediumLayout, initialLayout ?? DEFAULT_MEDIUM_CAPTION_LAYOUT)
   );
+  const [mediumRejected, setMediumRejected] = useState(false);
+  const [mediumReason, setMediumReason] = useState("");
   const [saving, setSaving] = useState(false);
   const [draggingText, setDraggingText] = useState(false);
   const [draggingMediumText, setDraggingMediumText] = useState(false);
@@ -188,7 +192,7 @@ export function CaptionEditor({
   async function handleApply() {
     setSaving(true);
     try {
-      await onApply(layout, mediumLayout);
+      await onApply(layout, mediumLayout, mediumRejected, mediumReason);
     } finally {
       setSaving(false);
     }
@@ -295,7 +299,7 @@ export function CaptionEditor({
           </View>
 
           {onPlacementReasonChange && <View style={{gap:8,padding:12}}>
-            <Text style={{color:C.textPrimary,fontWeight:"600"}}>{JSON.stringify(layout)===JSON.stringify(normalizeCaptionLayout(initialLayout)) && JSON.stringify(mediumLayout)===JSON.stringify(normalizeMediumCaptionLayout(initialMediumLayout,initialLayout ?? DEFAULT_MEDIUM_CAPTION_LAYOUT)) ? "Keep placement as is" : "Save adjusted placement"}</Text>
+            <Text style={{color:C.textPrimary,fontWeight:"600"}}>{JSON.stringify(layout)===JSON.stringify(normalizeCaptionLayout(initialLayout)) && (mediumRejected || JSON.stringify(mediumLayout)===JSON.stringify(normalizeMediumCaptionLayout(initialMediumLayout,initialLayout ?? DEFAULT_MEDIUM_CAPTION_LAYOUT))) ? "Keep placement as is" : "Save adjusted placement"}</Text>
             <TextInput accessibilityLabel="Placement feedback" value={placementReason} onChangeText={onPlacementReasonChange} placeholder="Optional: moved off the face, better contrast…" placeholderTextColor={C.textMuted} multiline maxLength={1000} style={{color:C.textPrimary,padding:12,borderWidth:1,borderColor:C.border,borderRadius:8}} />
           </View>}
           <View style={styles.actions}>
@@ -305,6 +309,13 @@ export function CaptionEditor({
         </View>
 
         <View style={styles.widgetCol}>
+          {allowMediumRejection && <View style={{gap:10, marginBottom:16}}>
+            <Btn label={mediumRejected ? "Undo wide rejection" : "Reject for wide widgets"} variant="ghost" disabled={saving} onPress={() => setMediumRejected(value => !value)} />
+            {mediumRejected && <>
+              <Text style={{color:C.textSecondary}}>Square version kept. The wide version will be excluded when you save to drafts.</Text>
+              <TextInput accessibilityLabel="Wide widget rejection reason" value={mediumReason} onChangeText={setMediumReason} placeholder="Optional: crop cuts off the subject…" placeholderTextColor={C.textMuted} maxLength={1000} multiline style={{color:C.textPrimary,padding:12,borderWidth:1,borderColor:C.border,borderRadius:8}} />
+            </>}
+          </View>}
           <View style={styles.panelHeaderRow}>
             <View>
               <Text style={styles.sectionTitle}>Medium</Text>
