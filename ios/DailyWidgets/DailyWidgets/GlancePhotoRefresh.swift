@@ -8,6 +8,7 @@ enum GlancePhotoRefresh {
         let id: UUID
         let storage_path: String
         let medium_storage_path: String?
+    let medium_eligible: Bool?
         let caption: String?
     }
 
@@ -17,27 +18,33 @@ enum GlancePhotoRefresh {
     static func fetchAndWriteSharedSnapshot() async -> Bool {
         do {
             let client = SupabaseConfig.makeClient()
-            let rows: [RandomPostRow] = try await client.rpc("get_random_post").execute().value
+            let rows: [RandomPostRow] = try await client.rpc("get_widget_post", params: ["widget_format": "square"]).execute().value
             guard let row = rows.first else { return false }
 
             guard let data = await loadResizedJPEGData(storagePath: row.storage_path) else { return false }
-            let mediumData: Data
-            if let mediumStoragePath = row.medium_storage_path,
-               mediumStoragePath != row.storage_path,
+            let mediumRows: [RandomPostRow] = row.medium_eligible == false
+                ? try await client.rpc("get_widget_post", params: ["widget_format": "medium"]).execute().value
+                : [row]
+            let mediumRow = mediumRows.first
+            let mediumData: Data?
+            if let mediumRow,
+               let mediumStoragePath = mediumRow.medium_storage_path ?? Optional(mediumRow.storage_path),
                let loadedMediumData = await loadResizedJPEGData(storagePath: mediumStoragePath) {
                 mediumData = loadedMediumData
             } else {
-                mediumData = data
+                mediumData = row.medium_eligible == false ? nil : data
             }
 
             SharedPhotoSnapshot.writeJPEGData(data, caption: row.caption, postId: row.id)
-            SharedPhotoSnapshot.writeJPEGData(
-                mediumData,
-                caption: row.caption,
-                postId: row.id,
-                variant: .medium,
-                recordRecent: false
-            )
+            if let mediumData, let mediumRow {
+                SharedPhotoSnapshot.writeJPEGData(
+                    mediumData,
+                    caption: mediumRow.caption,
+                    postId: mediumRow.id,
+                    variant: .medium,
+                    recordRecent: false
+                )
+            }
             SharedPhotoSnapshot.recordMainAppWroteSnapshot()
             SharedPhotoSnapshot.markNextWidgetTimelineReloadUsesSharedSnapshotOnly()
             return true
