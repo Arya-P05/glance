@@ -41,6 +41,8 @@ export default function BackgroundsScreen() {
   const [screen, setScreen] = useState<Screen>("grid");
   const [reviewIdx, setReviewIdx] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [reviewReason, setReviewReason] = useState("");
+  useEffect(() => setReviewReason(""), [backgrounds[reviewIdx]?.id]);
   const [error, setError] = useState<string | null>(null);
   const [tweakInstruction, setTweakInstruction] = useState("");
   const discardLockRef = useRef(false);
@@ -92,7 +94,7 @@ export default function BackgroundsScreen() {
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [screen, reviewIdx, backgrounds, busy]);
+  }, [screen, reviewIdx, backgrounds, busy, reviewReason]);
 
   function openReview(startIdx = 0) {
     setReviewIdx(startIdx);
@@ -120,7 +122,7 @@ export default function BackgroundsScreen() {
     const id = background.id;
     setBusy(true);
     try {
-      await api.discardBackground({ id, dbId: background.dbId });
+      await api.discardBackground({ id, dbId: background.dbId, reason:reviewReason });
       const nextLength = Math.max(0, backgrounds.length - 1);
       setBackgrounds(prev => prev.filter(b => b.id !== id));
       if (nextLength === 0) setScreen("grid");
@@ -143,7 +145,7 @@ export default function BackgroundsScreen() {
     const id = background.id;
     setBusy(true);
     try {
-      await api.stageBackground({ id, dbId: background.dbId });
+      await api.stageBackground({ id, dbId: background.dbId, reason:reviewReason });
       const nextLength = Math.max(0, backgrounds.length - 1);
       setBackgrounds(prev => prev.filter(item => item.id !== id));
       if (nextLength === 0) setScreen("grid");
@@ -247,7 +249,9 @@ export default function BackgroundsScreen() {
           </View>
 
           <View style={styles.metaPanel}>
-            <Text style={styles.metaTitle}>Metadata</Text>
+            <Text style={styles.metaTitle}>Background review</Text>
+            <Text style={styles.metaValueMuted}>Judge the image only. Caption and placement decisions are saved separately.</Text>
+            <TextInput accessibilityLabel="Background feedback" placeholder="Optional: awkward pose, unclear subject, love the lighting…" placeholderTextColor={C.textMuted} value={reviewReason} onChangeText={setReviewReason} maxLength={1000} multiline style={{color:C.textPrimary,padding:12,borderWidth:1,borderColor:C.border,borderRadius:8,minHeight:70}} />
             <View style={styles.metaSection}>
               <Text style={styles.metaLabel}>Status</Text>
               <Text style={styles.metaMissing}>Pending background</Text>
@@ -313,7 +317,7 @@ export default function BackgroundsScreen() {
           <View style={{ flex: 1 }} />
           <ActionKey label="Approve background" keyHint="A" onPress={approveCurrent} loading={busy} variant="primary" />
           <ActionKey label="Skip" keyHint="S" onPress={skipCurrent} variant="outline" />
-          <ActionKey keyHint="D" onPress={discardCurrent} loading={busy} variant="danger"
+          <ActionKey label="Reject background" keyHint="D" onPress={discardCurrent} loading={busy} variant="danger"
             icon={<Trash color="#fff" width={20} height={20} strokeWidth={1.8} />} />
           <View style={{ flex: 1 }} />
         </View>
