@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, ScrollView, StyleSheet, TextInput, Pressable, Switch } from "react-native";
-import { api, GenerateOptions } from "../lib/api";
+import { View, Text, ScrollView, StyleSheet, TextInput, Pressable, Switch, Image } from "react-native";
+import {useLocalSearchParams, useRouter} from "expo-router";
+import { api, GenerateOptions, StorageImage } from "../lib/api";
 import { JobLog } from "../components/JobLog";
 import { Btn } from "../components/Btn";
 import { C, S } from "../lib/theme";
@@ -111,6 +112,16 @@ function clearSavedGenerateJob() {
 }
 
 export default function GenerateScreen() {
+  const router=useRouter();
+  const {inspiration}=useLocalSearchParams<{inspiration?:string}>();
+  const [inspirationItems,setInspirationItems]=useState<StorageImage[]>([]);
+  const inspirationIds=(inspiration || "").split(",").filter(Boolean);
+  useEffect(()=>{
+    let cancelled=false;
+    setInspirationItems([]);
+    if(inspiration) api.images().then(({items})=>{if(!cancelled)setInspirationItems(items.filter(item=>inspiration.split(",").includes(item.id)));}).catch(()=>{});
+    return ()=>{cancelled=true;};
+  },[inspiration]);
   const [count, setCount] = useState("5");
   const [mode, setMode] = useState<Mode>("images");
   const [size, setSize] = useState<Size>("1024x1024");
@@ -191,6 +202,7 @@ export default function GenerateScreen() {
     clearSavedGenerateJob();
     try {
       const opts: GenerateOptions = {
+        inspirationIds,
         count: parseInt(count, 10) || 5,
         mode,
         model,
@@ -210,6 +222,8 @@ export default function GenerateScreen() {
         styleNotes: styleNotes.trim() || undefined,
       };
       const { jobId: id } = await api.generate(opts);
+      router.setParams({inspiration:undefined});
+      setInspirationItems([]);
       setJobId(id);
       saveGenerateJob(id, mode);
     } catch (e: any) {
@@ -226,6 +240,18 @@ export default function GenerateScreen() {
         Create background candidates using OpenAI
       </Text>
 
+      {inspirationIds.length > 0 && <View style={{padding:16,gap:12,marginBottom:24,borderWidth:1,borderColor:C.border,borderRadius:12}}>
+        <Text style={S.label}>Inspiration for this run · {inspirationIds.length}/5</Text>
+        <Text style={S.body}>Borrow the mood, lighting and texture. Create new subjects, scenes and compositions.</Text>
+        <View style={{flexDirection:"row",gap:10,flexWrap:"wrap"}}>
+          {inspirationItems.map(item=><View key={item.id} style={{gap:6}}>
+            <Image source={{uri:item.publicUrl}} style={{width:90,height:90,borderRadius:8}} />
+            <Btn label="Remove" variant="ghost" small onPress={()=>router.setParams({inspiration:inspirationIds.filter(id=>id!==item.id).join(",") || undefined})} />
+          </View>)}
+        </View>
+        <Btn label="Clear inspiration" variant="ghost" small onPress={()=>router.setParams({inspiration:undefined})} />
+        <Text style={S.body}>Used once when you start this run. Your permanent references stay unchanged.</Text>
+      </View>}
       {/* Mode selector */}
       <Text style={[S.label, { marginBottom: 10 }]}>Pipeline Mode</Text>
       <View style={styles.modeGrid}>
