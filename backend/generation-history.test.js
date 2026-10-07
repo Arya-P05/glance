@@ -1,3 +1,5 @@
+import {recentSceneAvoidance} from './generation-history.js';
+import {sceneDedupKeys} from './poster-concepts.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {loadGenerationHistory,rememberGeneration,generationHistoryInstructions} from './generation-history.js';
@@ -19,4 +21,16 @@ test('history loader orders newest first, bounds reads, and surfaces database fa
  assert.deepEqual(calls,[['created_at',{ascending:false}],['name',{ascending:true}]]);
  query.limit=async()=>({error:{message:'offline'}});
  await assert.rejects(()=>loadGenerationHistory({from:()=>query}),/offline/);
+});
+
+test('historical setting categories remain available while exact concepts and ride setups stay blocked',()=>{
+ const original={conceptId:'cat-kitchen',subject:'a cat',action:'sleeping on the table',setting:'a kitchen'};
+ const ride={subject:'a teen',action:'laughing on a rollercoaster',setting:'amusement park'};
+ const blocked=recentSceneAvoidance([{scene:original},{scene:ride}]);
+ assert.ok(![...blocked].some(key=>key.startsWith('family:')));
+ assert.ok(blocked.has('concept:cat-kitchen'));
+ assert.ok(blocked.has('setup:amusement-ride-reaction'));
+ const fresh={conceptId:'dog-bookstore',subject:'a dog',action:'balancing a book',setting:'a bookstore'};
+ assert.ok([...sceneDedupKeys(fresh)].every(key=>!blocked.has(key)));
+ assert.ok([...sceneDedupKeys(original)].some(key=>blocked.has(key)));
 });
