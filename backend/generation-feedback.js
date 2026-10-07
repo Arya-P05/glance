@@ -14,10 +14,12 @@ export function approvalEvents(metadata, caption, selectedIndex, layout, mediumL
   const initialMedium = {...normalizeMediumCaptionLayout(metadata.mediumCaptionLayout || {},metadata.captionLayout || undefined),textColor:metadata.mediumCaptionLayout?.textColor || metadata.captionLayout?.textColor || '#050505'};
   const before = {layout:initialLayout,mediumLayout:initialMedium};
   const after = {layout:normalizeCaptionLayout(layout),mediumLayout:normalizeMediumCaptionLayout(mediumLayout,layout)};
+  if (reasons.mediumRejected) { delete before.mediumLayout; delete after.mediumLayout; }
   return [
     reviewEvent('caption',original && (original.smallText !== caption.smallText || original.bigText !== caption.bigText) ? 'edited' : 'accepted',
       {caption:original,optionIndex:selectedIndex},{caption},reasons.caption),
     reviewEvent('placement',JSON.stringify(before)===JSON.stringify(after) ? 'unchanged' : 'edited',before,after,reasons.placement),
+    ...(reasons.mediumRejected ? [reviewEvent("placement","rejected",{format:"medium",mediumLayout:normalizeMediumCaptionLayout(mediumLayout,layout)},{format:"medium",eligible:false},reasons.medium)] : []),
   ];
 }
 export function compileFeedback(events, excludedSources = new Set()) {
@@ -26,7 +28,7 @@ export function compileFeedback(events, excludedSources = new Set()) {
   for (const event of events) {
     if (excludedSources.has(event.source_id)) continue;
     const caption = event.before_value?.caption ?? event.after_value?.caption;
-    const key = `${event.source_id}:${event.stage}:${event.stage==='caption' ? captionSignature(caption || {}) : ''}`;
+    const key = `${event.source_id}:${event.stage}:${event.stage==='caption' ? captionSignature(caption || {}) : (event.before_value?.format || '')}`;
     if (!latest.has(key)) latest.set(key,event);
   }
   const stages = {background:[],caption:[],placement:[]};
