@@ -43,3 +43,15 @@ test('placement suggestions use only layout feedback and clamp all frame control
  assert.match(prompt,/move off face/);assert.doesNotMatch(prompt,/caption-private|background-private/);
  assert.equal(result.layout.xRatio,.92);assert.equal(result.layout.fontScale,1.8);assert.equal(result.mediumLayout.cropXRatio,1);assert.deepEqual(result.feedbackIds,['layout-1']);
 });
+test('wide rejection preserves square acceptance and is a separate feedback target',()=>{
+ const events=approvalEvents({captionOptions:[original]},original,0,layout,medium,{mediumRejected:true,medium:'subject cropped out'});
+ assert.equal(events[0].decision,'accepted');
+ assert.equal(events[1].decision,'unchanged');
+ assert.ok(events[1].after.layout);
+ assert.equal(events[1].after.mediumLayout,undefined);
+ assert.equal(events[2].decision,'rejected');
+ assert.deepEqual(events[2].after,{format:'medium',eligible:false});
+ const compiled=compileFeedback(events.map(e=>({source_id:'image',stage:e.stage,decision:e.decision,before_value:e.before,after_value:e.after})));
+ assert.equal(compiled.placement.length,2);
+ assert.equal(compiled.background.length,0);
+});
