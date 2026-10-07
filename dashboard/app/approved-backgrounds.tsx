@@ -220,7 +220,7 @@ export default function ApprovedBackgroundsScreen() {
     }
   }
 
-  async function saveToDrafts(layout: CaptionLayout, mediumLayout: MediumCaptionLayout) {
+  async function saveToDrafts(layout: CaptionLayout, mediumLayout: MediumCaptionLayout, mediumRejected = false, mediumReason = "") {
     const background = backgrounds[reviewIdx];
     if (!background || busy) return;
     setBusy(true);
@@ -240,7 +240,7 @@ export default function ApprovedBackgroundsScreen() {
         captionPrompt,
         layout,
         mediumLayout,
-        captionReason,placementReason,expectedCaption:originalOptions[selectedCaptionIndex],
+        captionReason,placementReason,mediumRejected,mediumReason,expectedCaption:originalOptions[selectedCaptionIndex],
       });
       setBackgrounds(prev => prev.filter(item => item.id !== background.id));
       closeEdit();
@@ -308,6 +308,7 @@ export default function ApprovedBackgroundsScreen() {
           <View style={styles.editorWrap}>
             <CaptionEditor
               key={background.id + editorRevision}
+              allowMediumRejection
               placementReason={placementReason}
               onPlacementReasonChange={setPlacementReason}
               backgroundUri={backgroundImageUri(background, 1200)}
