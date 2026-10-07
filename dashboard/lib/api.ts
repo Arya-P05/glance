@@ -267,6 +267,8 @@ export interface CaptionText {
 }
 
 export interface DraftMeta {
+  reviewBatchId?: string | null;
+  tasteSnapshot?: string | null;
   filename?: string;
   caption?: CaptionText;
   captionOptions?: CaptionText[] | null;

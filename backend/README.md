@@ -122,4 +122,12 @@ Select posts in Library and choose **Add to references**, or add a saved backgro
 
 Assistant analysis remains separate from user feedback. The initial curated collection can be inspected with `node seed-creative-references.js` and inserted with `node seed-creative-references.js --apply` from `backend/`. Its source IDs belong to the original Glance library; other databases must curate their own seed. Re-running the seed preserves existing reviews. Run `node --test creative-references.test.js` for validation tests.
 
-This foundation stores references and review decisions only; generation, evaluation and scheduling do not consume them yet. References retain the source storage path, so deleting the underlying media will also make its reference image unavailable.
+New image prompts and captions use the reviewed reference snapshot. Pending and benchmark items are excluded. Current user roles and feedback override original assistant annotations. Evaluation and scheduling are not automatic. References retain the source storage path, so deleting the underlying media will also make its reference image unavailable.
+
+### Generate a reference-guided review batch
+
+From `backend/`, run `node generate.js --count 3 --review-batch`. This requires positive reviewed references, generates up to five new backgrounds with candidate captions, saves local `.review.png` previews, and leaves database rows **pending**. It never creates a carousel or posts. Open Backgrounds to review; `?batch=<reviewBatchId>` limits the view to that batch. Approving the background retains its pre-generated caption options for the next review step.
+
+Each output records the exact `generationTaste` snapshot and hash; caption generation records `captionTaste`. Up to three rotating accepted visual references inform the prompt writer via image inputs. Existing saved prompts are rendered unchanged when using `--from-prompts`; they are not retroactively rewritten from new reviews. Missing reference storage/schema produces an error rather than silently ignoring feedback. Caption validation failures stop that candidate instead of substituting unreviewed fallback phrases.
+
+Review batches exclude exact recent scene concepts and avoid repeating setting families within the batch. These are heuristic checks, not semantic novelty guarantees or an automated quality score. Tests: `node --test creative-references.test.js generation-taste.test.js`.
