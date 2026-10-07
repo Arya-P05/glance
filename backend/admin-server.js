@@ -25,6 +25,8 @@ import {
   resizeForWidget,
 } from "./instagram-helper.js";
 import { getDraftForPublish, publishDraftFromDb } from "./publish-draft.js";
+import { reviewEvent, approvalEvents, feedbackReason } from "./generation-feedback.js";
+import { suggestReviewedPlacement } from "./reviewed-placement.js";
 import { loadTaste } from "./generation-taste.js";
 import { generateReviewedCaptions } from "./reviewed-captions.js";
 import { addReferences, listReferences, updateReference } from "./creative-references.js";
@@ -826,6 +828,7 @@ function backgroundDraftFromRow(row, projectUrl) {
     meta: {
       caption: null,
       captionOptions: metadata.captionOptions ?? null,
+      captionRejections: metadata.captionRejections ?? [],
       selectedCaptionIndex: metadata.selectedCaptionIndex ?? null,
       captionPrompt: metadata.captionPrompt ?? null,
       captionLayout: metadata.captionLayout ?? null,
@@ -1077,7 +1080,7 @@ async function findBackgroundMatch(supabase, { id, dbId, statuses }) {
   return matches[0];
 }
 
-async function stagePendingBackground(supabase, { id, dbId }) {
+async function stagePendingBackground(supabase, { id, dbId, reason }) {
   const row = await findBackgroundMatch(supabase, { id, dbId, statuses: ["pending"] });
   const metadata = row.metadata && typeof row.metadata === "object" ? row.metadata : {};
   const now = new Date().toISOString();
@@ -1088,6 +1091,7 @@ async function stagePendingBackground(supabase, { id, dbId }) {
       metadata: {
         ...metadata,
         imageApprovedAt: metadata.imageApprovedAt ?? now,
+        reviewFeedback:[reviewEvent("background","accepted",null,{storagePath:row.storage_path},reason)],
       },
     })
     .eq("id", row.id)
@@ -1101,11 +1105,11 @@ async function stagePendingBackground(supabase, { id, dbId }) {
   return data;
 }
 
-async function discardBackgroundWithStatuses(supabase, { id, dbId, statuses }) {
+async function discardBackgroundWithStatuses(supabase, { id, dbId, statuses, reason }) {
   const row = await findBackgroundMatch(supabase, { id, dbId, statuses });
   const { data, error } = await supabase
     .from("backgrounds")
-    .update({ status: "discarded" })
+    .update({ status: "discarded", metadata:{...row.metadata,reviewFeedback:[reviewEvent("background","rejected",{storagePath:row.storage_path},null,reason)]} })
     .eq("id", row.id)
     .eq("status", row.status)
     .select("name");
@@ -1261,7 +1265,7 @@ async function generateCaptionOptionsForBackground(supabase, { id, captionModel 
   const openai = new OpenAI({ apiKey: env("OPENAI_API_KEY") });
   const recentCaptions = await loadRecentCaptions(supabase);
   const taste = await loadTaste(supabase);
-  const captionResult = await (taste.references.length ? generateReviewedCaptions : generateCaptionForScene)({
+  const captionResult = await (taste.references.length || taste.feedback?.caption?.length ? generateReviewedCaptions : generateCaptionForScene)({
     taste,
     client: openai,
     model,
@@ -1276,8 +1280,12 @@ async function generateCaptionOptionsForBackground(supabase, { id, captionModel 
   }
   const selectedCaptionIndex = captionOptions.findIndex((caption) => captionSignature(caption) === selectedCaptionSig);
 
+  const placement=await suggestReviewedPlacement({client:openai,model,imageBytes,caption:captionResult.caption,scene,taste});
   const nextMetadata = {
     ...metadata,
+    captionLayout:placement.layout,
+    mediumCaptionLayout:placement.mediumLayout,
+    placementFeedbackIds:placement.feedbackIds,
     captionOptions,
     selectedCaptionIndex,
     captionPrompt: captionResult.prompt,
@@ -1287,11 +1295,12 @@ async function generateCaptionOptionsForBackground(supabase, { id, captionModel 
     scene,
   };
 
-  const { error: updateErr } = await supabase
-    .from("backgrounds")
-    .update({ metadata: nextMetadata })
-    .eq("id", row.id)
-    .eq("status", row.status);
+  const { data: savedMetadata, error: updateErr } = await supabase.rpc("merge_background_generation", {
+    target_id:row.id,
+    patch:{captionOptions,selectedCaptionIndex,captionPrompt:captionResult.prompt,captionTaste:taste,captionModel:model,
+      captionGeneratedAt:nextMetadata.captionGeneratedAt,captionLayout:placement.layout,mediumCaptionLayout:placement.mediumLayout,
+      placementFeedbackIds:placement.feedbackIds},
+  });
   if (updateErr) throw updateErr;
 
   const { error: optionErr } = await supabase
@@ -1317,6 +1326,9 @@ async function generateCaptionOptionsForBackground(supabase, { id, captionModel 
     selectedCaptionIndex,
     captionPrompt: captionResult.prompt,
     captionTaste: taste,
+    captionRejections:savedMetadata.captionRejections || [],
+    captionLayout:placement.layout,
+    mediumCaptionLayout:placement.mediumLayout,
     captionModel: model,
   };
 }
@@ -1330,10 +1342,18 @@ async function approveBackgroundWithCaption(supabase, {
   captionPrompt,
   layout,
   mediumLayout,
+  captionReason,
+  placementReason,
+  expectedCaption,
 }) {
   const row = await loadBackgroundWithStatuses(supabase, id, ["staged"]);
   const { scene, metadata } = sceneForBackground(row);
   const finalCaption = normalizeSelectedCaption(caption);
+  const originalIndex=Number.isInteger(selectedCaptionIndex) ? selectedCaptionIndex : 0;
+  if (expectedCaption && (metadata.captionOptions?.[originalIndex]?.smallText !== expectedCaption.smallText || metadata.captionOptions?.[originalIndex]?.bigText !== expectedCaption.bigText)) {
+    throw Object.assign(new Error("Caption changed; refresh before reviewing"),{statusCode:409});
+  }
+  const reviewReasons={caption:feedbackReason(captionReason),placement:feedbackReason(placementReason)};
   let finalCaptionOptions = Array.isArray(captionOptions) && captionOptions.length
     ? captionOptions.map((option) =>
         captionSignature(option) === captionSignature(caption) ? finalCaption : normalizeSelectedCaption(option)
@@ -1379,63 +1399,21 @@ async function approveBackgroundWithCaption(supabase, {
     mediumCaptionLayout: normalizedMediumLayout,
     mediumStoragePath: finalMediumStoragePath,
     captionApprovedAt: new Date().toISOString(),
+    reviewFeedback:approvalEvents(metadata,finalCaption,originalIndex,normalizedLayout,normalizedMediumLayout,reviewReasons),
     captionModel: model,
     scene,
     scenePrompt: metadata.scenePrompt ?? row.image_prompt ?? null,
   };
 
-  const { data: draftRow, error: updateErr } = await supabase
-    .from("drafts")
-    .upsert({
-      name: row.name,
-      storage_path: finalStoragePath,
-      caption: finalCaption,
-      scene,
-      image_prompt: row.image_prompt ?? metadata.scenePrompt ?? null,
-      raw_storage_path: rawStoragePath,
-      image_model: row.image_model ?? metadata.imageModel ?? null,
-      prompt_model: row.prompt_model ?? metadata.promptModel ?? null,
-      caption_model: model,
-      metadata: nextMetadata,
-      status: "draft",
-    }, { onConflict: "name" })
-    .select("id")
-    .maybeSingle();
-  if (updateErr) {
-    await supabase.storage.from(BUCKET).remove([finalStoragePath, finalMediumStoragePath]);
-    throw updateErr;
+  const {error:reviewError}=await supabase.rpc("complete_background_review",{
+    target_id:row.id,final_caption:finalCaption,final_metadata:nextMetadata,final_path:finalStoragePath,
+    option_index:originalIndex,expected_caption:metadata.captionOptions?.[originalIndex] || null,
+  });
+  if(reviewError) {
+    // Only clean up on a confirmed SQL rejection; a network failure may follow a committed transaction.
+    if (reviewError.code === "P0001") await supabase.storage.from(BUCKET).remove([finalStoragePath,finalMediumStoragePath]);
+    throw Object.assign(new Error(reviewError.message),{statusCode:reviewError.code === "P0001" ? 409 : 500});
   }
-
-  const { error: optionErr } = await supabase
-    .from("caption_options")
-    .insert({
-      background_id: row.id,
-      draft_id: draftRow?.id ?? null,
-      caption: finalCaption,
-      caption_model: model,
-      prompt: nextMetadata.captionPrompt,
-      metadata: {
-        captionLayout: normalizedLayout,
-        mediumCaptionLayout: normalizedMediumLayout,
-        mediumStoragePath: finalMediumStoragePath,
-        optionIndex: selectedIndex,
-        selectedCaptionIndex: selectedIndex,
-        scene,
-      },
-      status: "selected",
-    });
-  if (optionErr) throw optionErr;
-
-  const { error: backgroundErr } = await supabase
-    .from("backgrounds")
-    .update({
-      status: "approved",
-      approved_draft_name: row.name,
-      approved_at: new Date().toISOString(),
-    })
-    .eq("id", row.id)
-    .eq("status", row.status);
-  if (backgroundErr) throw backgroundErr;
 
   return {
     id,
@@ -1850,7 +1828,7 @@ async function main() {
       const payload = await readBody(req);
       if (!payload?.id && !payload?.dbId) { json(res, 400, { error: "id required" }); return; }
       try {
-        const row = await stagePendingBackground(supabase, { id: payload.id, dbId: payload.dbId });
+        const row = await stagePendingBackground(supabase, { id: payload.id, dbId: payload.dbId, reason:payload.reason });
         if (!row.metadata?.captionOptions?.some(hasCompleteCaption)) {
           kickOffBackgroundCaptionJob(supabase, {
             id: row.name,
@@ -1867,6 +1845,19 @@ async function main() {
       return;
     }
 
+    if (req.method === "POST" && url.pathname === "/api/backgrounds/reject-caption") {
+      const payload=await readBody(req);
+      try {
+        if (!payload?.id || !Number.isInteger(payload.optionIndex) || payload.optionIndex<0 || !hasCompleteCaption(payload.expectedCaption)) {
+          json(res,400,{error:"id, optionIndex and original caption required"}); return;
+        }
+        const {data,error}=await supabase.rpc("reject_background_caption",{background_name:payload.id,option_index:payload.optionIndex,expected_caption:payload.expectedCaption,feedback_reason:feedbackReason(payload.reason)});
+        if(error) {json(res,409,{error:error.message});return;}
+        json(res,200,{success:true,captionRejections:data.captionRejections || []});
+      } catch(e) {json(res,e.statusCode || 500,{error:e.message});}
+      return;
+    }
+
     if (req.method === "POST" && url.pathname === "/api/backgrounds/message-options") {
       const payload = await readBody(req);
       if (!payload?.id) { json(res, 400, { error: "id required" }); return; }
@@ -1877,7 +1868,7 @@ async function main() {
         });
         json(res, 200, { success: true, ...result });
       } catch (e) {
-        json(res, e.message?.startsWith("Background not found") ? 404 : 500, { error: e.message });
+        json(res, e.statusCode || (e.message?.startsWith("Background not found") ? 404 : 500), { error: e.message });
       }
       return;
     }
@@ -1920,10 +1911,13 @@ async function main() {
           captionPrompt: payload.captionPrompt,
           layout: payload.layout,
           mediumLayout: payload.mediumLayout,
+          captionReason:payload.captionReason,
+          placementReason:payload.placementReason,
+          expectedCaption:payload.expectedCaption,
         });
         json(res, 200, { success: true, ...result });
       } catch (e) {
-        json(res, e.message?.startsWith("Background not found") ? 404 : 500, { error: e.message });
+        json(res, e.statusCode || (e.message?.startsWith("Background not found") ? 404 : 500), { error: e.message });
       }
       return;
     }
@@ -1957,6 +1951,7 @@ async function main() {
             id: payload.id,
             dbId: payload.dbId,
             statuses: [status],
+            reason:payload.reason,
           });
         } else {
           json(res, 400, { error: "Provide all or id" }); return;
