@@ -136,6 +136,7 @@ export default function LibraryScreen() {
         <View style={{ flex: 1 }} />
         {selected.size > 0 && (
           <>
+            <Btn label="Use as inspiration" onPress={() => router.push({pathname:"/generate",params:{inspiration:selectedImages.map(image=>image.id).join(",")}})} disabled={selectedImages.length > 5 || busy} small variant="outline" />
             <Btn label="Add to references" onPress={addSelectedReferences} loading={busy} disabled={selected.size > 50} small variant="outline" />
             {filter === "active" && (
               <Btn
