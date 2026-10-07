@@ -1,3 +1,4 @@
+import {loadRunInspiration, validateInspirationIds} from './run-inspiration.js';
 /**
  * Local admin UI + dashboard API.
  * Security: uses SUPABASE_SERVICE_ROLE_KEY — localhost only.
@@ -2094,6 +2095,14 @@ async function main() {
       if (!payload) { json(res, 400, { error: "Invalid JSON" }); return; }
 
       const args = [];
+      try {
+        const ids=validateInspirationIds(payload.inspirationIds);
+        if(ids.length) {
+          if(payload.promptIds?.length) throw Object.assign(new Error("Use fresh generation with Library inspiration"),{statusCode:400});
+          await loadRunInspiration(supabase,ids,path=>publicObjectUrl(supabaseUrl(),path));
+          args.push("--inspiration-ids",ids.join(","));
+        }
+      } catch(e) { json(res,e.statusCode || 500,{error:e.message}); return; }
       if (payload.count) args.push("--count", String(payload.count));
       if (payload.mode) args.push("--mode", payload.mode);
       if (payload.model) args.push("--model", payload.model);
