@@ -334,6 +334,7 @@ export interface Prompt {
 }
 
 export interface GenerateOptions {
+  inspirationIds?: string[];
   count?: number;
   mode?: "prompts" | "images";
   model?: string;
