@@ -67,7 +67,7 @@ export const api = {
   drafts: () => request<{ drafts: Draft[] }>("/api/drafts"),
   backgrounds: (opts?: { status?: "pending" | "staged" }) =>
     request<{ backgrounds: Draft[] }>(`/api/backgrounds${opts?.status ? `?status=${opts.status}` : ""}`),
-  stageBackground: (opts: { id?: string; dbId?: string }) =>
+  stageBackground: (opts: { id?: string; dbId?: string; reason?: string }) =>
     request<{ success: boolean; background: Draft }>("/api/backgrounds/stage", {
       method: "POST",
       body: JSON.stringify(opts),
@@ -76,8 +76,10 @@ export const api = {
     request<PublishDraftResult>("/api/drafts/publish", { method: "POST", body: JSON.stringify(opts) }),
   discardDraft: (opts: { id?: string; all?: boolean }) =>
     request<{ success: boolean; updated: number; ids: string[] }>("/api/drafts/discard", { method: "POST", body: JSON.stringify(opts) }),
-  discardBackground: (opts: { id?: string; dbId?: string; all?: boolean; status?: "pending" | "staged" }) =>
+  discardBackground: (opts: { id?: string; dbId?: string; all?: boolean; status?: "pending" | "staged"; reason?: string }) =>
     request<{ success: boolean; updated: number; ids: string[] }>("/api/backgrounds/discard", { method: "POST", body: JSON.stringify(opts) }),
+  rejectBackgroundCaption: (opts: {id:string; optionIndex:number; expectedCaption:CaptionText; reason?:string}) =>
+    request<{success:boolean;captionRejections:CaptionText[]}>("/api/backgrounds/reject-caption",{method:"POST",body:JSON.stringify(opts)}),
   generateBackgroundMessages: (opts: { id: string; captionModel?: string }) =>
     request<{
       success: boolean;
@@ -87,6 +89,9 @@ export const api = {
       selectedCaptionIndex: number;
       captionPrompt: string;
       captionModel: string;
+      captionLayout: CaptionLayout;
+      mediumCaptionLayout: MediumCaptionLayout;
+      captionRejections: CaptionText[];
     }>("/api/backgrounds/message-options", { method: "POST", body: JSON.stringify(opts) }),
   reviseBackground: (opts: { id: string; instruction: string; imageModel?: string; size?: string }) =>
     request<{
@@ -97,6 +102,9 @@ export const api = {
     }>("/api/backgrounds/revise", { method: "POST", body: JSON.stringify(opts) }),
   approveBackground: (opts: {
     id: string;
+    captionReason?: string;
+    placementReason?: string;
+    expectedCaption?: CaptionText;
     caption: CaptionText;
     captionOptions?: CaptionText[];
     selectedCaptionIndex?: number;
@@ -267,6 +275,7 @@ export interface CaptionText {
 }
 
 export interface DraftMeta {
+  captionRejections?: CaptionText[];
   reviewBatchId?: string | null;
   tasteSnapshot?: string | null;
   filename?: string;
