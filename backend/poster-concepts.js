@@ -2053,8 +2053,19 @@ export function sceneSignature(scene = {}) {
   return `${family}|${actionKey}|${subjectRoot}`;
 }
 
+// Stable visual setups must survive paraphrasing and changes of cast.
+export function visualSetupKeys(scene = {}) {
+  const text = [scene.conceptId, scene.subject, scene.action, scene.setting, scene.composition, scene.cameraAngle]
+    .filter(Boolean).join(' ').toLowerCase();
+  const keys = [];
+  if (/roller[ -]?coaster|coaster.{0,35}(ride|track|car)|(?:ride|track|car).{0,35}coaster|amusement.{0,40}ride|carnival.{0,40}ride|fairground.{0,40}ride/.test(text)) {
+    keys.push('setup:amusement-ride-reaction');
+  }
+  return keys;
+}
+
 export function sceneDedupKeys(scene = {}) {
-  const keys = new Set();
+  const keys = new Set(visualSetupKeys(scene));
   if (scene.conceptId) keys.add(`concept:${scene.conceptId}`);
   keys.add(sceneSignature(scene));
   keys.add(`family:${settingFamily(scene.setting)}`);
@@ -2087,7 +2098,7 @@ export function buildSceneDirectorPrompt({ avoidSignatures = new Set(), examples
     .join("\n");
 
   const avoidList = [...avoidSignatures]
-    .filter((k) => k.startsWith("family:") || k.startsWith("concept:"))
+    .filter((k) => k.startsWith("family:") || k.startsWith("concept:") || k.startsWith("setup:"))
     .slice(0, 20)
     .map((k) => `- ${k.replace(/^(family|concept):/, "")}`)
     .join("\n");
