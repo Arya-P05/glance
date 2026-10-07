@@ -861,6 +861,7 @@ async function renderDraftCaption(supabase, { id, caption, layout, mediumLayout 
   if (error) throw error;
   if (!row) throw new Error(`Draft not found: ${id}`);
 
+  const mediumRejected = row.metadata?.mediumRejected === true;
   const sourcePath = row.raw_storage_path || row.storage_path;
   if (!row.raw_storage_path) {
     console.warn(`Draft ${id} has no raw background — re-rendering from final image`);
@@ -881,17 +882,18 @@ async function renderDraftCaption(supabase, { id, caption, layout, mediumLayout 
   );
   const imageBytes = Buffer.from(await blob.arrayBuffer());
   const rendered = await overlayCaption(imageBytes, finalCaption, normalizedLayout);
-  const renderedMedium = await overlayMediumCaption(imageBytes, finalCaption, normalizedMediumLayout);
+  const renderedMedium = (!mediumRejected) ? await overlayMediumCaption(imageBytes, finalCaption, normalizedMediumLayout) : null;
   const finalStoragePath = captionedDraftStoragePath(row.name);
-  const finalMediumStoragePath = mediumDraftStoragePath(row.name);
+  const finalMediumStoragePath = mediumRejected ? null : mediumDraftStoragePath(row.name);
   await uploadVerifiedObject(supabase, finalStoragePath, rendered);
-  await uploadVerifiedObject(supabase, finalMediumStoragePath, renderedMedium);
+  if (finalMediumStoragePath) await uploadVerifiedObject(supabase, finalMediumStoragePath, renderedMedium);
 
   const metadata = {
     ...(row.metadata && typeof row.metadata === "object" ? row.metadata : {}),
     captionLayout: normalizedLayout,
     mediumCaptionLayout: normalizedMediumLayout,
     mediumStoragePath: finalMediumStoragePath,
+    mediumRejected,
   };
 
   const { error: updateErr } = await supabase
@@ -900,14 +902,14 @@ async function renderDraftCaption(supabase, { id, caption, layout, mediumLayout 
     .eq("name", id)
     .eq("status", "draft");
   if (updateErr) {
-    await supabase.storage.from(BUCKET).remove([finalStoragePath, finalMediumStoragePath]);
+    await supabase.storage.from(BUCKET).remove([finalStoragePath, finalMediumStoragePath].filter(Boolean));
     throw updateErr;
   }
 
   return {
     id,
     imageUrl: publicObjectUrl(supabaseUrl(), finalStoragePath),
-    mediumImageUrl: publicObjectUrl(supabaseUrl(), finalMediumStoragePath),
+    mediumImageUrl: finalMediumStoragePath ? publicObjectUrl(supabaseUrl(), finalMediumStoragePath) : null,
     caption: finalCaption,
     captionLayout: normalizedLayout,
     mediumCaptionLayout: normalizedMediumLayout,
@@ -1344,6 +1346,8 @@ async function approveBackgroundWithCaption(supabase, {
   mediumLayout,
   captionReason,
   placementReason,
+  mediumRejected = false,
+  mediumReason,
   expectedCaption,
 }) {
   const row = await loadBackgroundWithStatuses(supabase, id, ["staged"]);
@@ -1353,7 +1357,8 @@ async function approveBackgroundWithCaption(supabase, {
   if (expectedCaption && (metadata.captionOptions?.[originalIndex]?.smallText !== expectedCaption.smallText || metadata.captionOptions?.[originalIndex]?.bigText !== expectedCaption.bigText)) {
     throw Object.assign(new Error("Caption changed; refresh before reviewing"),{statusCode:409});
   }
-  const reviewReasons={caption:feedbackReason(captionReason),placement:feedbackReason(placementReason)};
+  if (typeof mediumRejected !== "boolean") throw Object.assign(new Error("mediumRejected must be boolean"),{statusCode:400});
+  const reviewReasons={mediumRejected,medium:feedbackReason(mediumReason),caption:feedbackReason(captionReason),placement:feedbackReason(placementReason)};
   let finalCaptionOptions = Array.isArray(captionOptions) && captionOptions.length
     ? captionOptions.map((option) =>
         captionSignature(option) === captionSignature(caption) ? finalCaption : normalizeSelectedCaption(option)
@@ -1383,11 +1388,11 @@ async function approveBackgroundWithCaption(supabase, {
     metadata.mediumCaptionLayout || normalizedLayout
   );
   const rendered = await overlayCaption(imageBytes, finalCaption, normalizedLayout);
-  const renderedMedium = await overlayMediumCaption(imageBytes, finalCaption, normalizedMediumLayout);
+  const renderedMedium = (!mediumRejected) ? await overlayMediumCaption(imageBytes, finalCaption, normalizedMediumLayout) : null;
   const finalStoragePath = captionedDraftStoragePath(row.name);
-  const finalMediumStoragePath = mediumDraftStoragePath(row.name);
+  const finalMediumStoragePath = mediumRejected ? null : mediumDraftStoragePath(row.name);
   await uploadVerifiedObject(supabase, finalStoragePath, rendered);
-  await uploadVerifiedObject(supabase, finalMediumStoragePath, renderedMedium);
+  if (finalMediumStoragePath) await uploadVerifiedObject(supabase, finalMediumStoragePath, renderedMedium);
 
   const nextMetadata = {
     ...metadata,
@@ -1398,6 +1403,7 @@ async function approveBackgroundWithCaption(supabase, {
     captionLayout: normalizedLayout,
     mediumCaptionLayout: normalizedMediumLayout,
     mediumStoragePath: finalMediumStoragePath,
+    mediumRejected,
     captionApprovedAt: new Date().toISOString(),
     reviewFeedback:approvalEvents(metadata,finalCaption,originalIndex,normalizedLayout,normalizedMediumLayout,reviewReasons),
     captionModel: model,
@@ -1411,14 +1417,14 @@ async function approveBackgroundWithCaption(supabase, {
   });
   if(reviewError) {
     // Only clean up on a confirmed SQL rejection; a network failure may follow a committed transaction.
-    if (reviewError.code === "P0001") await supabase.storage.from(BUCKET).remove([finalStoragePath,finalMediumStoragePath]);
+    if (reviewError.code === "P0001") await supabase.storage.from(BUCKET).remove([finalStoragePath,finalMediumStoragePath].filter(Boolean));
     throw Object.assign(new Error(reviewError.message),{statusCode:reviewError.code === "P0001" ? 409 : 500});
   }
 
   return {
     id,
     imageUrl: publicObjectUrl(supabaseUrl(), finalStoragePath),
-    mediumImageUrl: publicObjectUrl(supabaseUrl(), finalMediumStoragePath),
+    mediumImageUrl: finalMediumStoragePath ? publicObjectUrl(supabaseUrl(), finalMediumStoragePath) : null,
     rawImageUrl: publicObjectUrl(supabaseUrl(), rawStoragePath),
     caption: finalCaption,
     captionOptions: finalCaptionOptions,
@@ -1913,6 +1919,8 @@ async function main() {
           mediumLayout: payload.mediumLayout,
           captionReason:payload.captionReason,
           placementReason:payload.placementReason,
+          mediumRejected:payload.mediumRejected,
+          mediumReason:payload.mediumReason,
           expectedCaption:payload.expectedCaption,
         });
         json(res, 200, { success: true, ...result });
