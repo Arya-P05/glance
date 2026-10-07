@@ -1,3 +1,4 @@
+import { visualSetupKeys } from './poster-concepts.js';
 import { feedbackHash } from './generation-feedback.js';
 import { rememberGeneration } from './generation-history.js';
 /**
@@ -896,7 +897,7 @@ async function pickUniqueScene({ client, promptModel, avoidSignatures, preferEne
     if (isAllowedScene(scene, avoidSignatures, { allowFamilyRepeat: true })) return scene;
   }
 
-  return preferEnergy ? buildReferenceAestheticScene() : buildSceneFromArchetype();
+  throw new Error("Could not find a fresh scene; refusing to repeat a recent concept");
 }
 
 function rememberScene(scene, avoidSignatures) {
@@ -1169,6 +1170,11 @@ async function main() {
           preferEnergy: itemNumber % 3 === 1,
           taste,
         });
+      }
+      const requestedSetup = visualSetupKeys({subject:args.subject,action:args.action,setting:[args.idea,args.location].filter(Boolean).join(' ')});
+      if (visualSetupKeys(scene).some(key => avoidSceneSignatures.has(key) && !requestedSetup.includes(key))) {
+        console.log(`${prefix} repeated visual setup; trying a different idea`);
+        continue;
       }
       rememberScene(scene, avoidSceneSignatures);
       batchScenes.push({subject:scene.subject,action:scene.action,setting:scene.setting,emotion:scene.emotion});
