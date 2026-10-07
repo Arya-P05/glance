@@ -16,6 +16,7 @@ struct RandomPostRow: Decodable {
     let id: UUID
     let storage_path: String
     let medium_storage_path: String?
+    let medium_eligible: Bool?
     let caption: String?
 }
 
@@ -71,7 +72,7 @@ struct RandomPostProvider: TimelineProvider {
 
             do {
                 let client = SupabaseConfig.makeClient()
-                let rows: [RandomPostRow] = try await client.rpc("get_random_post").execute().value
+                let rows: [RandomPostRow] = try await client.rpc("get_widget_post", params: ["widget_format": context.family == .systemMedium ? "medium" : "square"]).execute().value
 
                 guard let row = rows.first else {
                     let entry = RandomPostEntry(date: Date(), imageData: nil, caption: nil)
@@ -166,13 +167,15 @@ struct RandomPostProvider: TimelineProvider {
         }
 
         SharedPhotoSnapshot.writeJPEGData(standardData, caption: row.caption, postId: row.id)
-        SharedPhotoSnapshot.writeJPEGData(
-            mediumData,
-            caption: row.caption,
-            postId: row.id,
-            variant: .medium,
-            recordRecent: false
-        )
+        if row.medium_eligible != false {
+            SharedPhotoSnapshot.writeJPEGData(
+                mediumData,
+                caption: row.caption,
+                postId: row.id,
+                variant: .medium,
+                recordRecent: false
+            )
+        }
     }
 
     private func loadImageData(from url: URL) async -> Data? {
