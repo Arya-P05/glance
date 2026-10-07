@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
-  View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Platform, useWindowDimensions,
+  View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Platform, useWindowDimensions, TextInput,
 } from "react-native";
 import { RefreshDouble } from "iconoir-react-native";
 import { API_BASE, api, CaptionText, Draft } from "../lib/api";
@@ -44,6 +44,11 @@ export default function ApprovedBackgroundsScreen() {
   const [reviewIdx, setReviewIdx] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editorRevision,setEditorRevision]=useState(0);
+  const [captionReason,setCaptionReason]=useState("");
+  const [placementReason,setPlacementReason]=useState("");
+  const [originalOptions,setOriginalOptions]=useState<CaptionText[]>([]);
+  const [rejections,setRejections]=useState<CaptionText[]>([]);
   const [captionOptions, setCaptionOptions] = useState<CaptionText[]>([]);
   const [selectedCaptionIndex, setSelectedCaptionIndex] = useState(0);
   const [caption, setCaption] = useState<CaptionText>({ smallText: "", bigText: "" });
@@ -76,8 +81,12 @@ export default function ApprovedBackgroundsScreen() {
   useEffect(() => { load(); }, []);
 
   function applyCaptionState(background: Draft, options: CaptionText[]) {
+    setRejections(background.meta?.captionRejections || []);
     const index = Math.max(0, Math.min(options.length - 1, background.meta?.selectedCaptionIndex ?? 0));
     setCaptionOptions(options);
+    setOriginalOptions(options.map(option=>({...option})));
+    setCaptionReason("");
+    setPlacementReason("");
     setSelectedCaptionIndex(index);
     setCaption(options[index]);
     setCaptionModel(background.meta?.captionModel ?? undefined);
@@ -86,9 +95,14 @@ export default function ApprovedBackgroundsScreen() {
 
   async function generateMessagesForBackground(background: Draft) {
     const result = await api.generateBackgroundMessages({ id: background.id });
+    setRejections(result.captionRejections || []);
+    setEditorRevision(value=>value+1);
     const options = result.captionOptions.length ? result.captionOptions : [{ smallText: "smile today,", bigText: "it helps." }];
     const index = Math.max(0, Math.min(options.length - 1, result.selectedCaptionIndex ?? 0));
     setCaptionOptions(options);
+    setOriginalOptions(options.map(option=>({...option})));
+    setCaptionReason("");
+    setPlacementReason("");
     setSelectedCaptionIndex(index);
     setCaption(options[index]);
     setCaptionModel(result.captionModel);
@@ -103,6 +117,9 @@ export default function ApprovedBackgroundsScreen() {
               selectedCaptionIndex: index,
               captionModel: result.captionModel,
               captionPrompt: result.captionPrompt,
+              captionLayout:result.captionLayout,
+              mediumCaptionLayout:result.mediumCaptionLayout,
+              captionRejections:result.captionRejections,
             },
           }
         : item
@@ -159,6 +176,7 @@ export default function ApprovedBackgroundsScreen() {
     if (!option) return;
     setSelectedCaptionIndex(index);
     setCaption(option);
+    setCaptionReason("");
   }
 
   function updateCaption(next: CaptionText) {
@@ -166,6 +184,21 @@ export default function ApprovedBackgroundsScreen() {
     setCaptionOptions(options => options.map((option, idx) =>
       idx === selectedCaptionIndex ? next : option
     ));
+  }
+
+  async function rejectCaption() {
+    const background=backgrounds[reviewIdx];
+    if(!background || busy) return;
+    setBusy(true);
+    try {
+      const result=await api.rejectBackgroundCaption({id:background.id,optionIndex:selectedCaptionIndex,expectedCaption:originalOptions[selectedCaptionIndex],reason:captionReason});
+      setRejections(result.captionRejections);
+      setBackgrounds(items=>items.map(item=>item.id===background.id ? {...item,meta:{...item.meta,captionRejections:result.captionRejections}} : item));
+    } catch(e:any) {alert(e.message);}
+    finally {setBusy(false);}
+  }
+  function isRejected(option:CaptionText) {
+    return rejections.some(value=>value.smallText===option.smallText && value.bigText===option.bigText);
   }
 
   async function discardCurrent() {
@@ -189,7 +222,8 @@ export default function ApprovedBackgroundsScreen() {
 
   async function saveToDrafts(layout: CaptionLayout, mediumLayout: MediumCaptionLayout) {
     const background = backgrounds[reviewIdx];
-    if (!background) return;
+    if (!background || busy) return;
+    setBusy(true);
 
     const finalCaption = normalizeCaption(caption);
     const finalOptions = captionOptions.map((option, idx) =>
@@ -206,6 +240,7 @@ export default function ApprovedBackgroundsScreen() {
         captionPrompt,
         layout,
         mediumLayout,
+        captionReason,placementReason,expectedCaption:originalOptions[selectedCaptionIndex],
       });
       setBackgrounds(prev => prev.filter(item => item.id !== background.id));
       closeEdit();
@@ -213,7 +248,7 @@ export default function ApprovedBackgroundsScreen() {
     } catch (e: any) {
       alert(e?.message ?? "Failed to save draft");
       throw e;
-    }
+    } finally {setBusy(false);}
   }
 
   if (screen === "edit") {
@@ -243,30 +278,38 @@ export default function ApprovedBackgroundsScreen() {
           </Text>
           <View style={{ flex: 1 }} />
           <Btn label="Regenerate" onPress={regenerateMessagesCurrent} loading={busy} small variant="outline" />
-          <Btn label="Discard" onPress={discardCurrent} loading={busy} small variant="danger" />
+          <Btn label="Reject background" onPress={discardCurrent} loading={busy} small variant="danger" />
         </View>
         <View style={styles.messageBody}>
           <View style={styles.optionPanel}>
-            <Text style={styles.panelTitle}>Messages</Text>
-            <ScrollView contentContainerStyle={styles.optionList}>
+            <Text style={styles.panelTitle}>Review text</Text>
+            <Text style={S.body}>Unselected options stay unreviewed. Regenerate asks for more without rejecting these.</Text>
+            <ScrollView style={{flex:1,minHeight:0,marginVertical:8}} contentContainerStyle={styles.optionList}>
               {captionOptions.map((option, idx) => {
                 const active = idx === selectedCaptionIndex;
                 return (
                   <Pressable
                     key={`${option.smallText}-${option.bigText}-${idx}`}
+                    disabled={busy}
                     onPress={() => selectCaptionOption(idx)}
                     style={[styles.optionCard, active && styles.optionCardActive]}
                   >
-                    <Text style={styles.optionNumber}>{idx + 1}</Text>
+                    <Text style={styles.optionNumber}>{idx + 1}{isRejected(originalOptions[idx] || option) ? " · Rejected" : ""}</Text>
                     <Text style={styles.optionSmall}>{option.smallText}</Text>
                     <Text style={styles.optionBig}>{option.bigText}</Text>
                   </Pressable>
                 );
               })}
             </ScrollView>
+            <TextInput accessibilityLabel="Caption feedback" value={captionReason} onChangeText={setCaptionReason} placeholder="Optional: too generic, forced slang, better wording…" placeholderTextColor={C.textMuted} multiline maxLength={1000} style={{color:C.textPrimary,backgroundColor:C.bg,padding:12,borderWidth:1,borderColor:C.border,borderRadius:8,minHeight:70,flexShrink:0}} />
+            <Btn label={isRejected(originalOptions[selectedCaptionIndex] || caption) ? "Caption rejected" : "Reject this caption"} onPress={rejectCaption} loading={busy} disabled={isRejected(originalOptions[selectedCaptionIndex] || caption)} variant="outline" />
+            <Text style={S.body}>Rejection keeps the background. Select another option, edit the wording, or regenerate.</Text>
           </View>
           <View style={styles.editorWrap}>
             <CaptionEditor
+              key={background.id + editorRevision}
+              placementReason={placementReason}
+              onPlacementReasonChange={setPlacementReason}
               backgroundUri={backgroundImageUri(background, 1200)}
               caption={caption}
               initialLayout={background.meta?.captionLayout}
@@ -274,7 +317,7 @@ export default function ApprovedBackgroundsScreen() {
               onCaptionChange={updateCaption}
               onApply={saveToDrafts}
               onCancel={closeEdit}
-              applyLabel="Save to drafts"
+              applyLabel="Accept text & save to drafts"
             />
           </View>
         </View>

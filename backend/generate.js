@@ -14,6 +14,7 @@
 import "dotenv/config";
 import OpenAI from "openai";
 import { loadTaste, positiveReferences, tasteInstructions, referenceImages } from "./generation-taste.js";
+import { suggestReviewedPlacement } from "./reviewed-placement.js";
 import { generateReviewedCaptions } from "./reviewed-captions.js";
 import { createClient } from "@supabase/supabase-js";
 import { readdir, readFile, writeFile } from "node:fs/promises";
@@ -1279,6 +1280,7 @@ async function main() {
         }));
         batchCaptions.push(review.caption);
       }
+      const placement = review ? await suggestReviewedPlacement({client:openai,model:args.promptModel,imageBytes:rawImageBytes,caption:review.caption,scene,taste}) : null;
       const draftMetadata = {
         imageModel: args.model,
         promptModel: args.promptModel,
@@ -1290,6 +1292,7 @@ async function main() {
         promptWriterPrompt,
         generationTaste,
         reviewBatchId,
+        ...(placement ? {captionLayout:placement.layout,mediumCaptionLayout:placement.mediumLayout,placementFeedbackIds:placement.feedbackIds} : {}),
         ...(review ? {captionOptions:review.options,selectedCaptionIndex:0,captionPrompt:review.prompt,captionTaste:taste} : {}),
       };
       const paths = await withProgress(`${prefix} saving background`, () =>
@@ -1305,7 +1308,7 @@ async function main() {
       );
       if (review) {
         const previewPath = join(args.outDir, `${name}.review.png`);
-        await writeFile(previewPath, await overlayCaption(rawImageBytes,review.caption));
+        await writeFile(previewPath, await overlayCaption(rawImageBytes,review.caption,placement.layout));
         console.log(`${prefix} review preview → ${previewPath}`);
       }
       if (supabase) {

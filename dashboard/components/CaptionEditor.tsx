@@ -40,6 +40,8 @@ type Props = {
   onApply: (layout: CaptionLayout, mediumLayout: MediumCaptionLayout) => Promise<void>;
   onCancel: () => void;
   applyLabel?: string;
+  placementReason?: string;
+  onPlacementReasonChange?: (value:string)=>void;
 };
 
 export function CaptionEditor({
@@ -51,6 +53,8 @@ export function CaptionEditor({
   onApply,
   onCancel,
   applyLabel = "Apply to poster",
+  placementReason,
+  onPlacementReasonChange,
 }: Props) {
   const [layout, setLayout] = useState<CaptionLayout>(() => normalizeCaptionLayout(initialLayout));
   const [mediumLayout, setMediumLayout] = useState<MediumCaptionLayout>(() =>
@@ -290,6 +294,10 @@ export function CaptionEditor({
             </View>
           </View>
 
+          {onPlacementReasonChange && <View style={{gap:8,padding:12}}>
+            <Text style={{color:C.textPrimary,fontWeight:"600"}}>{JSON.stringify(layout)===JSON.stringify(normalizeCaptionLayout(initialLayout)) && JSON.stringify(mediumLayout)===JSON.stringify(normalizeMediumCaptionLayout(initialMediumLayout,initialLayout ?? DEFAULT_MEDIUM_CAPTION_LAYOUT)) ? "Keep placement as is" : "Save adjusted placement"}</Text>
+            <TextInput accessibilityLabel="Placement feedback" value={placementReason} onChangeText={onPlacementReasonChange} placeholder="Optional: moved off the face, better contrast…" placeholderTextColor={C.textMuted} multiline maxLength={1000} style={{color:C.textPrimary,padding:12,borderWidth:1,borderColor:C.border,borderRadius:8}} />
+          </View>}
           <View style={styles.actions}>
             <Btn label="Cancel" onPress={onCancel} variant="ghost" />
             <Btn label={saving ? "Applying…" : applyLabel} onPress={handleApply} loading={saving} />

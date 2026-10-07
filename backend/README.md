@@ -131,3 +131,17 @@ From `backend/`, run `node generate.js --count 3 --review-batch`. This requires 
 Each output records the exact `generationTaste` snapshot and hash; caption generation records `captionTaste`. Up to three rotating accepted visual references inform the prompt writer via image inputs. Existing saved prompts are rendered unchanged when using `--from-prompts`; they are not retroactively rewritten from new reviews. Missing reference storage/schema produces an error rather than silently ignoring feedback. Caption validation failures stop that candidate instead of substituting unreviewed fallback phrases.
 
 Review batches exclude exact recent scene concepts and avoid repeating setting families within the batch. These are heuristic checks, not semantic novelty guarantees or an automated quality score. Tests: `node --test creative-references.test.js generation-taste.test.js`.
+
+### Separate review feedback
+
+Apply `supabase/migrations/20261007000000_add_generation_feedback.sql` before running the updated server. It adds a private `generation_feedback` event history and transactional review functions. No historical approvals or unselected captions are relabeled automatically.
+
+- **Backgrounds:** Approve or Reject background records an image-only decision, with an optional reason. Skip and bulk cleanup do not create taste feedback.
+- **Approved:** Reject this caption records only the exact original option. The background stays staged; other options remain unreviewed. Regenerate alone is not a rejection. Choosing or editing text and saving records that original and final wording. A later explicit acceptance supersedes an earlier rejection of the same option.
+- **Placement:** Saving records both square and medium layouts, including coordinates, font scales, colors and crop. The editor distinguishes unchanged from adjusted placement. An optional reason explains the adjustment.
+
+Final draft creation, caption selection, background completion and review events commit in one database transaction. Caption regeneration merges its fields without erasing feedback received while it ran. Retrying rejection does not add duplicate events. Stale caption approvals/rejections are rejected rather than applied to another option.
+
+New generations include the latest explicit decisions for each target from the most recent 300 events, scoped to the relevant stage (up to 40 per prompt). Direct benchmark sources are excluded. Image feedback guides scene prompts, wording feedback guides captions, and placement feedback guides image-aware square/medium layout suggestions. Suggestions remain reviewable: these are prompt examples, not model-weight training, guaranteed visual correctness, or automatic publishing. Layout suggestions use defaults until placement feedback exists.
+
+Run `node --test *test.js` in `backend/`. For database integration checks, execute `backend/tests/generation-feedback.integration.sql` after the migration; fixtures and decisions are wrapped in a transaction that rolls back. It exercises rejection idempotency, stale-option protection, preservation across regeneration, and atomic final approval.
