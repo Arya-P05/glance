@@ -104,6 +104,8 @@ export const api = {
     id: string;
     captionReason?: string;
     placementReason?: string;
+    mediumRejected?: boolean;
+    mediumReason?: string;
     expectedCaption?: CaptionText;
     caption: CaptionText;
     captionOptions?: CaptionText[];
@@ -117,7 +119,7 @@ export const api = {
       success: boolean;
       id: string;
       imageUrl: string;
-      mediumImageUrl: string;
+      mediumImageUrl: string | null;
       rawImageUrl: string;
       caption: CaptionText;
       captionOptions?: CaptionText[];
@@ -136,7 +138,7 @@ export const api = {
       success: boolean;
       id: string;
       imageUrl: string;
-      mediumImageUrl: string;
+      mediumImageUrl: string | null;
       caption: CaptionText;
       captionLayout: CaptionLayout;
       mediumCaptionLayout: MediumCaptionLayout;
@@ -332,6 +334,7 @@ export interface Prompt {
 }
 
 export interface GenerateOptions {
+  inspirationIds?: string[];
   count?: number;
   mode?: "prompts" | "images";
   model?: string;

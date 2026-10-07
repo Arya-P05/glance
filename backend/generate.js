@@ -1,3 +1,7 @@
+import {loadRunInspiration, validateInspirationIds, runInspirationImages, isDistinctFromInspiration} from './run-inspiration.js';
+import { visualSetupKeys } from './poster-concepts.js';
+import { feedbackHash } from './generation-feedback.js';
+import { rememberGeneration, recentSceneAvoidance } from './generation-history.js';
 /**
  * Content generator — prompts or raw background images.
  *
@@ -215,6 +219,7 @@ function parseArgs(argv) {
     mode: "images",
     fromPrompts: false,
     fromPromptsDir: PROMPTS_DIR,
+    inspirationIds: [],
     promptIds: null, // comma-separated list of prompt IDs to use
     outDir: null,
     model: process.env.OPENAI_IMAGE_MODEL || DEFAULT_IMAGE_MODEL,
@@ -251,6 +256,7 @@ function parseArgs(argv) {
     else if (arg === "--prompt-model") out.promptModel = next();
     else if (arg === "--size") out.size = next();
     else if (arg === "--dry-run") out.dryRun = true;
+    else if (arg === "--inspiration-ids") out.inspirationIds = validateInspirationIds(next().split(","));
     else if (arg === "--review-batch") out.reviewBatch = true;
     else if (arg === "--idea") out.idea = cleanOptionText(next(), 700);
     else if (arg === "--direction-mode") out.directionMode = next();
@@ -431,58 +437,12 @@ function responseText(response) {
   return chunks.join("\n");
 }
 
-async function loadRecentScenesFromDb(supabase, limit = 40) {
-  if (!supabase) return new Set();
-  const keys = new Set();
-
-  const { data: drafts } = await supabase
-    .from("drafts")
-    .select("scene")
-    .not("scene", "is", null)
-    .order("created_at", { ascending: false })
-    .limit(limit);
-
-  for (const row of drafts ?? []) {
-    if (row.scene && typeof row.scene === "object") {
-      for (const key of sceneDedupKeys(row.scene)) keys.add(key);
-    }
-  }
-
-  const { data: backgrounds } = await supabase
-    .from("backgrounds")
-    .select("scene")
-    .not("scene", "is", null)
-    .order("created_at", { ascending: false })
-    .limit(limit);
-
-  for (const row of backgrounds ?? []) {
-    if (row.scene && typeof row.scene === "object") {
-      for (const key of sceneDedupKeys(row.scene)) keys.add(key);
-    }
-  }
-
-  const { data: prompts } = await supabase
-    .from("prompts")
-    .select("scene")
-    .not("scene", "is", null)
-    .order("created_at", { ascending: false })
-    .limit(limit);
-
-  for (const row of prompts ?? []) {
-    if (row.scene && typeof row.scene === "object") {
-      for (const key of sceneDedupKeys(row.scene)) keys.add(key);
-    }
-  }
-
-  return keys;
-}
-
 async function generateSceneFromDirector({ client, model, avoidSignatures, taste, batchScenes = [] }) {
   const prompt = buildSceneDirectorPrompt({ avoidSignatures }) + tasteInstructions(taste)
     + `\nScenes already selected in this batch: ${JSON.stringify(batchScenes)}. Change the subject, expression, action and camera distance as well as the setting. Do not default to another scream-laughing face. Calm or understated expressions are welcome.`;
   const response = await client.responses.create({
     model,
-    input: [{ role: "user", content: [{ type: "input_text", text: prompt }] }],
+    input: [{ role: "user", content: [{ type: "input_text", text: prompt }, ...runInspirationImages(taste.runInspiration)] }],
   });
   const raw = parseDirectorScene(responseText(response));
   return buildSceneFromDirector(raw);
@@ -719,10 +679,10 @@ function buildAnimalNatureSelfieScene({ args, index, count, guidance }) {
 
 async function generateDirectedScene({ client, model, args, index, count, avoidSignatures, taste }) {
   const guidance = directionMetadata(args);
-  if (args.styleRecipe === "alpine-techwear") {
+  if (args.styleRecipe === "alpine-techwear" && !taste.runInspiration?.length) {
     return buildAlpineTechwearScene({ args, index, count, guidance });
   }
-  if (args.styleRecipe === "animal-nature-selfie") {
+  if (args.styleRecipe === "animal-nature-selfie" && !taste.runInspiration?.length) {
     return buildAnimalNatureSelfieScene({ args, index, count, guidance });
   }
 
@@ -731,7 +691,7 @@ async function generateDirectedScene({ client, model, args, index, count, avoidS
   const prompt = buildDirectedScenePrompt({ args, index, count, avoidSignatures }) + tasteInstructions(taste);
   const response = await client.responses.create({
     model,
-    input: [{ role: "user", content: [{ type: "input_text", text: prompt }] }],
+    input: [{ role: "user", content: [{ type: "input_text", text: prompt }, ...runInspirationImages(taste.runInspiration)] }],
   });
   const raw = parseDirectorScene(responseText(response));
   return {
@@ -940,7 +900,7 @@ async function pickUniqueScene({ client, promptModel, avoidSignatures, preferEne
     if (isAllowedScene(scene, avoidSignatures, { allowFamilyRepeat: true })) return scene;
   }
 
-  return preferEnergy ? buildReferenceAestheticScene() : buildSceneFromArchetype();
+  throw new Error("Could not find a fresh scene; refusing to repeat a recent concept");
 }
 
 function rememberScene(scene, avoidSignatures) {
@@ -1113,8 +1073,11 @@ async function main() {
   } catch {
     console.warn("Supabase not configured — drafts/prompts won't be saved to DB");
   }
-  const taste = await loadTaste(supabase);
-  if (args.reviewBatch && !positiveReferences(taste).length) throw new Error("Accept some positive references before generating a review batch");
+  let taste = await loadTaste(supabase);
+  if(args.fromPrompts && args.inspirationIds.length) throw new Error("Choose fresh generation when using Library inspiration");
+  taste.runInspiration=await loadRunInspiration(supabase,args.inspirationIds,path=>supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl);
+  if(taste.runInspiration.length) taste.hash=feedbackHash({previousHash:taste.hash,runInspiration:taste.runInspiration});
+  if (args.reviewBatch && !positiveReferences(taste).length && !taste.runInspiration.length) throw new Error("Accept some positive references before generating a review batch");
   const publicUrl = path => supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
   console.log(`Reviewed taste: ${positiveReferences(taste).length} positive references; snapshot ${taste.hash.slice(0,12)}`);
   const batchCaptions = [];
@@ -1161,11 +1124,8 @@ async function main() {
     console.log("");
   }
 
-  const recentSceneKeys = supabase ? await loadRecentScenesFromDb(supabase) : new Set();
-  // Preserve exact historical concepts, but reserve broad-family bans for this batch.
-  const avoidSceneSignatures = args.reviewBatch
-    ? new Set([...recentSceneKeys].filter(key => !key.startsWith("family:")))
-    : recentSceneKeys;
+  // Historical cooldown applies to concepts/setups, not whole setting categories.
+  const avoidSceneSignatures = recentSceneAvoidance(taste.recentGenerations);
 
   let completed = 0;
   let attempted = 0;
@@ -1198,11 +1158,11 @@ async function main() {
           avoidSignatures: avoidSceneSignatures,
           taste,
         });
-      } else if (args.reviewBatch && openai) {
+      } else if ((args.reviewBatch || taste.runInspiration.length) && openai) {
         // Review batches use the director on every item; normal generation keeps its existing variety logic.
         scene = await generateSceneFromDirector({client:openai,model:args.promptModel,avoidSignatures:avoidSceneSignatures,taste,batchScenes});
         if (!isAllowedScene(scene, avoidSceneSignatures)) {
-          console.log(`${prefix} repeated scene; trying another concept`);
+          console.log(`${prefix} repeated scene (${[...sceneDedupKeys(scene)].filter(key=>avoidSceneSignatures.has(key)).join(", ")}); trying another concept`);
           continue;
         }
       } else {
@@ -1213,6 +1173,16 @@ async function main() {
           preferEnergy: itemNumber % 3 === 1,
           taste,
         });
+      }
+      const requestedSetup = visualSetupKeys({subject:args.subject,action:args.action,setting:[args.idea,args.location].filter(Boolean).join(' ')});
+      if (visualSetupKeys(scene).some(key => avoidSceneSignatures.has(key) && !requestedSetup.includes(key))) {
+        console.log(`${prefix} repeated visual setup; trying a different idea`);
+        continue;
+      }
+      if (!args.dryRun && !(await isDistinctFromInspiration({client:openai,model:args.promptModel,scene,items:taste.runInspiration}))) {
+        rememberScene(scene, avoidSceneSignatures);
+        console.log(`${prefix} concept too close to inspiration; trying a fresh idea`);
+        continue;
       }
       rememberScene(scene, avoidSceneSignatures);
       batchScenes.push({subject:scene.subject,action:scene.action,setting:scene.setting,emotion:scene.emotion});
@@ -1326,6 +1296,8 @@ async function main() {
         }
       }
 
+      const recentGenerations=rememberGeneration(taste.recentGenerations || [],{name,scene,image_prompt:scenePrompt,created_at:draftMetadata.generatedAt});
+      taste = {...taste,recentGenerations,hash:feedbackHash({previousHash:taste.hash,recentGenerations})};
       saved++;
       completed++;
       console.log(`${prefix} → ${paths.imagePath}`);

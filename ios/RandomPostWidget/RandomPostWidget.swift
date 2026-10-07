@@ -7,6 +7,7 @@ struct RandomPostRow: Decodable {
     let id: UUID
     let storage_path: String
     let medium_storage_path: String?
+    let medium_eligible: Bool?
     let caption: String?
 }
 
@@ -36,7 +37,7 @@ struct RandomPostProvider: TimelineProvider {
                     supabaseURL: SupabaseConfig.url,
                     supabaseKey: SupabaseConfig.anonKey
                 )
-                let rows: [RandomPostRow] = try await client.rpc("get_random_post").execute().value
+                let rows: [RandomPostRow] = try await client.rpc("get_widget_post", params: ["widget_format": context.family == .systemMedium ? "medium" : "square"]).execute().value
                 guard let row = rows.first else {
                     entry = RandomPostEntry(date: Date(), imageData: nil, caption: nil)
                     refreshDate = startOfNextDay()
