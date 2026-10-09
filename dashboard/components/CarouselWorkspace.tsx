@@ -1,4 +1,4 @@
-import type {CarouselSchedule} from "../lib/api";
+import type {CarouselSchedule,CarouselSuggestion} from "../lib/api";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
@@ -63,6 +63,8 @@ export default function CarouselWorkspace({ mode }: { mode: "queue" | "editor" }
   const compactQueue = queueWidth < 900;
 
   const [images, setImages] = useState<StorageImage[]>([]);
+  const [suggestions,setSuggestions]=useState<CarouselSuggestion[]>([]);
+  const [suggesting,setSuggesting]=useState(false);
   const [schedule,setSchedule]=useState<CarouselSchedule | null>(null);
   const [carousels, setCarousels] = useState<InstagramCarousel[]>([]);
   const [instagramStatus, setInstagramStatus] = useState<InstagramStatus | null>(null);
@@ -84,13 +86,15 @@ export default function CarouselWorkspace({ mode }: { mode: "queue" | "editor" }
     try {
       setLoading(true);
       setError(null);
-      const [imageRes, carouselRes, statusRes] = await Promise.all([
+      const [imageRes, carouselRes, statusRes, suggestionRes] = await Promise.all([
         api.images(),
         api.carousels(),
         api.instagramStatus(),
+        api.carouselSuggestions(),
       ]);
       const activeImages = imageRes.items.filter(item => item.status === "active");
       setImages(activeImages);
+      setSuggestions(suggestionRes.suggestions);
       setSchedule(carouselRes.schedule);
       setCarousels(carouselRes.carousels.filter(carousel => carousel.status !== "posted"));
       setBuilder(current => {
@@ -282,6 +286,17 @@ export default function CarouselWorkspace({ mode }: { mode: "queue" | "editor" }
     }
   }
 
+  async function getSuggestions() {
+    setSuggesting(true);setError(null);
+    try {await api.suggestCarousels();setSuggestions((await api.carouselSuggestions()).suggestions);}
+    catch(e:any){setError(e.message);}finally{setSuggesting(false);}
+  }
+  async function reviewSuggestion(suggestion:CarouselSuggestion,decision:"accept"|"dismiss") {
+    setBusy(true);setError(null);
+    try {await api.reviewCarouselSuggestion(suggestion.id,decision);await loadAll({consumeSelection:false});}
+    catch(e:any){setError(e.message);}finally{setBusy(false);}
+  }
+
   return (
     <View style={styles.root}>
       <View style={styles.toolbar}>
@@ -289,6 +304,7 @@ export default function CarouselWorkspace({ mode }: { mode: "queue" | "editor" }
         {!isEditor && <Text style={[S.body, { marginLeft: 8 }]}>{carousels.length} queued</Text>}
         <View style={{ flex: 1 }} />
         {isEditor && <Btn label="View queue" onPress={() => router.push("/carousels")} small variant="outline" />}
+        {!isEditor && <Btn label="Suggest carousels" onPress={getSuggestions} loading={suggesting} disabled={busy || suggestions.length>0} small variant="outline" />}
         <Btn label="New carousel" onPress={newCarousel} small />
         <Btn label="Refresh" onPress={() => loadAll({ consumeSelection: false })} loading={loading} small variant="ghost" />
       </View>
@@ -308,6 +324,26 @@ export default function CarouselWorkspace({ mode }: { mode: "queue" | "editor" }
             </View>
           ) : (
             <ScrollView contentContainerStyle={styles.queueList}>
+              {suggestions.length>0 && <Text style={S.h2}>Suggested for you</Text>}
+              {suggestions.map(suggestion=><View key={suggestion.id} style={{padding:16,gap:12,borderWidth:1,borderColor:C.border,borderRadius:12}}>
+                <Text style={styles.queueTitle}>{suggestion.title}</Text>
+                <Text style={S.body}>{suggestion.reason}</Text>
+                <View style={{flexDirection:"row",gap:8}}>
+                  {suggestion.post_ids.map((id,index)=>{
+                    const post=images.find(image=>image.id===id);
+                    return <View key={id} style={{flex:1,maxWidth:180,gap:4}}>
+                      <View style={{aspectRatio:1,borderRadius:8,overflow:"hidden"}}><RemoteImage uri={post?.publicUrl || ""} resizeMode="contain" style={{width:"100%",height:"100%"}} /></View>
+                      <Text style={S.body}>Slide {index+1}</Text>
+                    </View>;
+                  })}
+                </View>
+                <View style={{flexDirection:"row",flexWrap:"wrap",gap:8,alignItems:"center"}}>
+                  <Btn label="Accept & queue" onPress={()=>reviewSuggestion(suggestion,"accept")} loading={busy} disabled={busy} small />
+                  <Btn label="Dismiss" onPress={()=>reviewSuggestion(suggestion,"dismiss")} disabled={busy} variant="ghost" small />
+                  <Text style={S.body}>Accepting adds it to your ready queue.</Text>
+                </View>
+              </View>)}
+              {suggestions.length>0 && <Text style={S.h2}>Posting queue</Text>}
               {carousels.map(carousel => (
                 <View
                   key={carousel.id}
