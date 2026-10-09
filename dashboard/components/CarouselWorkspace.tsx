@@ -1,3 +1,4 @@
+import type {CarouselSchedule} from "../lib/api";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
@@ -62,6 +63,7 @@ export default function CarouselWorkspace({ mode }: { mode: "queue" | "editor" }
   const compactQueue = queueWidth < 900;
 
   const [images, setImages] = useState<StorageImage[]>([]);
+  const [schedule,setSchedule]=useState<CarouselSchedule | null>(null);
   const [carousels, setCarousels] = useState<InstagramCarousel[]>([]);
   const [instagramStatus, setInstagramStatus] = useState<InstagramStatus | null>(null);
   const [builder, setBuilder] = useState<Builder | null>(null);
@@ -89,6 +91,7 @@ export default function CarouselWorkspace({ mode }: { mode: "queue" | "editor" }
       ]);
       const activeImages = imageRes.items.filter(item => item.status === "active");
       setImages(activeImages);
+      setSchedule(carouselRes.schedule);
       setCarousels(carouselRes.carousels.filter(carousel => carousel.status !== "posted"));
       setBuilder(current => {
         const saved = carouselRes.carousels.find(carousel => carousel.id === current?.id);
@@ -136,6 +139,13 @@ export default function CarouselWorkspace({ mode }: { mode: "queue" | "editor" }
 
   useFocusEffect(useCallback(() => {
     void loadAll();
+    let active=true;
+    const timer=setInterval(()=>{api.carousels().then(result=>{
+      if(!active)return;
+      setSchedule(result.schedule);
+      setCarousels(result.carousels.filter(item=>item.status!=="posted"));
+    }).catch(()=>{if(active)setError("Could not refresh the schedule. Refresh before relying on these times.");});},30000);
+    return ()=>{active=false;clearInterval(timer);};
   }, [isEditor, id]));
 
   useEffect(() => {
@@ -285,6 +295,10 @@ export default function CarouselWorkspace({ mode }: { mode: "queue" | "editor" }
 
       {error && <Text style={styles.error}>{error}</Text>}
 
+      {schedule && <View style={{paddingHorizontal:20,paddingVertical:12,gap:4}}>
+        <Text style={{color:C.textPrimary,fontWeight:"600"}}>{schedule.enabled ? "Automatic posting" : "Automatic posting paused"} · {schedule.hours.map(hour=>`${hour%12 || 12} ${hour<12?"AM":"PM"}`).join(" · ")} · New York time</Text>
+        <Text style={S.body}>{schedule.blocked ? "Scheduling is on hold while an uncertain publication is reviewed." : "Times follow queue order and update when the queue changes. Instagram processing may take a few minutes."}</Text>
+      </View>}
       <View style={styles.body}>
         {!isEditor && <View style={styles.queuePane} onLayout={event => setQueueWidth(event.nativeEvent.layout.width)}>
           {loading && !carousels.length ? (
@@ -320,6 +334,9 @@ export default function CarouselWorkspace({ mode }: { mode: "queue" | "editor" }
                       <Text style={styles.statusText}>{statusLabel(carousel.status)}</Text>
                     </View>
                   </View>
+                    <Text style={{color:carousel.scheduledAt ? C.textPrimary : C.textSecondary,fontSize:13,fontWeight:"600"}}>
+                      {carousel.schedulePhase === "uncertain" ? "Publishing needs review — outcome unconfirmed" : carousel.status === "posting" ? "Publishing now" : carousel.scheduledAt ? `Expected ${new Date(carousel.scheduledAt).toLocaleString("en-US",{timeZone:schedule?.timezone || "America/New_York",weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit",timeZoneName:"short"})}` : carousel.status === "ready" ? (schedule?.blocked ? "On hold — resolve the previous publication" : "Not scheduled — automatic posting paused") : "Not scheduled — mark ready to join"}
+                    </Text>
                     {!!carousel.caption && <Text style={styles.queueCaption} numberOfLines={2}>{carousel.caption.split("\n").filter(line => /[\p{L}\p{N}]/u.test(line)).join(" ")}</Text>}
                     {!!carousel.lastError && <Text style={styles.queueError} numberOfLines={2}>{carousel.lastError}</Text>}
                   </View>
@@ -330,7 +347,7 @@ export default function CarouselWorkspace({ mode }: { mode: "queue" | "editor" }
                       <Btn label="Open" onPress={() => Linking.openURL(carousel.permalink!)} small variant="outline" />
                     )}
                     {compactQueue && <View style={{ flex: 1 }} />}
-                    {carousel.status !== "posted" && (
+                    {schedule?.enabled === false && carousel.status !== "posted" && (
                       <Btn
                         label={carousel.status === "failed" ? "Retry" : "Post now"}
                         onPress={() => postNow(carousel.id)}
@@ -436,13 +453,13 @@ export default function CarouselWorkspace({ mode }: { mode: "queue" | "editor" }
                   const saved = await saveBuilder("ready");
                   if (saved) newCarousel();
                 }} loading={busy} disabled={builder.items.length !== CAROUSEL_SIZE} />
-                <Btn
+                {schedule?.enabled === false && <Btn
                   label={builder.status === "failed" ? "Retry post" : "Post now"}
                   onPress={() => postNow()}
                   variant="outline"
                   loading={busy}
                   disabled={!instagramStatus?.publishEnabled || builder.items.length !== CAROUSEL_SIZE || builder.status === "posting" || builder.status === "posted"}
-                />
+                />}
                 {builder.permalink && <Btn label="Open Instagram" onPress={() => Linking.openURL(builder.permalink!)} variant="outline" />}
               </View>
 
