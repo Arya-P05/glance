@@ -425,7 +425,7 @@ async function listCarousels(supabase, projectUrl, { includeArchived = false } =
   let query = supabase
     .from("instagram_carousels")
     .select("*")
-    .order("created_at", { ascending: false }).order("id", {ascending:true});
+    .order("queued_at", { ascending: true, nullsFirst: false }).order("created_at", { ascending: true }).order("id", {ascending:true});
   if (!includeArchived) query = query.neq("status", "archived");
 
   const { data: rows, error } = await query;

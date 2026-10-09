@@ -181,3 +181,5 @@ Requires migration `20261009020000_carousel_suggestions.sql` and the existing `O
 A previously used/reserved cover cannot lead another carousel. Ready-queue edits and suggestion acceptance also reject covers already queued. Suggestions may use historical covers in positions 2–5, subject to the existing recent-post cooldown. Local and cloud publication are protected by a database trigger. Cloud cover conflicts become failed queue items with an explanation instead of publishing duplicates.
 
 History covers publications recorded by this app; it cannot reconstruct manual Instagram posts or identify re-uploads under a new post ID and storage path. Apply `20261009030000_carousel_cover_history.sql`; verify with rollback-only `supabase/tests/carousel_cover_history.sql`.
+
+Queue order uses `queued_at`, set when a carousel becomes ready. New carousels and older drafts marked ready append to the back; edits retain their place. Removing and re-adding a carousel gives it a new place at the back. The dashboard schedule and cloud worker share this order. Migration `20261009040000_fifo_carousel_queue.sql` preserves the existing queue sequence during rollout.
