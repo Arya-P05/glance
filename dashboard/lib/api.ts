@@ -38,7 +38,7 @@ export const api = {
     }),
 
   instagramStatus: () => request<InstagramStatus>("/api/instagram/status"),
-  carousels: () => request<{ carousels: InstagramCarousel[] }>("/api/carousels"),
+  carousels: () => request<{ carousels: InstagramCarousel[]; schedule: CarouselSchedule }>("/api/carousels"),
   carousel: (id: string) => request<{ carousel: InstagramCarousel }>(`/api/carousels/${id}`),
   createCarousel: (opts: { title?: string; caption?: string; postIds: string[]; status?: "draft" | "ready" }) =>
     request<{ carousel: InstagramCarousel }>("/api/carousels", {
@@ -199,6 +199,8 @@ export interface StorageImage {
   publicUrl: string;
 }
 
+export interface CarouselSchedule { enabled:boolean; timezone:string; hours:number[]; blocked:boolean; }
+
 export type InstagramCarouselStatus = "draft" | "ready" | "posting" | "posted" | "failed" | "archived";
 
 export interface InstagramCarouselItem {
@@ -213,6 +215,8 @@ export interface InstagramCarouselItem {
 }
 
 export interface InstagramCarousel {
+  scheduledAt?: string | null;
+  schedulePhase?: string | null;
   id: string;
   title: string;
   caption: string;
