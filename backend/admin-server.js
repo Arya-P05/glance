@@ -1,3 +1,4 @@
+import {carouselSchedule} from './carousel-schedule.js';
 import {loadRunInspiration, validateInspirationIds} from './run-inspiration.js';
 /**
  * Local admin UI + dashboard API.
@@ -422,7 +423,7 @@ async function listCarousels(supabase, projectUrl, { includeArchived = false } =
   let query = supabase
     .from("instagram_carousels")
     .select("*")
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false }).order("id", {ascending:true});
   if (!includeArchived) query = query.neq("status", "archived");
 
   const { data: rows, error } = await query;
@@ -1661,7 +1662,7 @@ async function main() {
     if (req.method === "GET" && url.pathname === "/api/carousels") {
       try {
         const includeArchived = ["1", "true", "yes"].includes(String(url.searchParams.get("includeArchived") || "").toLowerCase());
-        json(res, 200, { carousels: await listCarousels(supabase, projectUrl, { includeArchived }) });
+        json(res, 200, await carouselSchedule(supabase, await listCarousels(supabase, projectUrl, { includeArchived })));
       } catch (e) {
         json(res, e.statusCode || 500, { error: e.message });
       }
