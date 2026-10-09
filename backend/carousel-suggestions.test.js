@@ -9,3 +9,7 @@ test('rejects unknown or repeated images',()=>{
 });
 test('rejects reuse across suggestions',()=>assert.throws(()=>validateSuggestions([suggestion,suggestion],candidates)));
 test('does not repeat dismissed grouping in different order',()=>assert.throws(()=>validateSuggestions([suggestion],candidates,[{post_ids:[...suggestion.postIds].reverse()}])));
+test('previous covers cannot lead but can appear later',()=>{
+ assert.throws(()=>validateSuggestions([suggestion],candidates,[],['0']));
+ assert.equal(validateSuggestions([{...suggestion,postIds:['1','0','2','3','4']}],candidates,[],['0']).length,1);
+});
