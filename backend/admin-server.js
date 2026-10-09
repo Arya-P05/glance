@@ -1,3 +1,5 @@
+import {suggestCarousels} from './carousel-suggestions.js';
+let suggestingCarousels = false;
 import {carouselSchedule} from './carousel-schedule.js';
 import {loadRunInspiration, validateInspirationIds} from './run-inspiration.js';
 /**
@@ -1645,6 +1647,40 @@ async function main() {
       const { error } = await supabase.from("posts").update({ status }).in("storage_path", paths);
       if (error) { json(res, 500, { error: error.message }); return; }
       json(res, 200, { updated: paths.length, status });
+      return;
+    }
+
+    if (url.pathname === "/api/carousel-suggestions" && req.method === "GET") {
+      try {
+        const result=await supabase.from("carousel_suggestions").select("*").eq("status","pending").order("created_at");
+        if(result.error)throw result.error;
+        json(res,200,{suggestions:result.data});
+      } catch(e) {json(res,500,{error:e.message});}
+      return;
+    }
+    if (url.pathname === "/api/carousel-suggestions" && req.method === "POST") {
+      if (suggestingCarousels) { json(res,409,{error:"Suggestions are already being prepared"}); return; }
+      suggestingCarousels = true;
+      try {
+        await suggestCarousels(supabase,new OpenAI({apiKey:env("OPENAI_API_KEY")}),path=>publicObjectUrl(projectUrl,path),process.env.OPENAI_PROMPT_MODEL || "gpt-4.1-mini");
+        json(res,200,{success:true});
+      } catch(e) {json(res,400,{error:e.message});}
+      finally {suggestingCarousels = false;}
+      return;
+    }
+    const suggestionMatch=url.pathname.match(/^\/api\/carousel-suggestions\/([^/]+)\/(accept|dismiss)$/);
+    if(suggestionMatch && req.method === "POST") {
+      try {
+        if(suggestionMatch[2]==="accept") {
+          const result=await supabase.rpc("accept_carousel_suggestion",{suggestion_id:suggestionMatch[1]});
+          if(result.error)throw result.error;
+          json(res,200,{carouselId:result.data});
+        } else {
+          const result=await supabase.from("carousel_suggestions").update({status:"dismissed"}).eq("id",suggestionMatch[1]).eq("status","pending");
+          if(result.error)throw result.error;
+          json(res,200,{success:true});
+        }
+      } catch(e){json(res,400,{error:e.message});}
       return;
     }
 
