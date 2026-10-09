@@ -165,3 +165,11 @@ Deploy the schema migration, provision secrets, deploy `supabase functions deplo
 Local manual/automated POST-to-publish is blocked while cloud scheduling is enabled, preventing the previous desktop automation from competing. This also means manual Post now requires pausing the cloud schedule. Your Mac and Codex are not involved in cloud execution. Inspect `cron.job_run_details`, `net._http_response`, Edge Function logs, and `instagram_schedule_runs` for operational status; no separate notification service is configured.
 
 Validation: `deno check --node-modules-dir=none supabase/functions/instagram-scheduler/index.ts`; `backend/tests/cloud-schedule.integration.sql` runs within a rollback transaction and checks leases, uncertain-outcome protection, completed-slot idempotency, pause, and daylight saving. Never test publishing against a real account just to check deployment.
+
+### Suggested carousels
+
+On the carousel queue, **Suggest carousels** proposes up to three five-slide groupings from active Library images. The model sees the images and captions, looking for a coherent mood with varied subjects and scenes. Images already ready/posting or in the last 20 published carousels are excluded.
+
+Review all pending suggestions before requesting another batch. **Accept & queue** creates a ready carousel with the default caption, which enters the automatic posting schedule. Acceptance is transactional and idempotent. **Dismiss** rejects only the grouping, leaving the Library images untouched. Previous groupings are retained to avoid proposing them again (the most recent 300 are checked). Suggestions persist across refreshes.
+
+Requires migration `20261009020000_carousel_suggestions.sql` and the existing `OPENAI_API_KEY`. The suggestion model uses `OPENAI_PROMPT_MODEL`, defaulting to `gpt-4.1-mini`.
