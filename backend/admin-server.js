@@ -736,11 +736,12 @@ async function publishCarouselNow(supabase, projectUrl, id, log) {
   const inactive = existing.items.find(item => item.post.status !== "active");
   if (inactive) throw httpError("Carousels can only publish active Library posts", 400);
 
-  const { error: postingError } = await supabase
+  const { data: claimed, error: postingError } = await supabase
     .from("instagram_carousels")
     .update({ status: "posting", last_error: null })
-    .eq("id", id);
+    .eq("id", id).in("status", ["ready", "draft", "failed"]).select("id");
   if (postingError) throw postingError;
+  if (!claimed?.length) throw httpError("Carousel is already being published",409);
 
   try {
     log(`Publishing carousel ${id}`);
@@ -1681,6 +1682,12 @@ async function main() {
     const carouselPostNowMatch = url.pathname.match(/^\/api\/carousels\/([^/]+)\/post-now$/);
     if (req.method === "POST" && carouselPostNowMatch) {
       try {
+        const schedule=await supabase.from("instagram_schedule").select("enabled").eq("id",true).single();
+        if(schedule.error) throw new Error("Cannot verify cloud scheduling status");
+        if(schedule.data.enabled) {
+          json(res,409,{error:"Cloud scheduling is active. Pause it before manual or local automated publishing to prevent duplicate slots."});
+          return;
+        }
         const status = await getInstagramConnectionStatus();
         if (!status.publishEnabled) {
           json(res, 400, { error: status.error || `Instagram publishing is not connected${status.missing?.length ? `: missing ${status.missing.join(", ")}` : ""}` });
