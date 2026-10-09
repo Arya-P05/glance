@@ -1,3 +1,4 @@
+import type {CarouselSchedule,CarouselSuggestion} from "../lib/api";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
@@ -62,6 +63,9 @@ export default function CarouselWorkspace({ mode }: { mode: "queue" | "editor" }
   const compactQueue = queueWidth < 900;
 
   const [images, setImages] = useState<StorageImage[]>([]);
+  const [suggestions,setSuggestions]=useState<CarouselSuggestion[]>([]);
+  const [suggesting,setSuggesting]=useState(false);
+  const [schedule,setSchedule]=useState<CarouselSchedule | null>(null);
   const [carousels, setCarousels] = useState<InstagramCarousel[]>([]);
   const [instagramStatus, setInstagramStatus] = useState<InstagramStatus | null>(null);
   const [builder, setBuilder] = useState<Builder | null>(null);
@@ -82,13 +86,16 @@ export default function CarouselWorkspace({ mode }: { mode: "queue" | "editor" }
     try {
       setLoading(true);
       setError(null);
-      const [imageRes, carouselRes, statusRes] = await Promise.all([
+      const [imageRes, carouselRes, statusRes, suggestionRes] = await Promise.all([
         api.images(),
         api.carousels(),
         api.instagramStatus(),
+        api.carouselSuggestions(),
       ]);
       const activeImages = imageRes.items.filter(item => item.status === "active");
       setImages(activeImages);
+      setSuggestions(suggestionRes.suggestions);
+      setSchedule(carouselRes.schedule);
       setCarousels(carouselRes.carousels.filter(carousel => carousel.status !== "posted"));
       setBuilder(current => {
         const saved = carouselRes.carousels.find(carousel => carousel.id === current?.id);
@@ -136,6 +143,13 @@ export default function CarouselWorkspace({ mode }: { mode: "queue" | "editor" }
 
   useFocusEffect(useCallback(() => {
     void loadAll();
+    let active=true;
+    const timer=setInterval(()=>{api.carousels().then(result=>{
+      if(!active)return;
+      setSchedule(result.schedule);
+      setCarousels(result.carousels.filter(item=>item.status!=="posted"));
+    }).catch(()=>{if(active)setError("Could not refresh the schedule. Refresh before relying on these times.");});},30000);
+    return ()=>{active=false;clearInterval(timer);};
   }, [isEditor, id]));
 
   useEffect(() => {
@@ -272,6 +286,17 @@ export default function CarouselWorkspace({ mode }: { mode: "queue" | "editor" }
     }
   }
 
+  async function getSuggestions() {
+    setSuggesting(true);setError(null);
+    try {await api.suggestCarousels();setSuggestions((await api.carouselSuggestions()).suggestions);}
+    catch(e:any){setError(e.message);}finally{setSuggesting(false);}
+  }
+  async function reviewSuggestion(suggestion:CarouselSuggestion,decision:"accept"|"dismiss") {
+    setBusy(true);setError(null);
+    try {await api.reviewCarouselSuggestion(suggestion.id,decision);await loadAll({consumeSelection:false});}
+    catch(e:any){setError(e.message);}finally{setBusy(false);}
+  }
+
   return (
     <View style={styles.root}>
       <View style={styles.toolbar}>
@@ -279,12 +304,17 @@ export default function CarouselWorkspace({ mode }: { mode: "queue" | "editor" }
         {!isEditor && <Text style={[S.body, { marginLeft: 8 }]}>{carousels.length} queued</Text>}
         <View style={{ flex: 1 }} />
         {isEditor && <Btn label="View queue" onPress={() => router.push("/carousels")} small variant="outline" />}
+        {!isEditor && <Btn label="Suggest carousels" onPress={getSuggestions} loading={suggesting} disabled={busy || suggestions.length>0} small variant="outline" />}
         <Btn label="New carousel" onPress={newCarousel} small />
         <Btn label="Refresh" onPress={() => loadAll({ consumeSelection: false })} loading={loading} small variant="ghost" />
       </View>
 
       {error && <Text style={styles.error}>{error}</Text>}
 
+      {schedule && <View style={{paddingHorizontal:20,paddingVertical:12,gap:4}}>
+        <Text style={{color:C.textPrimary,fontWeight:"600"}}>{schedule.enabled ? "Automatic posting" : "Automatic posting paused"} · {schedule.hours.map(hour=>`${hour%12 || 12} ${hour<12?"AM":"PM"}`).join(" · ")} · New York time</Text>
+        <Text style={S.body}>{schedule.blocked ? "Scheduling is on hold while an uncertain publication is reviewed." : "Times follow queue order and update when the queue changes. Instagram processing may take a few minutes."}</Text>
+      </View>}
       <View style={styles.body}>
         {!isEditor && <View style={styles.queuePane} onLayout={event => setQueueWidth(event.nativeEvent.layout.width)}>
           {loading && !carousels.length ? (
@@ -294,6 +324,26 @@ export default function CarouselWorkspace({ mode }: { mode: "queue" | "editor" }
             </View>
           ) : (
             <ScrollView contentContainerStyle={styles.queueList}>
+              {suggestions.length>0 && <Text style={S.h2}>Suggested for you</Text>}
+              {suggestions.map(suggestion=><View key={suggestion.id} style={{padding:16,gap:12,borderWidth:1,borderColor:C.border,borderRadius:12}}>
+                <Text style={styles.queueTitle}>{suggestion.title}</Text>
+                <Text style={S.body}>{suggestion.reason}</Text>
+                <View style={{flexDirection:"row",gap:8}}>
+                  {suggestion.post_ids.map((id,index)=>{
+                    const post=images.find(image=>image.id===id);
+                    return <View key={id} style={{flex:1,maxWidth:180,gap:4}}>
+                      <View style={{aspectRatio:1,borderRadius:8,overflow:"hidden"}}><RemoteImage uri={post?.publicUrl || ""} resizeMode="contain" style={{width:"100%",height:"100%"}} /></View>
+                      <Text style={S.body}>Slide {index+1}</Text>
+                    </View>;
+                  })}
+                </View>
+                <View style={{flexDirection:"row",flexWrap:"wrap",gap:8,alignItems:"center"}}>
+                  <Btn label="Accept & queue" onPress={()=>reviewSuggestion(suggestion,"accept")} loading={busy} disabled={busy} small />
+                  <Btn label="Dismiss" onPress={()=>reviewSuggestion(suggestion,"dismiss")} disabled={busy} variant="ghost" small />
+                  <Text style={S.body}>Accepting adds it to your ready queue.</Text>
+                </View>
+              </View>)}
+              {suggestions.length>0 && <Text style={S.h2}>Posting queue</Text>}
               {carousels.map(carousel => (
                 <View
                   key={carousel.id}
@@ -314,12 +364,11 @@ export default function CarouselWorkspace({ mode }: { mode: "queue" | "editor" }
                     ))}
                   </View>
                   <View style={styles.queueDetails}>
-                  <View style={styles.queueTop}>
-                    <Text style={styles.queueTitle} numberOfLines={1}>{carousel.title || "Untitled carousel"}</Text>
-                    <View style={[styles.statusPill, styles[`status_${carousel.status}` as keyof typeof styles] as any]}>
-                      <Text style={styles.statusText}>{statusLabel(carousel.status)}</Text>
+                    <View style={styles.schedulePill}>
+                    <Text style={{color:carousel.scheduledAt ? C.textPrimary : C.textSecondary,fontSize:13,fontWeight:"600"}}>
+                      {carousel.schedulePhase === "uncertain" ? "Publishing needs review — outcome unconfirmed" : carousel.status === "posting" ? "Publishing now" : carousel.scheduledAt ? `${new Date(carousel.scheduledAt).toLocaleString("en-US",{timeZone:schedule?.timezone || "America/New_York",weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit",timeZoneName:"short"})}` : carousel.status === "ready" ? (schedule?.blocked ? "On hold — resolve the previous publication" : "Not scheduled — automatic posting paused") : "Not scheduled — mark ready to join"}
+                    </Text>
                     </View>
-                  </View>
                     {!!carousel.caption && <Text style={styles.queueCaption} numberOfLines={2}>{carousel.caption.split("\n").filter(line => /[\p{L}\p{N}]/u.test(line)).join(" ")}</Text>}
                     {!!carousel.lastError && <Text style={styles.queueError} numberOfLines={2}>{carousel.lastError}</Text>}
                   </View>
@@ -330,7 +379,7 @@ export default function CarouselWorkspace({ mode }: { mode: "queue" | "editor" }
                       <Btn label="Open" onPress={() => Linking.openURL(carousel.permalink!)} small variant="outline" />
                     )}
                     {compactQueue && <View style={{ flex: 1 }} />}
-                    {carousel.status !== "posted" && (
+                    {schedule?.enabled === false && carousel.status !== "posted" && (
                       <Btn
                         label={carousel.status === "failed" ? "Retry" : "Post now"}
                         onPress={() => postNow(carousel.id)}
@@ -436,13 +485,13 @@ export default function CarouselWorkspace({ mode }: { mode: "queue" | "editor" }
                   const saved = await saveBuilder("ready");
                   if (saved) newCarousel();
                 }} loading={busy} disabled={builder.items.length !== CAROUSEL_SIZE} />
-                <Btn
+                {schedule?.enabled === false && <Btn
                   label={builder.status === "failed" ? "Retry post" : "Post now"}
                   onPress={() => postNow()}
                   variant="outline"
                   loading={busy}
                   disabled={!instagramStatus?.publishEnabled || builder.items.length !== CAROUSEL_SIZE || builder.status === "posting" || builder.status === "posted"}
-                />
+                />}
                 {builder.permalink && <Btn label="Open Instagram" onPress={() => Linking.openURL(builder.permalink!)} variant="outline" />}
               </View>
 
@@ -520,7 +569,7 @@ const styles = StyleSheet.create({
     gap: 20,
   },
   queueCardCompact: { flexDirection: "column", alignItems: "stretch", gap: 14 },
-  queueTop: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
+  schedulePill: { alignSelf: "flex-start", borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: C.surfaceHigh, borderWidth: 1, borderColor: C.border },
   queueDetails: { flex: 1, minWidth: 0, gap: 8 },
   queueTitle: { color: C.textPrimary, fontSize: 14, fontWeight: "600", flexShrink: 1 },
   queueThumbs: { flexDirection: "row", gap: 5, width: 320, flexShrink: 0 },

@@ -1,3 +1,6 @@
+import {suggestCarousels} from './carousel-suggestions.js';
+let suggestingCarousels = false;
+import {carouselSchedule} from './carousel-schedule.js';
 import {loadRunInspiration, validateInspirationIds} from './run-inspiration.js';
 /**
  * Local admin UI + dashboard API.
@@ -422,7 +425,7 @@ async function listCarousels(supabase, projectUrl, { includeArchived = false } =
   let query = supabase
     .from("instagram_carousels")
     .select("*")
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false }).order("id", {ascending:true});
   if (!includeArchived) query = query.neq("status", "archived");
 
   const { data: rows, error } = await query;
@@ -457,6 +460,11 @@ async function listCarousels(supabase, projectUrl, { includeArchived = false } =
   return rows.map(row => serializeCarousel(row, itemsByCarousel.get(row.id) ?? [], postsById, projectUrl));
 }
 
+async function assertUnusedCover(supabase, postId, carouselId = null) {
+  const {error} = await supabase.rpc("assert_unused_carousel_cover", {p_post:postId,p_carousel:carouselId});
+  if (error) throw httpError(error.message, 400);
+}
+
 async function createCarousel(supabase, projectUrl, payload) {
   const postIds = normalizeCarouselPostIds(payload?.postIds);
   const posts = await getActivePostsInOrder(supabase, postIds);
@@ -465,6 +473,7 @@ async function createCarousel(supabase, projectUrl, payload) {
     : `Carousel ${new Date().toLocaleDateString()}`;
   const caption = typeof payload.caption === "string" ? payload.caption : "";
   const status = payload.status === "ready" ? "ready" : "draft";
+  if(status === "ready") await assertUnusedCover(supabase,postIds[0]);
 
   const { data: row, error } = await supabase
     .from("instagram_carousels")
@@ -508,6 +517,9 @@ async function updateCarousel(supabase, projectUrl, id, payload) {
   if (typeof payload.status === "string") {
     if (!["draft", "ready"].includes(payload.status)) throw httpError("status must be draft or ready", 400);
     patch.status = payload.status;
+  }
+  if ((patch.status || existing.status) === "ready") {
+    await assertUnusedCover(supabase,posts ? posts[0].id : existing.items[0]?.postId,id);
   }
   if (Object.keys(patch).length) {
     patch.last_error = null;
@@ -1647,6 +1659,40 @@ async function main() {
       return;
     }
 
+    if (url.pathname === "/api/carousel-suggestions" && req.method === "GET") {
+      try {
+        const result=await supabase.from("carousel_suggestions").select("*").eq("status","pending").order("created_at");
+        if(result.error)throw result.error;
+        json(res,200,{suggestions:result.data});
+      } catch(e) {json(res,500,{error:e.message});}
+      return;
+    }
+    if (url.pathname === "/api/carousel-suggestions" && req.method === "POST") {
+      if (suggestingCarousels) { json(res,409,{error:"Suggestions are already being prepared"}); return; }
+      suggestingCarousels = true;
+      try {
+        await suggestCarousels(supabase,new OpenAI({apiKey:env("OPENAI_API_KEY")}),path=>publicObjectUrl(projectUrl,path),process.env.OPENAI_PROMPT_MODEL || "gpt-4.1-mini");
+        json(res,200,{success:true});
+      } catch(e) {json(res,400,{error:e.message});}
+      finally {suggestingCarousels = false;}
+      return;
+    }
+    const suggestionMatch=url.pathname.match(/^\/api\/carousel-suggestions\/([^/]+)\/(accept|dismiss)$/);
+    if(suggestionMatch && req.method === "POST") {
+      try {
+        if(suggestionMatch[2]==="accept") {
+          const result=await supabase.rpc("accept_carousel_suggestion",{suggestion_id:suggestionMatch[1]});
+          if(result.error)throw result.error;
+          json(res,200,{carouselId:result.data});
+        } else {
+          const result=await supabase.from("carousel_suggestions").update({status:"dismissed"}).eq("id",suggestionMatch[1]).eq("status","pending");
+          if(result.error)throw result.error;
+          json(res,200,{success:true});
+        }
+      } catch(e){json(res,400,{error:e.message});}
+      return;
+    }
+
     // ── Instagram Carousels ───────────────────────────────────────────────
 
     if (req.method === "GET" && url.pathname === "/api/instagram/status") {
@@ -1661,7 +1707,7 @@ async function main() {
     if (req.method === "GET" && url.pathname === "/api/carousels") {
       try {
         const includeArchived = ["1", "true", "yes"].includes(String(url.searchParams.get("includeArchived") || "").toLowerCase());
-        json(res, 200, { carousels: await listCarousels(supabase, projectUrl, { includeArchived }) });
+        json(res, 200, await carouselSchedule(supabase, await listCarousels(supabase, projectUrl, { includeArchived })));
       } catch (e) {
         json(res, e.statusCode || 500, { error: e.message });
       }

@@ -165,3 +165,19 @@ Deploy the schema migration, provision secrets, deploy `supabase functions deplo
 Local manual/automated POST-to-publish is blocked while cloud scheduling is enabled, preventing the previous desktop automation from competing. This also means manual Post now requires pausing the cloud schedule. Your Mac and Codex are not involved in cloud execution. Inspect `cron.job_run_details`, `net._http_response`, Edge Function logs, and `instagram_schedule_runs` for operational status; no separate notification service is configured.
 
 Validation: `deno check --node-modules-dir=none supabase/functions/instagram-scheduler/index.ts`; `backend/tests/cloud-schedule.integration.sql` runs within a rollback transaction and checks leases, uncertain-outcome protection, completed-slot idempotency, pause, and daylight saving. Never test publishing against a real account just to check deployment.
+
+### Suggested carousels
+
+On the carousel queue, **Suggest carousels** proposes up to three five-slide groupings from active Library images. The model sees the images and captions, looking for a coherent mood with varied subjects and scenes. Images already ready/posting or in the last 20 published carousels are excluded.
+
+Review all pending suggestions before requesting another batch. **Accept & queue** creates a ready carousel with the default caption, which enters the automatic posting schedule. Acceptance is transactional and idempotent. **Dismiss** rejects only the grouping, leaving the Library images untouched. Previous groupings are retained to avoid proposing them again (the most recent 300 are checked). Suggestions persist across refreshes.
+
+Requires migration `20261009020000_carousel_suggestions.sql` and the existing `OPENAI_API_KEY`. The suggestion model uses `OPENAI_PROMPT_MODEL`, defaulting to `gpt-4.1-mini`.
+
+### First-slide history
+
+`instagram_cover_history` permanently records first-slide post IDs and storage paths independently of carousel archival/deletion. Existing published carousels, including archived rows with `posted_at`, are backfilled. Covers are reserved when publishing starts and marked with the publication time when it succeeds. Failed or uncertain attempts retain reservations; retrying the same carousel is allowed.
+
+A previously used/reserved cover cannot lead another carousel. Ready-queue edits and suggestion acceptance also reject covers already queued. Suggestions may use historical covers in positions 2–5, subject to the existing recent-post cooldown. Local and cloud publication are protected by a database trigger. Cloud cover conflicts become failed queue items with an explanation instead of publishing duplicates.
+
+History covers publications recorded by this app; it cannot reconstruct manual Instagram posts or identify re-uploads under a new post ID and storage path. Apply `20261009030000_carousel_cover_history.sql`; verify with rollback-only `supabase/tests/carousel_cover_history.sql`.
