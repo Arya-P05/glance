@@ -364,15 +364,11 @@ export default function CarouselWorkspace({ mode }: { mode: "queue" | "editor" }
                     ))}
                   </View>
                   <View style={styles.queueDetails}>
-                  <View style={styles.queueTop}>
-                    <Text style={styles.queueTitle} numberOfLines={1}>{carousel.title || "Untitled carousel"}</Text>
-                    <View style={[styles.statusPill, styles[`status_${carousel.status}` as keyof typeof styles] as any]}>
-                      <Text style={styles.statusText}>{statusLabel(carousel.status)}</Text>
-                    </View>
-                  </View>
+                    <View style={styles.schedulePill}>
                     <Text style={{color:carousel.scheduledAt ? C.textPrimary : C.textSecondary,fontSize:13,fontWeight:"600"}}>
-                      {carousel.schedulePhase === "uncertain" ? "Publishing needs review — outcome unconfirmed" : carousel.status === "posting" ? "Publishing now" : carousel.scheduledAt ? `Expected ${new Date(carousel.scheduledAt).toLocaleString("en-US",{timeZone:schedule?.timezone || "America/New_York",weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit",timeZoneName:"short"})}` : carousel.status === "ready" ? (schedule?.blocked ? "On hold — resolve the previous publication" : "Not scheduled — automatic posting paused") : "Not scheduled — mark ready to join"}
+                      {carousel.schedulePhase === "uncertain" ? "Publishing needs review — outcome unconfirmed" : carousel.status === "posting" ? "Publishing now" : carousel.scheduledAt ? `${new Date(carousel.scheduledAt).toLocaleString("en-US",{timeZone:schedule?.timezone || "America/New_York",weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit",timeZoneName:"short"})}` : carousel.status === "ready" ? (schedule?.blocked ? "On hold — resolve the previous publication" : "Not scheduled — automatic posting paused") : "Not scheduled — mark ready to join"}
                     </Text>
+                    </View>
                     {!!carousel.caption && <Text style={styles.queueCaption} numberOfLines={2}>{carousel.caption.split("\n").filter(line => /[\p{L}\p{N}]/u.test(line)).join(" ")}</Text>}
                     {!!carousel.lastError && <Text style={styles.queueError} numberOfLines={2}>{carousel.lastError}</Text>}
                   </View>
@@ -573,7 +569,7 @@ const styles = StyleSheet.create({
     gap: 20,
   },
   queueCardCompact: { flexDirection: "column", alignItems: "stretch", gap: 14 },
-  queueTop: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
+  schedulePill: { alignSelf: "flex-start", borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: C.surfaceHigh, borderWidth: 1, borderColor: C.border },
   queueDetails: { flex: 1, minWidth: 0, gap: 8 },
   queueTitle: { color: C.textPrimary, fontSize: 14, fontWeight: "600", flexShrink: 1 },
   queueThumbs: { flexDirection: "row", gap: 5, width: 320, flexShrink: 0 },
