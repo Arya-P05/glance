@@ -38,6 +38,9 @@ export const api = {
     }),
 
   instagramStatus: () => request<InstagramStatus>("/api/instagram/status"),
+  carouselSuggestions: () => request<{suggestions:CarouselSuggestion[]}>("/api/carousel-suggestions"),
+  suggestCarousels: () => request<{success:boolean}>("/api/carousel-suggestions",{method:"POST"}),
+  reviewCarouselSuggestion: (id:string,decision:"accept"|"dismiss") => request(`/api/carousel-suggestions/${id}/${decision}`,{method:"POST"}),
   carousels: () => request<{ carousels: InstagramCarousel[]; schedule: CarouselSchedule }>("/api/carousels"),
   carousel: (id: string) => request<{ carousel: InstagramCarousel }>(`/api/carousels/${id}`),
   createCarousel: (opts: { title?: string; caption?: string; postIds: string[]; status?: "draft" | "ready" }) =>
@@ -416,3 +419,5 @@ export interface CreativeReference {
   benchmark: boolean;
   publicUrl: string;
 }
+
+export interface CarouselSuggestion {id:string;title:string;reason:string;post_ids:string[];}
