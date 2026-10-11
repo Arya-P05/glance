@@ -183,3 +183,9 @@ A previously used/reserved cover cannot lead another carousel. Ready-queue edits
 History covers publications recorded by this app; it cannot reconstruct manual Instagram posts or identify re-uploads under a new post ID and storage path. Apply `20261009030000_carousel_cover_history.sql`; verify with rollback-only `supabase/tests/carousel_cover_history.sql`.
 
 Queue order uses `queued_at`, set when a carousel becomes ready. New carousels and older drafts marked ready append to the back; edits retain their place. Removing and re-adding a carousel gives it a new place at the back. The dashboard schedule and cloud worker share this order. Migration `20261009040000_fifo_carousel_queue.sql` preserves the existing queue sequence during rollout.
+
+### Learning carousel taste
+
+Each suggestion run retrieves up to three accepted and three dismissed five-slide carousels and supplies their actual images, captions, and original order as visual taste examples. It uses the newest complete examples from up to 20 suggestions per decision. Pending suggestions and model-written titles/rationales are not preference evidence. Missing-image examples are skipped; database failures stop the run instead of silently losing feedback.
+
+The recommender infers tentative preferences in mood, character mix, caption tone, visual variety, and sequencing. Dismissals apply to the combination, never automatically blacklist individual images. Sparse or conflicting decisions should preserve exploration. Existing approvals/rejections are used automatically on the next run; pending suggestions are not regenerated. This is contextual learning from saved decisions, not model fine-tuning or an engagement predictor. The candidate pool remains a random sample of up to 24 eligible Library images; cover, cooldown, and duplicate-grouping rules still apply.
