@@ -1,3 +1,4 @@
+import {prepareGrain} from './image-grain.js';
 import {suggestCarousels} from './carousel-suggestions.js';
 let suggestingCarousels = false;
 import {carouselSchedule} from './carousel-schedule.js';
@@ -1079,7 +1080,7 @@ async function findBackgroundMatch(supabase, { id, dbId, statuses }) {
 
   let matchQuery = supabase
     .from("backgrounds")
-    .select("id, name, metadata, status")
+    .select("id, name, storage_path, metadata, status")
     .in("status", allowedStatuses)
     .limit(2);
   matchQuery = isUuid(target) ? matchQuery.eq("id", target) : matchQuery.eq("name", target);
@@ -1096,18 +1097,23 @@ async function findBackgroundMatch(supabase, { id, dbId, statuses }) {
   return matches[0];
 }
 
-async function stagePendingBackground(supabase, { id, dbId, reason }) {
+async function stagePendingBackground(supabase, { id, dbId, reason, grain = false }) {
   const row = await findBackgroundMatch(supabase, { id, dbId, statuses: ["pending"] });
   const metadata = row.metadata && typeof row.metadata === "object" ? row.metadata : {};
+  if (typeof grain !== "boolean") throw httpError("grain must be a boolean",400);
+  const selected = grain ? await prepareGrain(supabase,BUCKET,row) : null;
+  const storagePath = selected?.storagePath || metadata.grain?.originalStoragePath || row.storage_path;
   const now = new Date().toISOString();
   const { data, error } = await supabase
     .from("backgrounds")
     .update({
       status: "staged",
+      storage_path: storagePath,
       metadata: {
         ...metadata,
+        grain: {enabled:grain,version:selected?.version || "grain-v1",originalStoragePath:selected?.originalStoragePath || storagePath},
         imageApprovedAt: metadata.imageApprovedAt ?? now,
-        reviewFeedback:[reviewEvent("background","accepted",null,{storagePath:row.storage_path},reason)],
+        reviewFeedback:[reviewEvent("background","accepted",null,{storagePath,grain},reason)],
       },
     })
     .eq("id", row.id)
@@ -1884,11 +1890,21 @@ async function main() {
       return;
     }
 
+    if (req.method === "POST" && url.pathname === "/api/backgrounds/grain-preview") {
+      try {
+        const payload=await readBody(req);
+        const row=await findBackgroundMatch(supabase,{id:payload.id,dbId:payload.dbId,statuses:["pending"]});
+        const result=await prepareGrain(supabase,BUCKET,row);
+        json(res,200,{imageUrl:publicObjectUrl(projectUrl,result.storagePath)});
+      } catch(e) {json(res,e.statusCode || 500,{error:e.message});}
+      return;
+    }
+
     if (req.method === "POST" && url.pathname === "/api/backgrounds/stage") {
       const payload = await readBody(req);
       if (!payload?.id && !payload?.dbId) { json(res, 400, { error: "id required" }); return; }
       try {
-        const row = await stagePendingBackground(supabase, { id: payload.id, dbId: payload.dbId, reason:payload.reason });
+        const row = await stagePendingBackground(supabase, { id: payload.id, dbId: payload.dbId, reason:payload.reason, grain:payload.grain });
         if (!row.metadata?.captionOptions?.some(hasCompleteCaption)) {
           kickOffBackgroundCaptionJob(supabase, {
             id: row.name,

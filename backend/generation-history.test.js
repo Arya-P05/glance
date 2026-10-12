@@ -34,3 +34,14 @@ test('historical setting categories remain available while exact concepts and ri
  assert.ok([...sceneDedupKeys(fresh)].every(key=>!blocked.has(key)));
  assert.ok([...sceneDedupKeys(original)].some(key=>blocked.has(key)));
 });
+
+test('within-batch memory blocks concepts but permits broad setting families',async()=>{
+ const {rememberSceneAvoidance}=await import('./generation-history.js');
+ const {sceneDedupKeys}=await import('./poster-concepts.js');
+ const first={conceptId:'hike',subject:'friends',action:'hiking a trail',setting:'mountain grass'};
+ const second={conceptId:'picnic',subject:'couple',action:'sharing lunch',setting:'flower field'};
+ const blocked=new Set();rememberSceneAvoidance(first,blocked);
+ assert.ok(blocked.has('concept:hike'));
+ assert.ok(![...blocked].some(k=>k.startsWith('family:')));
+ assert.ok(![...sceneDedupKeys(second)].some(k=>blocked.has(k)));
+});

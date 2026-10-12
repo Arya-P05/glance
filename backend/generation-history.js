@@ -20,3 +20,7 @@ export function recentSceneAvoidance(history=[]) {
   return new Set(history.slice(0,RECENT_GENERATION_LIMIT).flatMap(item=>
     [...sceneDedupKeys(item.scene)].filter(key=>!key.startsWith('family:'))));
 }
+
+export function rememberSceneAvoidance(scene, signatures) {
+  for(const key of sceneDedupKeys(scene)) if(!key.startsWith('family:')) signatures.add(key);
+}

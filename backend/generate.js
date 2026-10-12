@@ -1,7 +1,7 @@
-import {loadRunInspiration, validateInspirationIds, runInspirationImages, isDistinctFromInspiration} from './run-inspiration.js';
+import {loadRunInspiration, validateInspirationIds, runInspirationImages, analyzeInspiration, inspirationDirectorPrompt, inspirationWriterPrompt, reviewInspirationFit} from './run-inspiration.js';
 import { visualSetupKeys } from './poster-concepts.js';
 import { feedbackHash } from './generation-feedback.js';
-import { rememberGeneration, recentSceneAvoidance } from './generation-history.js';
+import { rememberGeneration, recentSceneAvoidance, rememberSceneAvoidance } from './generation-history.js';
 /**
  * Content generator — prompts or raw background images.
  *
@@ -412,7 +412,7 @@ async function generateImage({ client, model, prompt, size }) {
 }
 
 async function generateDetailedPrompt({ client, model, scene, taste, visualReferences = [] }) {
-  const promptWriterPrompt = buildPromptWriterPrompt(scene) + tasteInstructions(taste);
+  const promptWriterPrompt = (taste.runInspiration?.length ? inspirationWriterPrompt(scene,taste.inspirationBrief) : buildPromptWriterPrompt(scene)) + tasteInstructions(taste);
   const response = await client.responses.create({
     model,
     input: [{ role: "user", content: [{ type: "input_text", text: promptWriterPrompt }, ...visualReferences] }],
@@ -437,15 +437,17 @@ function responseText(response) {
   return chunks.join("\n");
 }
 
-async function generateSceneFromDirector({ client, model, avoidSignatures, taste, batchScenes = [] }) {
-  const prompt = buildSceneDirectorPrompt({ avoidSignatures }) + tasteInstructions(taste)
-    + `\nScenes already selected in this batch: ${JSON.stringify(batchScenes)}. Change the subject, expression, action and camera distance as well as the setting. Do not default to another scream-laughing face. Calm or understated expressions are welcome.`;
+async function generateSceneFromDirector({ client, model, avoidSignatures, taste, batchScenes = [], direction = {} }) {
+  const prompt = (taste.runInspiration?.length ? inspirationDirectorPrompt(taste.inspirationBrief,batchScenes,avoidSignatures,direction) : buildSceneDirectorPrompt({ avoidSignatures })) + tasteInstructions(taste)
+    + (taste.runInspiration?.length
+      ? `\nKeep the shared reference direction across this batch; vary concrete activity, location and framing without losing the subject relationships.`
+      : `\nScenes already selected in this batch: ${JSON.stringify(batchScenes)}. Change the subject, expression, action and camera distance as well as the setting. Do not default to another scream-laughing face. Calm or understated expressions are welcome.`);
   const response = await client.responses.create({
     model,
     input: [{ role: "user", content: [{ type: "input_text", text: prompt }, ...runInspirationImages(taste.runInspiration)] }],
   });
   const raw = parseDirectorScene(responseText(response));
-  return buildSceneFromDirector(raw);
+  return taste.runInspiration?.length ? {...raw,source:"run-inspiration"} : buildSceneFromDirector(raw);
 }
 
 function hasDirection(args) {
@@ -904,7 +906,7 @@ async function pickUniqueScene({ client, promptModel, avoidSignatures, preferEne
 }
 
 function rememberScene(scene, avoidSignatures) {
-  for (const key of sceneDedupKeys(scene)) avoidSignatures.add(key);
+  rememberSceneAvoidance(scene,avoidSignatures);
 }
 
 async function loadFromPromptsDir(dir, count, filterIds = null) {
@@ -1076,7 +1078,11 @@ async function main() {
   let taste = await loadTaste(supabase);
   if(args.fromPrompts && args.inspirationIds.length) throw new Error("Choose fresh generation when using Library inspiration");
   taste.runInspiration=await loadRunInspiration(supabase,args.inspirationIds,path=>supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl);
-  if(taste.runInspiration.length) taste.hash=feedbackHash({previousHash:taste.hash,runInspiration:taste.runInspiration});
+  if(taste.runInspiration.length && openai) {
+    taste.inspirationBrief=await withProgress("understanding selected inspiration",()=>analyzeInspiration({client:openai,model:args.promptModel,items:taste.runInspiration}));
+    console.log(`Inspiration direction: ${taste.inspirationBrief.summary}`);
+  }
+  if(taste.runInspiration.length) taste.hash=feedbackHash({previousHash:taste.hash,runInspiration:taste.runInspiration,inspirationBrief:taste.inspirationBrief});
   if (args.reviewBatch && !positiveReferences(taste).length && !taste.runInspiration.length) throw new Error("Accept some positive references before generating a review batch");
   const publicUrl = path => supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
   console.log(`Reviewed taste: ${positiveReferences(taste).length} positive references; snapshot ${taste.hash.slice(0,12)}`);
@@ -1129,12 +1135,15 @@ async function main() {
 
   let completed = 0;
   let attempted = 0;
+  let conceptAttempts = 0;
+  let rejected = 0;
   const maxAttempts = args.dryRun
     ? args.count
     : args.count + Math.max(3, Math.ceil(args.count * 0.5));
 
-  while (completed < args.count && attempted < maxAttempts) {
-    attempted++;
+  const maxConceptAttempts = args.dryRun ? args.count : args.count * 8;
+  while (completed < args.count && attempted < maxAttempts && conceptAttempts < maxConceptAttempts) {
+    conceptAttempts++;
     const itemNumber = completed + 1;
     const prefix = `[${itemNumber}/${args.count}]`;
 
@@ -1147,8 +1156,11 @@ async function main() {
       ({ scene, prompt: scenePrompt, promptWriterPrompt, name } = source);
       generationTaste = source.generationTaste;
     } else {
-      name = makeBackgroundName(attempted);
-      if (hasDirection(args)) {
+      name = makeBackgroundName(conceptAttempts);
+      if (taste.runInspiration.length && openai) {
+        scene = await generateSceneFromDirector({client:openai,model:args.promptModel,avoidSignatures:avoidSceneSignatures,taste,batchScenes,direction:directionMetadata(args)});
+        if (!isAllowedScene(scene,avoidSceneSignatures)) {rejected++;console.log(`${prefix} repeated concept; trying another idea`);continue;}
+      } else if (hasDirection(args)) {
         scene = await generateDirectedScene({
           client: openai,
           model: args.promptModel,
@@ -1162,6 +1174,7 @@ async function main() {
         // Review batches use the director on every item; normal generation keeps its existing variety logic.
         scene = await generateSceneFromDirector({client:openai,model:args.promptModel,avoidSignatures:avoidSceneSignatures,taste,batchScenes});
         if (!isAllowedScene(scene, avoidSceneSignatures)) {
+          rejected++;
           console.log(`${prefix} repeated scene (${[...sceneDedupKeys(scene)].filter(key=>avoidSceneSignatures.has(key)).join(", ")}); trying another concept`);
           continue;
         }
@@ -1176,13 +1189,18 @@ async function main() {
       }
       const requestedSetup = visualSetupKeys({subject:args.subject,action:args.action,setting:[args.idea,args.location].filter(Boolean).join(' ')});
       if (visualSetupKeys(scene).some(key => avoidSceneSignatures.has(key) && !requestedSetup.includes(key))) {
+        rejected++;
         console.log(`${prefix} repeated visual setup; trying a different idea`);
         continue;
       }
-      if (!args.dryRun && !(await isDistinctFromInspiration({client:openai,model:args.promptModel,scene,items:taste.runInspiration}))) {
-        rememberScene(scene, avoidSceneSignatures);
-        console.log(`${prefix} concept too close to inspiration; trying a fresh idea`);
-        continue;
+      if (!args.dryRun && taste.runInspiration.length) {
+        const fit=await reviewInspirationFit({client:openai,model:args.promptModel,scene,items:taste.runInspiration,brief:taste.inspirationBrief});
+        if(!fit.distinct || !fit.aligned) {
+          rejected++;
+          rememberScene(scene,avoidSceneSignatures);
+          console.log(`${prefix} concept rejected (${fit.reason}); trying another idea`);
+          continue;
+        }
       }
       rememberScene(scene, avoidSceneSignatures);
       batchScenes.push({subject:scene.subject,action:scene.action,setting:scene.setting,emotion:scene.emotion});
@@ -1200,6 +1218,7 @@ async function main() {
     }
 
     try {
+      attempted++;
       console.log(`${prefix} ${sceneSummary(scene)}`);
 
       if (!promptSources && !scenePrompt) {
@@ -1208,6 +1227,15 @@ async function main() {
         );
         scenePrompt = result.prompt || fallbackPrompt;
         promptWriterPrompt = result.promptWriterPrompt;
+      }
+
+      if (generationTaste.runInspiration?.length) {
+        const fit=await reviewInspirationFit({client:openai,model:args.promptModel,scene:{imagePrompt:scenePrompt},items:generationTaste.runInspiration,brief:generationTaste.inspirationBrief});
+        if(!fit.distinct || !fit.aligned) {
+          rejected++;attempted--;
+          console.log(`${prefix} prompt rejected (${fit.reason}); replanning before image generation`);
+          continue;
+        }
       }
 
       if (args.mode === "prompts") {
@@ -1309,9 +1337,9 @@ async function main() {
   }
 
   if (!args.dryRun) {
-    console.log(`Done: ${saved} saved, ${failed} failed in ${formatElapsed(Date.now() - startedAt)}.`);
+    console.log(`Done: ${saved} saved, ${failed} failed, ${rejected} concepts/prompts rejected in ${formatElapsed(Date.now() - startedAt)}.`);
     if (saved < args.count) {
-      console.log(`Stopped after ${attempted} attempt${attempted === 1 ? "" : "s"} before reaching ${args.count} saved item${args.count === 1 ? "" : "s"}.`);
+      console.log(`Stopped after ${conceptAttempts} concept attempts and ${attempted} generation attempts before reaching ${args.count} saved item${args.count === 1 ? "" : "s"}.`);
     }
     if (saved < args.count) process.exitCode = 1;
     if (saved > 0 && args.mode !== "prompts") {

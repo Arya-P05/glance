@@ -70,7 +70,8 @@ export const api = {
   drafts: () => request<{ drafts: Draft[] }>("/api/drafts"),
   backgrounds: (opts?: { status?: "pending" | "staged" }) =>
     request<{ backgrounds: Draft[] }>(`/api/backgrounds${opts?.status ? `?status=${opts.status}` : ""}`),
-  stageBackground: (opts: { id?: string; dbId?: string; reason?: string }) =>
+  previewBackgroundGrain: (id: string) => request<{imageUrl:string}>("/api/backgrounds/grain-preview", {method:"POST",body:JSON.stringify({id})}),
+  stageBackground: (opts: { id?: string; dbId?: string; reason?: string; grain?: boolean }) =>
     request<{ success: boolean; background: Draft }>("/api/backgrounds/stage", {
       method: "POST",
       body: JSON.stringify(opts),
