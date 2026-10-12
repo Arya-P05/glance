@@ -41,6 +41,7 @@ export default function BackgroundsScreen() {
   const [screen, setScreen] = useState<Screen>("grid");
   const [reviewIdx, setReviewIdx] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [grainChoices,setGrainChoices] = useState<Record<string,{enabled:boolean;url:string}>>({});
   const [reviewReason, setReviewReason] = useState("");
   useEffect(() => setReviewReason(""), [backgrounds[reviewIdx]?.id]);
   const [error, setError] = useState<string | null>(null);
@@ -94,7 +95,7 @@ export default function BackgroundsScreen() {
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [screen, reviewIdx, backgrounds, busy, reviewReason]);
+  }, [screen, reviewIdx, backgrounds, busy, reviewReason, grainChoices]);
 
   function openReview(startIdx = 0) {
     setReviewIdx(startIdx);
@@ -138,6 +139,19 @@ export default function BackgroundsScreen() {
     }
   }
 
+  async function toggleGrain() {
+    const background=backgrounds[reviewIdx];
+    if(!background || busy)return;
+    const choice=grainChoices[background.id];
+    if(choice) {setGrainChoices(prev=>({...prev,[background.id]:{...choice,enabled:!choice.enabled}}));return;}
+    setBusy(true);setError(null);
+    try {
+      const {imageUrl}=await api.previewBackgroundGrain(background.id);
+      setGrainChoices(prev=>({...prev,[background.id]:{enabled:true,url:imageUrl}}));
+    } catch(e:any) {alert(e.message || "Could not preview grain");}
+    finally {setBusy(false);}
+  }
+
   async function approveCurrent() {
     const background = backgrounds[reviewIdx];
     if (!background || busy) return;
@@ -145,7 +159,7 @@ export default function BackgroundsScreen() {
     const id = background.id;
     setBusy(true);
     try {
-      await api.stageBackground({ id, dbId: background.dbId, reason:reviewReason });
+      await api.stageBackground({ id, dbId: background.dbId, reason:reviewReason, grain:grainChoices[id]?.enabled ?? false });
       const nextLength = Math.max(0, backgrounds.length - 1);
       setBackgrounds(prev => prev.filter(item => item.id !== id));
       if (nextLength === 0) setScreen("grid");
@@ -198,7 +212,7 @@ export default function BackgroundsScreen() {
       );
     }
 
-    const imgUri = backgroundImageUri(background, 1024);
+    const imgUri = grainChoices[background.id]?.enabled ? grainChoices[background.id].url : backgroundImageUri(background, 1024);
     const scene = background.meta?.scene;
     const candidateCaption = background.meta?.reviewBatchId ? background.meta.captionOptions?.[background.meta.selectedCaptionIndex ?? 0] : undefined;
     const posterPreview = candidateCaption ? {backgroundUri:imgUri,caption:candidateCaption,layout:normalizeCaptionLayout(background.meta?.captionLayout)} : undefined;
@@ -250,6 +264,8 @@ export default function BackgroundsScreen() {
 
           <View style={styles.metaPanel}>
             <Text style={styles.metaTitle}>Background review</Text>
+            <Btn label={grainChoices[background.id]?.enabled ? "Grain: On" : "Grain: Off"} onPress={toggleGrain} disabled={busy} variant="outline" small />
+            <Text style={styles.metaValueMuted}>Toggle to compare. Approval saves the selected version; the original is kept.</Text>
             <Text style={styles.metaValueMuted}>Judge the image only. Caption and placement decisions are saved separately.</Text>
             <TextInput accessibilityLabel="Background feedback" placeholder="Optional: awkward pose, unclear subject, love the lighting…" placeholderTextColor={C.textMuted} value={reviewReason} onChangeText={setReviewReason} maxLength={1000} multiline style={{color:C.textPrimary,padding:12,borderWidth:1,borderColor:C.border,borderRadius:8,minHeight:70}} />
             <View style={styles.metaSection}>
