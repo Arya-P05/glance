@@ -212,7 +212,7 @@ export default function BackgroundsScreen() {
       );
     }
 
-    const imgUri = grainChoices[background.id]?.enabled ? grainChoices[background.id].url : backgroundImageUri(background, 1024);
+    const imgUri = grainChoices[background.id]?.enabled ? previewImageUrl(grainChoices[background.id].url, 1024) : backgroundImageUri(background, 1024);
     const scene = background.meta?.scene;
     const candidateCaption = background.meta?.reviewBatchId ? background.meta.captionOptions?.[background.meta.selectedCaptionIndex ?? 0] : undefined;
     const posterPreview = candidateCaption ? {backgroundUri:imgUri,caption:candidateCaption,layout:normalizeCaptionLayout(background.meta?.captionLayout)} : undefined;
