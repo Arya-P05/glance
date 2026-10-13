@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
-  View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Platform, TextInput, useWindowDimensions,
+  View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Platform, Switch, TextInput, useWindowDimensions,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { NavArrowLeft, NavArrowRight, RefreshDouble, Trash } from "iconoir-react-native";
@@ -30,6 +30,32 @@ function backgroundGridImageUri(background: Draft) {
   if (background.rawImageUrl) return background.rawImageUrl;
   if (background.imageUrl) return background.imageUrl;
   return `${API_BASE}/content/backgrounds/${background.filename}`;
+}
+
+function ReviewSection({ title, indicator, children }: {
+  title: string;
+  indicator?: string;
+  children: React.ReactNode;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <View style={styles.reviewSection}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded }}
+        onPress={() => setExpanded(value => !value)}
+        style={({ pressed }) => [styles.sectionToggle, pressed && { opacity: 0.65 }]}
+      >
+        <Text style={styles.sectionTitle}>{title}</Text>
+        {indicator && <Text style={styles.sectionIndicator}>{indicator}</Text>}
+        <NavArrowRight
+          color={C.textSecondary} width={14} height={14}
+          style={{ transform: [{ rotate: expanded ? "90deg" : "0deg" }] }}
+        />
+      </Pressable>
+      {expanded && <View style={styles.sectionContent}>{children}</View>}
+    </View>
+  );
 }
 
 export default function BackgroundsScreen() {
@@ -262,71 +288,94 @@ export default function BackgroundsScreen() {
             </View>
           </View>
 
-          <View style={styles.metaPanel}>
-            <Text style={styles.metaTitle}>Background review</Text>
-            <Btn label={grainChoices[background.id]?.enabled ? "Grain: On" : "Grain: Off"} onPress={toggleGrain} disabled={busy} variant="outline" small />
-            <Text style={styles.metaValueMuted}>Toggle to compare. Approval saves the selected version; the original is kept.</Text>
-            <Text style={styles.metaValueMuted}>Judge the image only. Caption and placement decisions are saved separately.</Text>
-            <TextInput accessibilityLabel="Background feedback" placeholder="Optional: awkward pose, unclear subject, love the lighting…" placeholderTextColor={C.textMuted} value={reviewReason} onChangeText={setReviewReason} maxLength={1000} multiline style={{color:C.textPrimary,padding:12,borderWidth:1,borderColor:C.border,borderRadius:8,minHeight:70}} />
-            <View style={styles.metaSection}>
-              <Text style={styles.metaLabel}>Status</Text>
-              <Text style={styles.metaMissing}>Pending background</Text>
-            </View>
-            {candidateCaption && <View style={styles.metaSection}>
-              <Text style={styles.metaLabel}>Review batch · proposed wording</Text>
-              <Text style={styles.metaValue}>{candidateCaption.smallText} / {candidateCaption.bigText}</Text>
-              <Text style={styles.metaValueMuted}>Generated from your reviewed references. Approve the background to choose or edit its caption.</Text>
-            </View>}
-            {scene && (
-              <View style={styles.metaSection}>
-                <Text style={styles.metaLabel}>Scene</Text>
-                {scene.subject && <Text style={styles.metaValue}>{scene.subject}</Text>}
-                {scene.setting && <Text style={styles.metaValueMuted}>{scene.setting}</Text>}
-                {scene.mood && <Text style={styles.metaValueMuted}>{scene.mood}</Text>}
-                {scene.style && <Text style={styles.metaValueMuted}>{scene.style}</Text>}
-              </View>
-            )}
-            {background.meta?.imageModel && (
-              <View style={styles.metaSection}>
-                <Text style={styles.metaLabel}>Model</Text>
-                <Text style={styles.metaValue}>{background.meta.imageModel}</Text>
-              </View>
-            )}
-            {background.meta?.generatedAt && (
-              <View style={styles.metaSection}>
-                <Text style={styles.metaLabel}>Generated</Text>
-                <Text style={styles.metaValue}>
-                  {new Date(background.meta.generatedAt).toLocaleString()}
-                </Text>
-              </View>
-            )}
-            <View style={styles.tweakPanel}>
-              <Text style={styles.metaLabel}>Tweak image</Text>
-              <Text style={styles.tweakHint}>Make one small edit and keep this frame.</Text>
-              <TextInput
-                value={tweakInstruction}
-                onChangeText={setTweakInstruction}
-                placeholder="no open mouth"
-                placeholderTextColor={C.textMuted}
-                multiline
-                editable={!busy}
-                textAlignVertical="top"
-                style={styles.tweakInput}
+          <ScrollView style={styles.metaPanel} contentContainerStyle={styles.metaPanelContent}>
+            <Text style={styles.metaTitle}>Background</Text>
+            <View style={styles.grainRow}>
+              <Text style={styles.sectionTitle}>Film grain</Text>
+              <Switch
+                accessibilityLabel="Film grain"
+                value={grainChoices[background.id]?.enabled ?? false}
+                onValueChange={toggleGrain}
+                disabled={busy}
+                trackColor={{ false: C.border, true: C.accentDim }}
+                thumbColor={C.textPrimary}
               />
-              <Btn
-                label="Generate tweak"
-                onPress={reviseCurrentBackground}
-                loading={busy}
-                disabled={!tweakInstruction.trim() || busy}
-                small
-              />
-              {background.meta?.revision?.instruction && (
-                <Text style={styles.tweakSource}>
-                  From: {background.meta.revision.instruction}
-                </Text>
-              )}
             </View>
-          </View>
+            <Text style={styles.grainHint}>Approval saves this version.</Text>
+
+            <View key={background.id}>
+              <ReviewSection title="Review note" indicator={reviewReason.trim() ? "Added" : undefined}>
+                <TextInput
+                  accessibilityLabel="Background feedback"
+                  placeholder="Add a note (optional)"
+                  placeholderTextColor={C.textSecondary}
+                  value={reviewReason}
+                  onChangeText={setReviewReason}
+                  maxLength={1000}
+                  multiline
+                  editable={!busy}
+                  textAlignVertical="top"
+                  style={styles.tweakInput}
+                />
+              </ReviewSection>
+              <ReviewSection title="Tweak image" indicator={tweakInstruction.trim() ? "Draft" : undefined}>
+                <TextInput
+                  accessibilityLabel="Image edit instructions"
+                  value={tweakInstruction}
+                  onChangeText={setTweakInstruction}
+                  placeholder="Describe a small change…"
+                  placeholderTextColor={C.textSecondary}
+                  multiline
+                  editable={!busy}
+                  textAlignVertical="top"
+                  style={styles.tweakInput}
+                />
+                <Btn
+                  label="Generate tweak"
+                  onPress={reviseCurrentBackground}
+                  loading={busy}
+                  disabled={!tweakInstruction.trim() || busy}
+                  variant="outline"
+                  small
+                />
+              </ReviewSection>
+              <ReviewSection title="Image details">
+                {candidateCaption && <View style={styles.metaSection}>
+                  <Text style={styles.metaLabel}>Proposed caption</Text>
+                  <Text style={styles.metaValue}>{candidateCaption.smallText} / {candidateCaption.bigText}</Text>
+                  <Text style={styles.metaValueMuted}>Choose or edit the caption after approval.</Text>
+                </View>}
+                {scene && (
+                  <View style={styles.metaSection}>
+                    <Text style={styles.metaLabel}>Scene</Text>
+                    {scene.subject && <Text style={styles.metaValue}>{scene.subject}</Text>}
+                    {scene.setting && <Text style={styles.metaValueMuted}>{scene.setting}</Text>}
+                    {scene.mood && <Text style={styles.metaValueMuted}>{scene.mood}</Text>}
+                    {scene.style && <Text style={styles.metaValueMuted}>{scene.style}</Text>}
+                  </View>
+                )}
+                {background.meta?.imageModel && (
+                  <View style={styles.metaSection}>
+                    <Text style={styles.metaLabel}>Model</Text>
+                    <Text style={styles.metaValue}>{background.meta.imageModel}</Text>
+                  </View>
+                )}
+                {background.meta?.generatedAt && (
+                  <View style={styles.metaSection}>
+                    <Text style={styles.metaLabel}>Generated</Text>
+                    <Text style={styles.metaValue}>{new Date(background.meta.generatedAt).toLocaleString()}</Text>
+                  </View>
+                )}
+                {background.meta?.revision?.instruction && (
+                  <View style={styles.metaSection}>
+                    <Text style={styles.metaLabel}>Last edit</Text>
+                    <Text style={styles.metaValueMuted}>{background.meta.revision.instruction}</Text>
+                  </View>
+                )}
+                <Text style={styles.metaValueMuted}>The original image is kept. Captions and placement are saved separately.</Text>
+              </ReviewSection>
+            </View>
+          </ScrollView>
         </View>
 
         <View style={styles.actionBar}>
@@ -494,10 +543,10 @@ const styles = StyleSheet.create({
     borderLeftWidth: 1,
     borderLeftColor: C.border,
     backgroundColor: C.surface,
-    padding: 18,
-    gap: 0,
+    flexGrow: 0,
     flexShrink: 0,
   },
+  metaPanelContent: { padding: 18 },
   metaTitle: {
     color: C.textSecondary,
     fontSize: 11,
@@ -517,15 +566,13 @@ const styles = StyleSheet.create({
   },
   metaValue: { color: C.textPrimary, fontSize: 12, lineHeight: 17 },
   metaValueMuted: { color: C.textSecondary, fontSize: 11, lineHeight: 16 },
-  metaMissing: { color: C.textMuted, fontSize: 12, fontStyle: "italic", marginBottom: 16 },
-  tweakPanel: {
-    marginTop: 4,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: C.border,
-    gap: 8,
-  },
-  tweakHint: { color: C.textMuted, fontSize: 11, lineHeight: 15 },
+  grainRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
+  grainHint: { color: C.textSecondary, fontSize: 11, lineHeight: 16, marginTop: 8, marginBottom: 20 },
+  reviewSection: { borderTopWidth: 1, borderTopColor: C.border },
+  sectionToggle: { flexDirection: "row", alignItems: "center", gap: 8, minHeight: 44 },
+  sectionTitle: { flex: 1, color: C.textPrimary, fontSize: 12, fontWeight: "500" },
+  sectionIndicator: { color: C.textSecondary, fontSize: 10 },
+  sectionContent: { gap: 10, paddingBottom: 16 },
   tweakInput: {
     minHeight: 82,
     borderWidth: 1,
@@ -537,9 +584,7 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     fontSize: 12,
     lineHeight: 17,
-    outlineStyle: "none",
-  } as any,
-  tweakSource: { color: C.textMuted, fontSize: 10, lineHeight: 14 },
+  },
   actionBar: {
     flexDirection: "row",
     alignItems: "center",
