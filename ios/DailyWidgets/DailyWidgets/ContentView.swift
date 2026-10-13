@@ -25,6 +25,9 @@ private struct PhotoHomeView: View {
 
     @State private var hasPhotoWidget = false
     @State private var refreshInterval: PhotoRefreshInterval = .oneHour
+    @State private var previewVariant: SharedPhotoSnapshot.SnapshotVariant = .standard
+    @State private var hasSquareWidget = false
+    @State private var hasMediumWidget = false
     @State private var sharedWidgetImage: UIImage?
     @State private var sharedLastUpdated: Date?
     @State private var recentItems: [SharedPhotoSnapshot.RecentItem] = []
@@ -100,6 +103,9 @@ private struct PhotoHomeView: View {
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
             handleForegroundActivation()
         }
+        .onChange(of: previewVariant) { _, _ in
+            refreshSharedWidgetImage()
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 handleForegroundActivation()
@@ -167,6 +173,7 @@ private struct PhotoHomeView: View {
             let safeTop = geo.safeAreaInsets.top
             let safeBottom = geo.safeAreaInsets.bottom
             let imageSide = min(geo.size.width, geo.size.height * 0.5)
+            let imageHeight = previewVariant == .medium ? imageSide * 0.47 : imageSide
             let topBias = max(safeTop, geo.size.height * 0.11)
             let bottomBias = max(safeBottom + 56, geo.size.height * 0.2)
 
@@ -180,7 +187,7 @@ private struct PhotoHomeView: View {
                             Image(uiImage: img)
                                 .resizable()
                                 .scaledToFill()
-                                .frame(width: imageSide, height: imageSide)
+                                .frame(width: imageSide, height: imageHeight)
                                 .clipped()
                                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                                 .id(SharedPhotoSnapshot.lastUpdated?.timeIntervalSince1970 ?? 0)
@@ -194,11 +201,21 @@ private struct PhotoHomeView: View {
                                     .multilineTextAlignment(.center)
                                     .padding(.horizontal, 20)
                             }
-                            .frame(width: imageSide, height: imageSide)
+                            .frame(width: imageSide, height: imageHeight)
                         }
                     }
                     .padding(.leading, geo.size.width * 0.06)
                     Spacer(minLength: 0)
+                }
+
+                if hasSquareWidget && hasMediumWidget {
+                    Picker("Widget preview", selection: $previewVariant) {
+                        Text("small / large").tag(SharedPhotoSnapshot.SnapshotVariant.standard)
+                        Text("medium").tag(SharedPhotoSnapshot.SnapshotVariant.medium)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(maxWidth: 260)
+                    .padding(.top, 14)
                 }
 
                 if let contextLine {
@@ -321,7 +338,15 @@ private struct PhotoHomeView: View {
         WidgetCenter.shared.getCurrentConfigurations { result in
             guard case let .success(configs) = result else { return }
             DispatchQueue.main.async {
-                let installed = configs.contains { $0.kind == Self.photoWidgetKind }
+                let photoWidgets = configs.filter { $0.kind == Self.photoWidgetKind }
+                let installed = !photoWidgets.isEmpty
+                hasSquareWidget = photoWidgets.contains { $0.family == .systemSmall || $0.family == .systemLarge }
+                hasMediumWidget = photoWidgets.contains { $0.family == .systemMedium }
+                if hasMediumWidget && !hasSquareWidget {
+                    previewVariant = .medium
+                } else if !hasMediumWidget {
+                    previewVariant = .standard
+                }
                 let widgetRenderedAfterOnboarding = didWidgetRenderAfterOnboardingBaseline()
                 if widgetRenderedAfterOnboarding {
                     widgetPresenceConfirmedBySnapshot = true
@@ -389,7 +414,7 @@ private struct PhotoHomeView: View {
         }
     }
 
-    /// Fetch once in-app, write app-group JPEG, then reload timelines so the widget reads that file (see `SharedPhotoSnapshot.markNextWidgetTimelineReloadUsesSharedSnapshotOnly`).
+    /// Commit both widget shapes together, then ask WidgetKit to reload every installed size.
     private func forceRefreshWidgetAndSnapshot() {
         guard !isForceRefreshing else { return }
         isForceRefreshing = true
@@ -407,8 +432,14 @@ private struct PhotoHomeView: View {
     }
 
     private func refreshSharedWidgetImage() {
-        sharedWidgetImage = SharedPhotoSnapshot.loadImage()
-        sharedLastUpdated = SharedPhotoSnapshot.lastUpdated
+        if let snapshot = SharedPhotoSnapshot.store?.load() {
+            sharedWidgetImage = snapshot.photo(for: previewVariant).flatMap { UIImage(data: $0.data) }
+                ?? SharedPhotoSnapshot.loadImage(for: previewVariant)
+            sharedLastUpdated = snapshot.updatedAt
+        } else {
+            sharedWidgetImage = SharedPhotoSnapshot.loadImage(for: previewVariant)
+            sharedLastUpdated = SharedPhotoSnapshot.snapshotLastUpdated(for: previewVariant)
+        }
         recentItems = SharedPhotoSnapshot.loadRecentItems()
     }
 

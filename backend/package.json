@@ -5,6 +5,7 @@
   "type": "module",
   "main": "sync.js",
   "scripts": {
+    "summer-roll": "node summer-roll/server.js",
     "gen": "node generate.js",
     "gen:prompts": "node generate.js --mode prompts",
     "gen:images": "node generate.js --mode images",
