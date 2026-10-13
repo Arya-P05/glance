@@ -68,6 +68,30 @@ export default function BackgroundsScreen() {
   const [reviewIdx, setReviewIdx] = useState(0);
   const [busy, setBusy] = useState(false);
   const [grainChoices,setGrainChoices] = useState<Record<string,{enabled:boolean;url:string}>>({});
+  const [grainError, setGrainError] = useState<string | null>(null);
+  const [grainRetry, setGrainRetry] = useState(0);
+  const currentBackgroundId = backgrounds[reviewIdx]?.id;
+  const currentGrain = currentBackgroundId ? grainChoices[currentBackgroundId] : undefined;
+  const grainEnabled = currentGrain?.enabled ?? true;
+  const grainUrl = currentGrain?.url;
+  const grainPreviewPending = grainEnabled && !grainUrl;
+
+  useEffect(() => {
+    setGrainError(null);
+    if (screen !== "review" || !currentBackgroundId || !grainEnabled || grainUrl) return;
+    let cancelled = false;
+    api.previewBackgroundGrain(currentBackgroundId).then(({ imageUrl }) => {
+      if (cancelled) return;
+      setGrainChoices(prev => ({
+        ...prev,
+        [currentBackgroundId]: { enabled: true, url: imageUrl },
+      }));
+    }).catch((e: Error) => {
+      if (!cancelled) setGrainError(e.message || "Could not preview grain");
+    });
+    return () => { cancelled = true; };
+  }, [screen, currentBackgroundId, grainEnabled, grainUrl, grainRetry]);
+
   const [reviewReason, setReviewReason] = useState("");
   useEffect(() => setReviewReason(""), [backgrounds[reviewIdx]?.id]);
   const [error, setError] = useState<string | null>(null);
@@ -165,27 +189,26 @@ export default function BackgroundsScreen() {
     }
   }
 
-  async function toggleGrain() {
-    const background=backgrounds[reviewIdx];
-    if(!background || busy)return;
-    const choice=grainChoices[background.id];
-    if(choice) {setGrainChoices(prev=>({...prev,[background.id]:{...choice,enabled:!choice.enabled}}));return;}
-    setBusy(true);setError(null);
-    try {
-      const {imageUrl}=await api.previewBackgroundGrain(background.id);
-      setGrainChoices(prev=>({...prev,[background.id]:{enabled:true,url:imageUrl}}));
-    } catch(e:any) {alert(e.message || "Could not preview grain");}
-    finally {setBusy(false);}
+  function toggleGrain() {
+    const background = backgrounds[reviewIdx];
+    if (!background || busy) return;
+    setGrainChoices(prev => ({
+      ...prev,
+      [background.id]: {
+        enabled: !(prev[background.id]?.enabled ?? true),
+        url: prev[background.id]?.url ?? "",
+      },
+    }));
   }
 
   async function approveCurrent() {
     const background = backgrounds[reviewIdx];
-    if (!background || busy) return;
+    if (!background || busy || grainPreviewPending) return;
 
     const id = background.id;
     setBusy(true);
     try {
-      await api.stageBackground({ id, dbId: background.dbId, reason:reviewReason, grain:grainChoices[id]?.enabled ?? false });
+      await api.stageBackground({ id, dbId: background.dbId, reason:reviewReason, grain:grainChoices[id]?.enabled ?? true });
       const nextLength = Math.max(0, backgrounds.length - 1);
       setBackgrounds(prev => prev.filter(item => item.id !== id));
       if (nextLength === 0) setScreen("grid");
@@ -238,7 +261,7 @@ export default function BackgroundsScreen() {
       );
     }
 
-    const imgUri = grainChoices[background.id]?.enabled ? previewImageUrl(grainChoices[background.id].url, 1024) : backgroundImageUri(background, 1024);
+    const imgUri = grainEnabled && grainUrl ? previewImageUrl(grainUrl, 1024) : backgroundImageUri(background, 1024);
     const scene = background.meta?.scene;
     const candidateCaption = background.meta?.reviewBatchId ? background.meta.captionOptions?.[background.meta.selectedCaptionIndex ?? 0] : undefined;
     const posterPreview = candidateCaption ? {backgroundUri:imgUri,caption:candidateCaption,layout:normalizeCaptionLayout(background.meta?.captionLayout)} : undefined;
@@ -294,14 +317,22 @@ export default function BackgroundsScreen() {
               <Text style={styles.sectionTitle}>Film grain</Text>
               <Switch
                 accessibilityLabel="Film grain"
-                value={grainChoices[background.id]?.enabled ?? false}
+                value={grainEnabled}
                 onValueChange={toggleGrain}
                 disabled={busy}
                 trackColor={{ false: C.border, true: C.accentDim }}
                 thumbColor={C.textPrimary}
               />
             </View>
-            <Text style={styles.grainHint}>Approval saves this version.</Text>
+            <Text style={styles.grainHint}>
+              {grainPreviewPending ? (grainError ? "Grain preview unavailable." : "Preparing grain preview…") : "On by default. Approval saves this version."}
+            </Text>
+            {grainEnabled && grainError && (
+              <View>
+                <Text style={styles.error}>{grainError}</Text>
+                <Btn label="Retry grain preview" onPress={() => setGrainRetry(value => value + 1)} small variant="outline" />
+              </View>
+            )}
 
             <View key={background.id}>
               <ReviewSection title="Review note" indicator={reviewReason.trim() ? "Added" : undefined}>
@@ -380,7 +411,7 @@ export default function BackgroundsScreen() {
 
         <View style={styles.actionBar}>
           <View style={{ flex: 1 }} />
-          <ActionKey label="Approve background" keyHint="A" onPress={approveCurrent} loading={busy} variant="primary" />
+          <ActionKey label="Approve background" keyHint="A" onPress={approveCurrent} loading={busy || grainPreviewPending} variant="primary" />
           <ActionKey label="Skip" keyHint="S" onPress={skipCurrent} variant="outline" />
           <ActionKey label="Reject background" keyHint="D" onPress={discardCurrent} loading={busy} variant="danger"
             icon={<Trash color="#fff" width={20} height={20} strokeWidth={1.8} />} />

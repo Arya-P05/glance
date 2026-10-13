@@ -18,7 +18,7 @@ import { rememberGeneration, recentSceneAvoidance, rememberSceneAvoidance } from
 import "dotenv/config";
 import OpenAI from "openai";
 import { loadTaste, positiveReferences, tasteInstructions, referenceImages } from "./generation-taste.js";
-import { suggestReviewedPlacement } from "./reviewed-placement.js";
+import { defaultCaptionPlacement } from "./reviewed-placement.js";
 import { generateReviewedCaptions } from "./reviewed-captions.js";
 import { createClient } from "@supabase/supabase-js";
 import { readdir, readFile, writeFile } from "node:fs/promises";
@@ -1278,7 +1278,7 @@ async function main() {
         }));
         batchCaptions.push(review.caption);
       }
-      const placement = review ? await suggestReviewedPlacement({client:openai,model:args.promptModel,imageBytes:rawImageBytes,caption:review.caption,scene,taste}) : null;
+      const placement = review ? defaultCaptionPlacement() : null;
       const draftMetadata = {
         imageModel: args.model,
         promptModel: args.promptModel,

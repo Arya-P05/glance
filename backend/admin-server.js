@@ -31,7 +31,7 @@ import {
 } from "./instagram-helper.js";
 import { getDraftForPublish, publishDraftFromDb } from "./publish-draft.js";
 import { reviewEvent, approvalEvents, feedbackReason } from "./generation-feedback.js";
-import { suggestReviewedPlacement } from "./reviewed-placement.js";
+import { defaultCaptionPlacement } from "./reviewed-placement.js";
 import { loadTaste } from "./generation-taste.js";
 import { generateReviewedCaptions } from "./reviewed-captions.js";
 import { addReferences, listReferences, updateReference } from "./creative-references.js";
@@ -1097,7 +1097,7 @@ async function findBackgroundMatch(supabase, { id, dbId, statuses }) {
   return matches[0];
 }
 
-async function stagePendingBackground(supabase, { id, dbId, reason, grain = false }) {
+async function stagePendingBackground(supabase, { id, dbId, reason, grain = true }) {
   const row = await findBackgroundMatch(supabase, { id, dbId, statuses: ["pending"] });
   const metadata = row.metadata && typeof row.metadata === "object" ? row.metadata : {};
   if (typeof grain !== "boolean") throw httpError("grain must be a boolean",400);
@@ -1302,7 +1302,7 @@ async function generateCaptionOptionsForBackground(supabase, { id, captionModel 
   }
   const selectedCaptionIndex = captionOptions.findIndex((caption) => captionSignature(caption) === selectedCaptionSig);
 
-  const placement=await suggestReviewedPlacement({client:openai,model,imageBytes,caption:captionResult.caption,scene,taste});
+  const placement=defaultCaptionPlacement();
   const nextMetadata = {
     ...metadata,
     captionLayout:placement.layout,
@@ -1667,7 +1667,7 @@ async function main() {
 
     if (url.pathname === "/api/carousel-suggestions" && req.method === "GET") {
       try {
-        const result=await supabase.from("carousel_suggestions").select("*").eq("status","pending").order("created_at");
+        const result=await supabase.from("carousel_suggestions").select("*").eq("status","pending").order("created_at", {ascending:false}).order("id");
         if(result.error)throw result.error;
         json(res,200,{suggestions:result.data});
       } catch(e) {json(res,500,{error:e.message});}
@@ -1677,7 +1677,7 @@ async function main() {
       if (suggestingCarousels) { json(res,409,{error:"Suggestions are already being prepared"}); return; }
       suggestingCarousels = true;
       try {
-        await suggestCarousels(supabase,new OpenAI({apiKey:env("OPENAI_API_KEY")}),path=>publicObjectUrl(projectUrl,path),process.env.OPENAI_PROMPT_MODEL || "gpt-4.1-mini");
+        await suggestCarousels(supabase);
         json(res,200,{success:true});
       } catch(e) {json(res,400,{error:e.message});}
       finally {suggestingCarousels = false;}
