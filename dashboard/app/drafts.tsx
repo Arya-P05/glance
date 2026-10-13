@@ -186,6 +186,7 @@ export default function DraftsScreen() {
                 ...d.meta,
                 caption: result.caption,
                 captionLayout: {
+                  ...result.captionLayout,
                   xRatio: result.captionLayout.xRatio,
                   yRatio: result.captionLayout.yRatio,
                   textColor: result.captionLayout.textColor === "#ffffff" ? "#ffffff" : "#050505",

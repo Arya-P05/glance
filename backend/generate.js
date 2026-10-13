@@ -21,7 +21,7 @@ import { rememberGeneration, recentSceneAvoidance, rememberSceneAvoidance } from
 import "dotenv/config";
 import OpenAI from "openai";
 import { loadTaste, positiveReferences, tasteInstructions, referenceImages } from "./generation-taste.js";
-import { suggestReviewedPlacement } from "./reviewed-placement.js";
+import { defaultCaptionPlacement } from "./reviewed-placement.js";
 import { generateReviewedCaptions } from "./reviewed-captions.js";
 import { createClient } from "@supabase/supabase-js";
 import { readdir, readFile, writeFile } from "node:fs/promises";
@@ -1303,7 +1303,7 @@ async function main() {
             client:openai,model:process.env.OPENAI_CAPTION_MODEL || DEFAULT_CAPTION_MODEL,
             scene,imageBytes:rawImageBytes,taste,recentCaptions:batchCaptions,
           }));
-          const placement = await suggestReviewedPlacement({client:openai,model:args.promptModel,imageBytes:rawImageBytes,caption:review.caption,scene,taste});
+          const placement = defaultCaptionPlacement();
           const patch = {captionLayout:placement.layout,mediumCaptionLayout:placement.mediumLayout,placementFeedbackIds:placement.feedbackIds,
             captionOptions:review.options,selectedCaptionIndex:0,captionPrompt:review.prompt,captionTaste:taste};
           Object.assign(draftMetadata, patch);

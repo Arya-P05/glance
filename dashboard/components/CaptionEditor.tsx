@@ -1,3 +1,5 @@
+import { layoutCaptionGlyphs } from "../lib/captionFont";
+import { CaptionLines } from "./CaptionLines";
 import { clearEditorRecovery, readEditorRecovery, writeEditorRecovery, type EditorRecovery } from '../lib/editorRecovery';
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -7,8 +9,9 @@ import { Crop, NavArrowDown, NavArrowLeft, NavArrowRight, NavArrowUp, TextSquare
 import { Btn } from "./Btn";
 import { PosterPreview } from "./PosterPreview";
 import { C, S } from "../lib/theme";
-import { CaptionTextBlock } from "./CaptionOverlay";
 import {
+  captionOverflow,
+  independentCaptionLayout,
   CaptionLayout,
   CaptionLayoutInput,
   CaptionText,
@@ -16,8 +19,6 @@ import {
   DEFAULT_MEDIUM_CAPTION_LAYOUT,
   MediumCaptionLayout,
   MediumCaptionLayoutInput,
-  captionBlockRect,
-  captionBlockRectForFrame,
   normalizeCaptionLayout,
   normalizeMediumCaptionLayout,
   sourceCropInFrame,
@@ -26,11 +27,6 @@ import {
 const EDITOR_SIZE = 420;
 const MEDIUM_EDITOR_WIDTH = 420;
 const MEDIUM_EDITOR_HEIGHT = Math.round(MEDIUM_EDITOR_WIDTH * 155 / 329);
-const WEB_NO_SELECT_STYLE = {
-  userSelect: "none",
-  WebkitUserSelect: "none",
-  touchAction: "none",
-} as const;
 
 type Props = {
   backgroundUri: string;
@@ -81,9 +77,9 @@ export function CaptionEditor({
     }
     setRecoveryReady(true);
   }, []);
-  const [layout, setLayout] = useState<CaptionLayout>(() => normalizeCaptionLayout(initialLayout));
+  const [layout, setLayout] = useState<CaptionLayout>(() => independentCaptionLayout(EDITOR_SIZE, EDITOR_SIZE, normalizeCaptionLayout(initialLayout), caption));
   const [mediumLayout, setMediumLayout] = useState<MediumCaptionLayout>(() =>
-    normalizeMediumCaptionLayout(initialMediumLayout, initialLayout ?? DEFAULT_MEDIUM_CAPTION_LAYOUT)
+    independentCaptionLayout(MEDIUM_EDITOR_WIDTH, MEDIUM_EDITOR_HEIGHT, normalizeMediumCaptionLayout(initialMediumLayout, initialLayout ?? DEFAULT_MEDIUM_CAPTION_LAYOUT), caption)
   );
   const [mediumRejected, setMediumRejected] = useState(false);
   const [mediumReason, setMediumReason] = useState("");
@@ -95,95 +91,14 @@ export function CaptionEditor({
     }));
   }, [recoveryKey, recoveryVersion, recoveryReady, caption, layout, mediumLayout, mediumRejected, mediumReason, recoveryContext]);
   const [saving, setSaving] = useState(false);
-  const [draggingText, setDraggingText] = useState(false);
-  const [draggingMediumText, setDraggingMediumText] = useState(false);
   const [draggingMediumCrop, setDraggingMediumCrop] = useState(false);
   const [mediumMode, setMediumMode] = useState<"text" | "image">("text");
   const mediumModeRef = useRef(mediumMode);
   mediumModeRef.current = mediumMode;
-  const layoutRef = useRef(layout);
-  layoutRef.current = layout;
   const mediumLayoutRef = useRef(mediumLayout);
   mediumLayoutRef.current = mediumLayout;
-  const startLayout = useRef(layout);
   const startMediumLayout = useRef(mediumLayout);
-  const canvasSize = useRef(EDITOR_SIZE);
   const mediumCanvasSize = useRef({ width: MEDIUM_EDITOR_WIDTH, height: MEDIUM_EDITOR_HEIGHT });
-
-  function clearWebTextSelection() {
-    if (typeof window === "undefined") return;
-    window.getSelection?.()?.removeAllRanges();
-  }
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
-        clearWebTextSelection();
-        setDraggingText(true);
-        startLayout.current = layoutRef.current;
-      },
-      onPanResponderMove: (_, gesture) => {
-        const size = canvasSize.current;
-        setLayout({
-          ...startLayout.current,
-          xRatio: clamp(startLayout.current.xRatio + gesture.dx / size, 0.08, 0.92),
-          yRatio: clamp(startLayout.current.yRatio + gesture.dy / size, 0.08, 0.88),
-        });
-      },
-      onPanResponderRelease: () => {
-        clearWebTextSelection();
-        setDraggingText(false);
-      },
-      onPanResponderTerminate: () => {
-        clearWebTextSelection();
-        setDraggingText(false);
-      },
-    })
-  ).current;
-
-  const rect = captionBlockRect(EDITOR_SIZE, layout, caption);
-  const outlinePadH = Math.max(10, Math.round(rect.smallSize * 0.35));
-  const outlinePadV = Math.max(8, Math.round(rect.smallSize * 0.3));
-  const mediumRect = captionBlockRectForFrame(
-    MEDIUM_EDITOR_WIDTH,
-    MEDIUM_EDITOR_HEIGHT,
-    mediumLayout,
-    caption
-  );
-  const mediumOutlinePadH = Math.max(10, Math.round(mediumRect.smallSize * 0.35));
-  const mediumOutlinePadV = Math.max(8, Math.round(mediumRect.smallSize * 0.3));
-
-  const mediumTextPanResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => mediumModeRef.current === "text",
-      onMoveShouldSetPanResponder: () => mediumModeRef.current === "text",
-      onPanResponderGrant: () => {
-        if (mediumModeRef.current !== "text") return;
-        clearWebTextSelection();
-        setDraggingMediumText(true);
-        startMediumLayout.current = mediumLayoutRef.current;
-      },
-      onPanResponderMove: (_, gesture) => {
-        if (mediumModeRef.current !== "text") return;
-        const size = mediumCanvasSize.current;
-        setMediumLayout({
-          ...startMediumLayout.current,
-          xRatio: clamp(startMediumLayout.current.xRatio + gesture.dx / size.width, 0.08, 0.92),
-          yRatio: clamp(startMediumLayout.current.yRatio + gesture.dy / size.height, 0.06, 0.82),
-        });
-      },
-      onPanResponderRelease: () => {
-        clearWebTextSelection();
-        setDraggingMediumText(false);
-      },
-      onPanResponderTerminate: () => {
-        clearWebTextSelection();
-        setDraggingMediumText(false);
-      },
-    })
-  ).current;
 
   const mediumCropPanResponder = useRef(
     PanResponder.create({
@@ -219,6 +134,8 @@ export function CaptionEditor({
     })
   ).current;
 
+  const unsupported = layoutCaptionGlyphs(caption.smallText + caption.bigText, 1).unsupported;
+
   async function handleApply() {
     setSaving(true);
     try {
@@ -251,12 +168,11 @@ export function CaptionEditor({
       <View style={styles.main}>
         <View style={styles.editorCol}>
           <Text style={styles.sectionTitle}>Caption editor</Text>
+          <Text style={styles.hint}>Drag each line left or right independently. Drag up or down to move both lines together.</Text>
           {recoveryKey && <Text style={styles.hint}>{recoveryFailed ? 'Edit recovery is unavailable in this browser. Keep this editor open until you save.' : 'Edits are recovered in this browser. Use the save button to apply them to the poster.'}</Text>}
-          <Text style={styles.hint}>Drag the text to reposition. Toggle color, then apply to bake onto the poster.</Text>
 
           <View
             style={styles.canvas}
-            onLayout={(e) => { canvasSize.current = e.nativeEvent.layout.width; }}
           >
             <PosterPreview
               backgroundUri={backgroundUri}
@@ -267,29 +183,10 @@ export function CaptionEditor({
               borderRadius={12}
               showCaption={false}
             />
-            <View
-              {...panResponder.panHandlers}
-              style={[
-                styles.dragHandle,
-                WEB_NO_SELECT_STYLE as any,
-                {
-                  left: rect.left - outlinePadH,
-                  top: rect.top - outlinePadV,
-                  width: rect.width + outlinePadH * 2,
-                  paddingHorizontal: outlinePadH,
-                  paddingVertical: outlinePadV,
-                },
-              ]}
-            >
-              <CaptionTextBlock rect={rect} caption={caption} />
-              {draggingText && (
-                <View
-                  style={[styles.dragOutline, styles.noPointerEvents, { borderColor: layout.textColor }]}
-                />
-              )}
-            </View>
+            <CaptionLines width={EDITOR_SIZE} height={EDITOR_SIZE} layout={layout} caption={caption} onChange={setLayout} />
           </View>
 
+          {captionOverflow(EDITOR_SIZE, EDITOR_SIZE, layout, caption).length > 0 && <Text accessibilityRole="alert" style={{ color: C.danger }}>Text extends beyond the square image. Move it inward or shorten the wording; the size stays fixed.</Text>}
           <View style={styles.controls}>
             {onCaptionChange && (
               <View style={styles.textControls}>
@@ -310,7 +207,7 @@ export function CaptionEditor({
                 />
               </View>
             )}
-            <TextSizeControls layout={layout} onChange={setLayout} />
+            <Text style={styles.hint}>Text sizes and vertical gap are locked.</Text>
             <Text style={styles.controlLabel}>Text color</Text>
             <View style={styles.colorRow}>
               <Pressable
@@ -325,7 +222,7 @@ export function CaptionEditor({
               >
                 <Text style={styles.colorBtnTextLight}>White</Text>
               </Pressable>
-              <Pressable onPress={() => setLayout(normalizeCaptionLayout(DEFAULT_CAPTION_LAYOUT))} style={styles.resetBtn}>
+              <Pressable onPress={() => setLayout(current => (independentCaptionLayout(EDITOR_SIZE, EDITOR_SIZE, { ...normalizeCaptionLayout(DEFAULT_CAPTION_LAYOUT), smallFontRatio: current.smallFontRatio, bigFontRatio: current.bigFontRatio }, caption)))} style={styles.resetBtn}>
                 <Text style={styles.resetText}>Reset layout</Text>
               </Pressable>
             </View>
@@ -335,9 +232,10 @@ export function CaptionEditor({
             <Text style={{color:C.textPrimary,fontWeight:"600"}}>{JSON.stringify(layout)===JSON.stringify(normalizeCaptionLayout(initialLayout)) && (mediumRejected || JSON.stringify(mediumLayout)===JSON.stringify(normalizeMediumCaptionLayout(initialMediumLayout,initialLayout ?? DEFAULT_MEDIUM_CAPTION_LAYOUT))) ? "Keep placement as is" : "Save adjusted placement"}</Text>
             <TextInput accessibilityLabel="Placement feedback" value={placementReason} onChangeText={onPlacementReasonChange} placeholder="Optional: moved off the face, better contrast…" placeholderTextColor={C.textMuted} multiline maxLength={1000} style={{color:C.textPrimary,padding:12,borderWidth:1,borderColor:C.border,borderRadius:8}} />
           </View>}
+          {!!unsupported.length && <Text style={{ color: C.danger }}>Replace unsupported characters: {unsupported.join(" ")}</Text>}
           <View style={styles.actions}>
             <Btn label="Cancel" onPress={onCancel} variant="ghost" />
-            <Btn label={saving ? "Applying…" : applyLabel} onPress={handleApply} loading={saving} />
+            <Btn label={saving ? "Applying…" : applyLabel} onPress={handleApply} loading={saving} disabled={unsupported.length > 0} />
           </View>
         </View>
 
@@ -406,37 +304,18 @@ export function CaptionEditor({
                 style={styles.mediumCropHandle}
               />
             )}
-            <View
-              {...mediumTextPanResponder.panHandlers}
-              style={[
-                styles.mediumDragHandle,
-                WEB_NO_SELECT_STYLE as any,
-                {
-                  left: mediumRect.left - mediumOutlinePadH,
-                  top: mediumRect.top - mediumOutlinePadV,
-                  width: mediumRect.width + mediumOutlinePadH * 2,
-                  paddingHorizontal: mediumOutlinePadH,
-                  paddingVertical: mediumOutlinePadV,
-                  pointerEvents: (mediumMode === "text" ? "auto" : "none") as any,
-                },
-              ]}
-            >
-              <CaptionTextBlock rect={mediumRect} caption={caption} />
-              {draggingMediumText && (
-                <View
-                  style={[styles.dragOutline, styles.noPointerEvents, { borderColor: mediumLayout.textColor }]}
-                />
-              )}
-            </View>
+            <CaptionLines width={MEDIUM_EDITOR_WIDTH} height={MEDIUM_EDITOR_HEIGHT} layout={mediumLayout} caption={caption}
+              onChange={mediumMode === "text" ? next => setMediumLayout(current => ({ ...current, ...next })) : undefined} />
             {draggingMediumCrop && (
               <View style={[styles.cropOutline, styles.noPointerEvents]} />
             )}
           </View>
 
+          {!mediumRejected && captionOverflow(MEDIUM_EDITOR_WIDTH, MEDIUM_EDITOR_HEIGHT, mediumLayout, caption).length > 0 && <Text accessibilityRole="alert" style={{ color: C.danger }}>Text extends beyond the wide image. Move it inward or shorten the wording; the size stays fixed.</Text>}
           {mediumMode === "text" ? (
             <View style={styles.mediumControls}>
               <View style={styles.controlBlock}>
-                <TextSizeControls layout={mediumLayout} onChange={setMediumLayout} />
+                <Text style={styles.hint}>Text sizes and vertical gap are locked.</Text>
               </View>
               <View style={styles.controlBlock}>
                 <Text style={styles.controlLabel}>Color</Text>
@@ -454,7 +333,7 @@ export function CaptionEditor({
                     <Text style={styles.colorBtnTextLight}>White</Text>
                   </Pressable>
                   <Pressable
-                    onPress={() => setMediumLayout(normalizeMediumCaptionLayout(DEFAULT_MEDIUM_CAPTION_LAYOUT))}
+                    onPress={() => setMediumLayout(current => (independentCaptionLayout(MEDIUM_EDITOR_WIDTH, MEDIUM_EDITOR_HEIGHT, { ...normalizeMediumCaptionLayout(DEFAULT_MEDIUM_CAPTION_LAYOUT), smallFontRatio: current.smallFontRatio, bigFontRatio: current.bigFontRatio }, caption)))}
                     style={styles.resetBtn}
                   >
                     <Text style={styles.resetText}>Reset</Text>
@@ -508,104 +387,6 @@ function CropNudgeButton({
     <Pressable onPress={onPress} style={styles.nudgeBtn}>
       {children}
     </Pressable>
-  );
-}
-
-type TextSizeKey = "fontScale" | "smallFontScale" | "bigFontScale";
-
-function TextSizeControls<T extends CaptionLayout>({
-  layout,
-  onChange,
-}: {
-  layout: T;
-  onChange: React.Dispatch<React.SetStateAction<T>>;
-}) {
-  const mode = layout.textSizeMode === "separate" ? "separate" : "together";
-
-  function setMode(nextMode: "together" | "separate") {
-    onChange((current) => ({ ...current, textSizeMode: nextMode }));
-  }
-
-  function adjust(key: TextSizeKey, delta: number) {
-    onChange((current) => {
-      const min = key === "fontScale" ? 0.6 : 0.5;
-      const max = key === "fontScale" ? 1.8 : 2.2;
-      return {
-        ...current,
-        [key]: clamp(Math.round((current[key] + delta) * 100) / 100, min, max),
-      };
-    });
-  }
-
-  return (
-    <View style={styles.textSizeBlock}>
-      <View style={styles.controlHeaderRow}>
-        <Text style={styles.controlLabel}>Text size</Text>
-        <View style={styles.sizeModeRow}>
-          <Pressable
-            onPress={() => setMode("together")}
-            style={[styles.sizeModeBtn, mode === "together" && styles.sizeModeBtnActive]}
-          >
-            <Text style={[styles.sizeModeText, mode === "together" && styles.sizeModeTextActive]}>Together</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setMode("separate")}
-            style={[styles.sizeModeBtn, mode === "separate" && styles.sizeModeBtnActive]}
-          >
-            <Text style={[styles.sizeModeText, mode === "separate" && styles.sizeModeTextActive]}>Separate</Text>
-          </Pressable>
-        </View>
-      </View>
-
-      {mode === "together" ? (
-        <SizeStepper
-          label="Both"
-          value={Math.round(layout.fontScale * 100)}
-          onDecrease={() => adjust("fontScale", -0.05)}
-          onIncrease={() => adjust("fontScale", 0.05)}
-        />
-      ) : (
-        <>
-          <SizeStepper
-            label="Top"
-            value={Math.round(layout.fontScale * layout.smallFontScale * 100)}
-            onDecrease={() => adjust("smallFontScale", -0.05)}
-            onIncrease={() => adjust("smallFontScale", 0.05)}
-          />
-          <SizeStepper
-            label="Bottom"
-            value={Math.round(layout.fontScale * layout.bigFontScale * 100)}
-            onDecrease={() => adjust("bigFontScale", -0.05)}
-            onIncrease={() => adjust("bigFontScale", 0.05)}
-          />
-        </>
-      )}
-    </View>
-  );
-}
-
-function SizeStepper({
-  label,
-  value,
-  onDecrease,
-  onIncrease,
-}: {
-  label: string;
-  value: number;
-  onDecrease: () => void;
-  onIncrease: () => void;
-}) {
-  return (
-    <View style={styles.sizeRow}>
-      <Text style={styles.sizeLineLabel}>{label}</Text>
-      <Pressable onPress={onDecrease} style={styles.sizeBtn}>
-        <Text style={styles.sizeBtnText}>-</Text>
-      </Pressable>
-      <Text style={styles.sizeValue}>{value}%</Text>
-      <Pressable onPress={onIncrease} style={styles.sizeBtn}>
-        <Text style={styles.sizeBtnText}>+</Text>
-      </Pressable>
-    </View>
   );
 }
 
@@ -748,47 +529,6 @@ const styles = StyleSheet.create({
     outlineStyle: "none" as any,
   },
   textInputLarge: { fontSize: 18, fontWeight: "900" },
-  textSizeBlock: { gap: 8, marginBottom: 8 },
-  sizeModeRow: {
-    flexDirection: "row",
-    borderWidth: 1,
-    borderColor: C.border,
-    borderRadius: 8,
-    overflow: "hidden",
-  },
-  sizeModeBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: C.surface,
-  },
-  sizeModeBtnActive: { backgroundColor: C.accent },
-  sizeModeText: { color: C.textSecondary, fontSize: 11, fontWeight: "800" },
-  sizeModeTextActive: { color: "#050505" },
-  sizeRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  sizeLineLabel: {
-    width: 58,
-    color: C.textSecondary,
-    fontSize: 12,
-    fontWeight: "800",
-  },
-  sizeBtn: {
-    width: 40,
-    height: 34,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: C.border,
-    backgroundColor: C.surface,
-  },
-  sizeBtnText: { color: C.textPrimary, fontSize: 18, fontWeight: "800" },
-  sizeValue: {
-    minWidth: 54,
-    color: C.textSecondary,
-    fontSize: 13,
-    fontWeight: "700",
-    textAlign: "center",
-  },
   colorRow: { flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" },
   colorBtn: {
     paddingHorizontal: 16,

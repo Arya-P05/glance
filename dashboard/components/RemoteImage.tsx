@@ -3,6 +3,9 @@ import { Image, ImageStyle, Platform, StyleProp, StyleSheet } from "react-native
 
 type Props = {
   uri: string;
+  onLoad?: () => void;
+  onError?: () => void;
+  accessibilityLabel?: string;
   style: StyleProp<ImageStyle>;
   resizeMode?: "cover" | "contain" | "stretch" | "repeat" | "center";
   /** Skip Supabase render transform — use the URL as-is (matches Library thumbnails). */
@@ -42,6 +45,9 @@ export function RemoteImage({
   transformResizeMode,
   priority = false,
   webStyle,
+  onLoad,
+  onError,
+  accessibilityLabel,
 }: Props) {
   const src = raw ? uri : previewImageUrl(uri, width, { height, resize: transformResizeMode });
 
@@ -49,6 +55,9 @@ export function RemoteImage({
     const flattened = StyleSheet.flatten(style) ?? {};
     return React.createElement("img", {
       src,
+      onLoad,
+      onError,
+      alt: accessibilityLabel ?? "",
       loading: priority ? "eager" : "lazy",
       decoding: "async",
       fetchPriority: priority ? "high" : "low",
@@ -56,6 +65,7 @@ export function RemoteImage({
         width: flattened.width ?? "100%",
         height: flattened.height ?? "100%",
         objectFit: resizeMode,
+        opacity: flattened.opacity,
         objectPosition: "center",
         display: "block",
         backgroundColor: flattened.backgroundColor,
@@ -69,5 +79,5 @@ export function RemoteImage({
     });
   }
 
-  return <Image source={{ uri: src }} style={style} resizeMode={resizeMode} />;
+  return <Image source={{ uri: src }} style={style} resizeMode={resizeMode} onLoad={onLoad} onError={onError} accessibilityLabel={accessibilityLabel} />;
 }

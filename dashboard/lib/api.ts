@@ -17,7 +17,15 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
+export interface TypographyDefaults {
+  letterSpacingEm?: number;
+  smallFontRatio: number;
+  bigFontRatio: number;
+  referenceId?: string;
+}
+
 export const api = {
+  typography: () => request<{ defaults: TypographyDefaults | null }>("/api/typography"),
   references: () => request<{ references: CreativeReference[] }>("/api/references"),
   addReferences: (sourceType: "post" | "background", sourceIds: string[]) =>
     request<{ added: number; existing: number }>("/api/references", { method: "POST", body: JSON.stringify({ sourceType, sourceIds }) }),
@@ -194,6 +202,7 @@ export interface Stats {
 }
 
 export interface StorageImage {
+  referenceText?: CaptionText | null;
   id: string;
   instagramId: string;
   storagePath: string;
@@ -265,6 +274,13 @@ export interface InstagramStatus {
 }
 
 export interface CaptionLayout {
+  letterSpacingEm?: number;
+  smallXRatio?: number;
+  smallYRatio?: number;
+  bigXRatio?: number;
+  bigYRatio?: number;
+  smallFontRatio?: number;
+  bigFontRatio?: number;
   xRatio: number;
   yRatio: number;
   textColor: "#050505" | "#ffffff" | null;

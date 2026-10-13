@@ -304,7 +304,7 @@ export default function CarouselWorkspace({ mode }: { mode: "queue" | "editor" }
         {!isEditor && <Text style={[S.body, { marginLeft: 8 }]}>{carousels.length} queued</Text>}
         <View style={{ flex: 1 }} />
         {isEditor && <Btn label="View queue" onPress={() => router.push("/carousels")} small variant="outline" />}
-        {!isEditor && <Btn label="Suggest carousels" onPress={getSuggestions} loading={suggesting} disabled={busy || suggestions.length>0} small variant="outline" />}
+        {!isEditor && <Btn label="Suggest 5 carousels" onPress={getSuggestions} loading={suggesting} disabled={busy} small variant="outline" />}
         <Btn label="New carousel" onPress={newCarousel} small />
         <Btn label="Refresh" onPress={() => loadAll({ consumeSelection: false })} loading={loading} small variant="ghost" />
       </View>

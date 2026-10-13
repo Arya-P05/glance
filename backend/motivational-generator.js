@@ -1,3 +1,5 @@
+import { layoutCaptionGlyphs, DEFAULT_LETTER_SPACING, LOCKED_TYPOGRAPHY, captionLineTops } from "../dashboard/lib/captionFont.js";
+import { readTypographyDefaults } from "./typography-defaults.js";
 import { readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
@@ -2572,6 +2574,7 @@ export const DEFAULT_MEDIUM_CAPTION_LAYOUT = {
 };
 
 export function normalizeCaptionLayout(layout = {}) {
+  layout = { ...layout, ...LOCKED_TYPOGRAPHY };
   const xRatio = Number(layout.xRatio);
   const yRatio = Number(layout.yRatio);
   const fontScale = Number(layout.fontScale);
@@ -2587,6 +2590,11 @@ export function normalizeCaptionLayout(layout = {}) {
     smallFontScale: Number.isFinite(smallFontScale) ? Math.min(2.2, Math.max(0.5, smallFontScale)) : DEFAULT_CAPTION_LAYOUT.smallFontScale,
     bigFontScale: Number.isFinite(bigFontScale) ? Math.min(2.2, Math.max(0.5, bigFontScale)) : DEFAULT_CAPTION_LAYOUT.bigFontScale,
     textSizeMode,
+    letterSpacingEm: typeof layout.letterSpacingEm === "number" && Number.isFinite(layout.letterSpacingEm) ? Math.min(.12, Math.max(-.12, layout.letterSpacingEm)) : DEFAULT_LETTER_SPACING,
+    ...Object.fromEntries(["smallXRatio", "smallYRatio", "bigXRatio", "bigYRatio"].flatMap(key =>
+      typeof layout[key] === "number" && Number.isFinite(layout[key]) ? [[key, Math.min(1, Math.max(0, layout[key]))]] : [])),
+    ...Object.fromEntries(["smallFontRatio", "bigFontRatio"].flatMap(key =>
+      typeof layout[key] === "number" && Number.isFinite(layout[key]) ? [[key, Math.min(0.2, Math.max(0.005, layout[key]))]] : [])),
   };
 }
 
@@ -2601,34 +2609,18 @@ export function normalizeMediumCaptionLayout(layout = {}, fallback = DEFAULT_MED
   };
 }
 
-function lineFontScales(layoutOrFontScale = 1) {
-  if (typeof layoutOrFontScale === "number") {
-    const fontScale = Number.isFinite(layoutOrFontScale) ? layoutOrFontScale : 1;
-    return { smallScale: fontScale, bigScale: fontScale };
-  }
-  return {
-    smallScale: layoutOrFontScale.fontScale * layoutOrFontScale.smallFontScale,
-    bigScale: layoutOrFontScale.fontScale * layoutOrFontScale.bigFontScale,
-  };
-}
-
-export function captionFontSizes(width, caption, fontScale = 1) {
-  const maxTextWidth = width * CAPTION_MAX_TEXT_WIDTH_RATIO;
-  const { smallScale, bigScale } = lineFontScales(fontScale);
-  return {
-    smallSize: fitTextSize(caption.smallText, Math.round(width * CAPTION_SMALL_FONT_RATIO * smallScale), maxTextWidth),
-    bigSize: fitTextSize(caption.bigText, Math.round(width * CAPTION_BIG_FONT_RATIO * bigScale), maxTextWidth),
-  };
+export function captionFontSizes(width, _caption, _fontScale = 1) {
+  return { smallSize: width * LOCKED_TYPOGRAPHY.smallFontRatio, bigSize: width * LOCKED_TYPOGRAPHY.bigFontRatio };
 }
 
 export async function overlayCaption(imageBytes, caption, layout = {}) {
-  const normalizedLayout = normalizeCaptionLayout(layout);
+  const normalizedLayout = normalizeCaptionLayout({ ...(Object.keys(layout).length ? {} : readTypographyDefaults()), ...layout });
   const { basePng, width, height } = await squareBaseImage(imageBytes);
   return overlayCaptionOnFrame(basePng, width, height, caption, normalizedLayout);
 }
 
 export async function overlayMediumCaption(imageBytes, caption, layout = {}) {
-  const normalizedLayout = normalizeMediumCaptionLayout(layout);
+  const normalizedLayout = normalizeMediumCaptionLayout({ ...(Object.keys(layout).length ? {} : readTypographyDefaults()), ...layout });
   const { basePng, width: baseSize } = await squareBaseImage(imageBytes);
   const scale = Math.max(MEDIUM_WIDGET_WIDTH / baseSize, MEDIUM_WIDGET_HEIGHT / baseSize);
   const scaledSize = Math.ceil(baseSize * scale);
@@ -2676,25 +2668,23 @@ async function overlayCaptionOnFrame(basePng, width, height, caption, normalized
   // so baked text matches the dashboard editor (yRatio = top of small line).
   const SMALL_ASCENT = 0.88;
   const BIG_ASCENT = 0.88;
-  const ySmall = yTop + Math.round(smallSize * SMALL_ASCENT);
-  const yBig = yTop + smallSize + lineGap + Math.round(bigSize * BIG_ASCENT);
+  const xSmall = width * (normalizedLayout.smallXRatio ?? normalizedLayout.xRatio);
+  const xBig = width * (normalizedLayout.bigXRatio ?? normalizedLayout.xRatio);
+  const tops = captionLineTops(width, height, normalizedLayout);
+  const ySmall = tops.small + smallSize * SMALL_ASCENT;
+  const yBig = tops.big + bigSize * BIG_ASCENT;
   const textColor =
     normalizedLayout.textColor ?? (await pickTextColor(basePng, width, height, x, yTop + Math.round(smallSize * 0.5)));
 
-  const svg = Buffer.from(`
-<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
-  <style>
-    text {
-      font-family: Arial, Helvetica, sans-serif;
-      text-anchor: middle;
-      fill: ${textColor};
-    }
-    .small { font-size: ${smallSize}px; font-weight: 800; letter-spacing: 0; }
-    .big { font-size: ${bigSize}px; font-weight: 800; letter-spacing: 0; }
-  </style>
-  <text class="small" x="${x}" y="${ySmall}">${escapeXml(caption.smallText)}</text>
-  <text class="big" x="${x}" y="${yBig}">${escapeXml(caption.bigText)}</text>
-</svg>`);
+  function linePaths(text, size, x, baseline) {
+    const { glyphs, width: textWidth, unsupported } = layoutCaptionGlyphs(text, size, normalizedLayout.letterSpacingEm);
+    if (unsupported.length) throw new Error(`Unsupported caption characters: ${unsupported.join(" ")}`);
+    return glyphs.map(glyph => `<path d="${glyph.path}" transform="translate(${x - textWidth / 2 + glyph.x} ${baseline - glyph.rise}) scale(${glyph.scale} ${-glyph.scale})"/>`).join('');
+  }
+  const svg = Buffer.from(`<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg"><g fill="${textColor}">
+    ${linePaths(caption.smallText, smallSize, xSmall, ySmall)}
+    ${linePaths(caption.bigText, bigSize, xBig, yBig)}
+  </g></svg>`);
 
   const composited = await sharp(basePng).composite([{ input: svg, top: 0, left: 0 }]).png().toBuffer();
   return addFilmGrain(composited, width, height);
