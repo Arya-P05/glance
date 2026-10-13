@@ -1,5 +1,6 @@
 import { loadApprovedCaptionExamples } from "./motivational-generator.js";
 import { readTypographyDefaults } from "./typography-defaults.js";
+import { imageAssetPath, saveImageAsset, listImageObjects, deleteLibraryPost } from './image-assets.js';
 import {prepareGrain} from './image-grain.js';
 import {suggestCarousels} from './carousel-suggestions.js';
 let suggestingCarousels = false;
@@ -188,16 +189,6 @@ function contentDispositionFilename(filename) {
   return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
 }
 
-function captionedDraftStoragePath(name) {
-  const suffix = `${Date.now()}-${randomUUID().slice(0, 8)}`;
-  return `${DRAFT_PREFIX}/captioned/${name}-${suffix}.png`;
-}
-
-function mediumDraftStoragePath(name) {
-  const suffix = `${Date.now()}-${randomUUID().slice(0, 8)}`;
-  return `${DRAFT_PREFIX}/medium/${name}-${suffix}.png`;
-}
-
 function revisedBackgroundName(sourceName) {
   const stamp = new Date().toISOString().replace(/\D/g, "").slice(0, 14);
   return `${sourceName}_tweak_${stamp}_${randomUUID().slice(0, 8)}`;
@@ -219,22 +210,8 @@ function normalizeBackgroundQueueStatus(status, fallback = "pending") {
   return ["pending", "staged"].includes(normalized) ? normalized : null;
 }
 
-async function uploadVerifiedObject(supabase, storagePath, bytes) {
-  const { error: uploadErr } = await supabase.storage
-    .from(BUCKET)
-    .upload(storagePath, bytes, {
-      contentType: "image/png",
-      cacheControl: "0",
-      upsert: false,
-    });
-  if (uploadErr) throw uploadErr;
-
-  const { data: verifyBlob, error: verifyErr } = await supabase.storage.from(BUCKET).download(storagePath);
-  if (verifyErr) throw verifyErr;
-  const verified = Buffer.from(await verifyBlob.arrayBuffer());
-  if (!verified.equals(bytes)) {
-    throw new Error(`Uploaded object failed verification: ${storagePath}`);
-  }
+async function uploadVerifiedObject(supabase, storagePath, bytes, source = null) {
+  return saveImageAsset(supabase, storagePath, bytes, { source });
 }
 
 function checkToken(req) {
@@ -261,58 +238,10 @@ async function readBody(req) {
 }
 
 async function listAllStoragePaths(supabase) {
-  const paths = [];
-  const pageSize = 1000;
-  let offset = 0;
-  for (;;) {
-    const { data: files, error } = await supabase.storage.from(BUCKET).list(PREFIX, { limit: pageSize, offset });
-    if (error) throw error;
-    if (!files?.length) break;
-    for (const f of files) paths.push(`${PREFIX}/${f.name}`);
-    offset += files.length;
-    if (files.length < pageSize) break;
-  }
-  return paths;
+  return (await listImageObjects(supabase)).map(item => item.path);
 }
 
-async function deletePostImage(supabase, { id, storagePath }) {
-  let query = supabase
-    .from("posts")
-    .select("id, storage_path")
-    .limit(2);
-  if (id) query = query.eq("id", id);
-  else query = query.eq("storage_path", storagePath);
-
-  const { data: rows, error: selectErr } = await query;
-  if (selectErr) throw selectErr;
-  if (!rows?.length) throw httpError("Post image not found", 404);
-  if (rows.length > 1) throw httpError("Delete target is ambiguous. Refresh and try again.", 409);
-
-  const row = rows[0];
-  if (storagePath && row.storage_path !== storagePath) {
-    throw httpError("Delete target changed. Refresh and try again.", 409);
-  }
-  if (!row.storage_path.startsWith(`${PREFIX}/`)) {
-    throw httpError("Invalid storage path", 400);
-  }
-
-  const { error: rmErr } = await supabase.storage.from(BUCKET).remove([row.storage_path]);
-  if (rmErr) throw rmErr;
-
-  const { data: deleted, error: dbErr } = await supabase
-    .from("posts")
-    .delete()
-    .eq("id", row.id)
-    .select("id, storage_path");
-  if (dbErr) throw dbErr;
-  if (!deleted?.length) throw httpError("Post image row was already deleted", 404);
-
-  return {
-    removedStorage: 1,
-    removedRows: deleted.length,
-    removed: deleted.map(item => ({ id: item.id, storagePath: item.storage_path })),
-  };
-}
+const deletePostImage = deleteLibraryPost;
 
 // ─── DB Helpers ───────────────────────────────────────────────────────────────
 
@@ -900,10 +829,10 @@ async function renderDraftCaption(supabase, { id, caption, layout, mediumLayout 
   const imageBytes = Buffer.from(await blob.arrayBuffer());
   const rendered = await overlayCaption(imageBytes, finalCaption, normalizedLayout);
   const renderedMedium = (!mediumRejected) ? await overlayMediumCaption(imageBytes, finalCaption, normalizedMediumLayout) : null;
-  const finalStoragePath = captionedDraftStoragePath(row.name);
-  const finalMediumStoragePath = mediumRejected ? null : mediumDraftStoragePath(row.name);
-  await uploadVerifiedObject(supabase, finalStoragePath, rendered);
-  if (finalMediumStoragePath) await uploadVerifiedObject(supabase, finalMediumStoragePath, renderedMedium);
+  const finalStoragePath = imageAssetPath("captioned", rendered);
+  const finalMediumStoragePath = mediumRejected ? null : imageAssetPath("medium", renderedMedium);
+  await uploadVerifiedObject(supabase, finalStoragePath, rendered, row.raw_storage_path || row.storage_path);
+  if (finalMediumStoragePath) await uploadVerifiedObject(supabase, finalMediumStoragePath, renderedMedium, row.raw_storage_path || row.storage_path);
 
   const metadata = {
     ...(row.metadata && typeof row.metadata === "object" ? row.metadata : {}),
@@ -913,15 +842,15 @@ async function renderDraftCaption(supabase, { id, caption, layout, mediumLayout 
     mediumRejected,
   };
 
-  const { error: updateErr } = await supabase
+  const { data: updatedDraft, error: updateErr } = await supabase
     .from("drafts")
     .update({ caption: finalCaption, metadata, storage_path: finalStoragePath })
     .eq("name", id)
-    .eq("status", "draft");
+    .eq("status", "draft").select("name").maybeSingle();
   if (updateErr) {
-    await supabase.storage.from(BUCKET).remove([finalStoragePath, finalMediumStoragePath].filter(Boolean));
     throw updateErr;
   }
+  if (!updatedDraft) throw httpError("Draft changed while saving; refresh and retry", 409);
 
   return {
     id,
@@ -1215,7 +1144,7 @@ async function revisePendingBackground(supabase, { id, instruction, imageModel, 
   const revisedBytes = Buffer.from(b64, "base64");
   const name = revisedBackgroundName(row.name);
   const storagePath = `${DRAFT_PREFIX}/backgrounds/${name}.png`;
-  await uploadVerifiedObject(supabase, storagePath, revisedBytes);
+  await uploadVerifiedObject(supabase, storagePath, revisedBytes, row.storage_path);
 
   const now = new Date().toISOString();
   const {
@@ -1266,7 +1195,6 @@ async function revisePendingBackground(supabase, { id, instruction, imageModel, 
     .single();
 
   if (insertErr) {
-    await supabase.storage.from(BUCKET).remove([storagePath]);
     throw insertErr;
   }
 
@@ -1411,10 +1339,10 @@ async function approveBackgroundWithCaption(supabase, {
   );
   const rendered = await overlayCaption(imageBytes, finalCaption, normalizedLayout);
   const renderedMedium = (!mediumRejected) ? await overlayMediumCaption(imageBytes, finalCaption, normalizedMediumLayout) : null;
-  const finalStoragePath = captionedDraftStoragePath(row.name);
-  const finalMediumStoragePath = mediumRejected ? null : mediumDraftStoragePath(row.name);
-  await uploadVerifiedObject(supabase, finalStoragePath, rendered);
-  if (finalMediumStoragePath) await uploadVerifiedObject(supabase, finalMediumStoragePath, renderedMedium);
+  const finalStoragePath = imageAssetPath("captioned", rendered);
+  const finalMediumStoragePath = mediumRejected ? null : imageAssetPath("medium", renderedMedium);
+  await uploadVerifiedObject(supabase, finalStoragePath, rendered, row.raw_storage_path || row.storage_path);
+  if (finalMediumStoragePath) await uploadVerifiedObject(supabase, finalMediumStoragePath, renderedMedium, row.raw_storage_path || row.storage_path);
 
   const nextMetadata = {
     ...metadata,
@@ -1438,8 +1366,7 @@ async function approveBackgroundWithCaption(supabase, {
     option_index:originalIndex,expected_caption:metadata.captionOptions?.[originalIndex] || null,
   });
   if(reviewError) {
-    // Only clean up on a confirmed SQL rejection; a network failure may follow a committed transaction.
-    if (reviewError.code === "P0001") await supabase.storage.from(BUCKET).remove([finalStoragePath,finalMediumStoragePath].filter(Boolean));
+    // Shared immutable renders are reclaimed by reference-aware GC, never here.
     throw Object.assign(new Error(reviewError.message),{statusCode:reviewError.code === "P0001" ? 409 : 500});
   }
 

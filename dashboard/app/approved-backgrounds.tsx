@@ -308,6 +308,18 @@ export default function ApprovedBackgroundsScreen() {
           <View style={styles.editorWrap}>
             <CaptionEditor
               key={background.id + editorRevision}
+              recoveryKey={`approved:${background.id}`}
+              recoveryVersion={JSON.stringify([background.rawImageUrl, background.meta?.captionOptions, background.meta?.captionLayout, background.meta?.mediumCaptionLayout])}
+              recoveryContext={{options:captionOptions,selectedCaptionIndex,captionReason,placementReason}}
+              onRecover={state => {
+                setCaption(state.caption);
+                if (state.context) {
+                  setCaptionOptions(state.context.options);
+                  setSelectedCaptionIndex(state.context.selectedCaptionIndex);
+                  setCaptionReason(state.context.captionReason);
+                  setPlacementReason(state.context.placementReason);
+                }
+              }}
               allowMediumRejection
               placementReason={placementReason}
               onPlacementReasonChange={setPlacementReason}

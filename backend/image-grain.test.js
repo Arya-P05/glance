@@ -13,11 +13,15 @@ test('grain is repeatable, monochrome, and preserves size and transparency',asyn
 });
 test('preview creates a derivative from original, never overwrites source or compounds grain',async()=>{
  const original=await sharp({create:{width:8,height:8,channels:3,background:'#777'}}).png().toBuffer();
- let downloaded;const writes=[];
- const db={storage:{from:()=>({download:async path=>{downloaded=path;return {data:new Blob([original])};},upload:async(path,bytes)=>{writes.push({path,bytes});return {};}})}};
+ let downloaded;const writes=[];const files=new Map();
+ const db={rpc:async()=>({}),storage:{from:()=>({
+   exists:async path=>({data:files.has(path)}),
+   download:async path=>{if(!files.has(path)) downloaded=path;return {data:new Blob([files.get(path)||original])};},
+   upload:async(path,bytes)=>{writes.push({path,bytes});files.set(path,bytes);return {};},
+ })}};
  const row={storage_path:'original.png',metadata:{}};
  const first=await prepareGrain(db,'test',row);
  const next=await prepareGrain(db,'test',{storage_path:first.storagePath,metadata:{grain:{originalStoragePath:'original.png'}}});
  assert.equal(downloaded,'original.png');assert.equal(first.storagePath,next.storagePath);
- assert.notEqual(first.storagePath,'original.png');assert.deepEqual(writes[0].bytes,writes[1].bytes);
+ assert.notEqual(first.storagePath,'original.png');assert.equal(writes.length,1); // Approval reuses the preview instead of reprocessing/reuploading.
 });

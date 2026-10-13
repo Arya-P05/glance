@@ -203,3 +203,45 @@ Within-batch repeat checks block concepts and known visual setups, not broad set
 In Backgrounds → Review, **Film grain** starts on for every image and its deterministic monochrome preview loads automatically. Toggle it off to compare with the original. Approval waits for the enabled preview to be ready; failed previews can be retried. The same image always receives the same seeded pattern; repeated toggles do not accumulate noise. Previewing writes a separate, content-addressed PNG but does not approve or replace the background. Selections are kept while navigating within the review screen and reset to on after a full page reload. The staging API also defaults to grain when the caller omits the option; an explicit `grain: false` keeps the original.
 
 Approving with grain enabled switches the background's storage path to that exact deterministic variant, so subsequent captions, widgets and publication use it. Approval records the choice/version and original storage path in metadata, preserving the original asset. Grain is applied to the background before text rendering. This is a fixed grain amount, with no image-model call.
+
+### Image persistence and cleanup
+
+Apply `20261013000000_image_asset_lifecycle.sql` before running this version of the backend. It backfills asset references from existing records and adds service-role-only lifecycle functions. It does not move or delete existing files. Deploy the backend and migration together; older delete/clear scripts do not understand shared assets.
+
+Generated originals are saved locally and uploaded before review-batch captions or placement are requested. A caption/placement failure leaves a pending background available for normal review. A cloud-persistence failure after local saving stops the batch instead of paying to generate a replacement. Saved-prompt renders receive distinct names; the original prompt remains recorded in metadata.
+
+From `backend`, inspect and recover local images after a failed upload without another model call:
+
+```sh
+npm run gen:recover
+npm run gen:recover -- --apply
+```
+
+Recovery reads the default `content/backgrounds/` and `content/meta/` directories. It inserts missing backgrounds without resetting existing approvals, rejections, or edits. Custom generation output directories are not automatically scanned. Local files remain inspection/recovery copies, not a synchronized mirror of later dashboard edits.
+
+Square and wide renders now have content-addressed immutable filenames. Saving an identical render reuses its object. Grain approval reuses an existing deterministic preview. Publishing to Library references the finished draft images instead of copying them to `posts/`; publication and draft status commit in one transaction. Widgets and carousel publishing continue to use the stored paths. Existing Library paths remain valid.
+
+`image_assets` records image identity, source path, hash, size and lifecycle state. `image_asset_references` tracks ownership independently of workflow status, including paths nested in review/reference metadata. Discarded records, creative references, carousel snapshots, cover history and recorded feedback continue to protect their images. No rejected-image expiry or automatic cleanup schedule is introduced.
+
+Library deletion first removes membership, then attempts to remove both formats only if neither has another reference or an active upload lease. Failed removals remain retryable. Clear uses a snapshot of post IDs and the same checks; prune searches nested storage folders and shared draft paths. Neither treats a shared file as disposable merely because it is outside `posts/`.
+
+Inspect cleanup candidates, optionally index older untracked files, then explicitly apply cleanup:
+
+```sh
+npm run assets:cleanup
+npm run assets:cleanup -- --index
+npm run assets:cleanup -- --apply
+```
+
+The default retention is 30 days **after the last reference is removed**, or after an old untracked file is first indexed. `--days=N` changes that retention (minimum one day). Indexing saves inventory metadata but removes nothing. Preview is read-only. Apply rechecks and claims each candidate under a database lock; concurrent references and uploads block deletion. Failed cleanup claims are held for an hour before they can be retried. Storage and database operations are not a single transaction, so uncertain failures retain files rather than eagerly deleting them. Historical metadata can intentionally keep an otherwise superseded render alive.
+
+Caption editors recover unfinished wording, option selection, square/wide layout and review notes in the same browser. Recovery does not approve, render, publish, or create taste feedback. A changed server caption/layout invalidates the recovered session; successful saving clears it. Browser storage is not a cross-device backup, and unavailable storage is indicated in the editor. Summer Roll remains independent.
+
+Validation without production data or paid image calls:
+
+```sh
+node --test *test.js
+python3 tests/run-image-assets-integration.py
+```
+
+The SQL runner uses a disposable `postgres:15` Docker container with no published ports and removes it afterward. It checks backfill, ownership, publication rollback/idempotency, cleanup claims, and existing feedback, widget and carousel behavior.

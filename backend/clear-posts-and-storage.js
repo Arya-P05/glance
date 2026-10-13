@@ -1,79 +1,27 @@
-/**
- * Empties the instagram-posts bucket (posts/*) and truncates the posts table.
- * Requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.
- *
- * Run once, then re-import with small images: npm run bulk or collect-links + import-links.
- */
-import "dotenv/config";
-import { createClient } from "@supabase/supabase-js";
-import { supabaseServiceRoleKey, supabaseUrl } from "./supabase-env.js";
-
-const BUCKET = "instagram-posts";
-
-function env(name) {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing env: ${name}`);
-  return v;
-}
+/** Clear Library membership, deleting only files with no remaining owners. */
+import 'dotenv/config';
+import { createClient } from '@supabase/supabase-js';
+import { supabaseServiceRoleKey, supabaseUrl } from './supabase-env.js';
+import { deleteLibraryPost, requireImageAssets } from './image-assets.js';
 
 async function main() {
-  const supabase = createClient(supabaseUrl(), supabaseServiceRoleKey());
-
-  // List and delete all objects under posts/
-  let totalDeleted = 0;
-  let offset = 0;
-  const pageSize = 200;
-
-  while (true) {
-    const { data: files, error: listErr } = await supabase.storage
-      .from(BUCKET)
-      .list("posts", { limit: pageSize, offset });
-
-    if (listErr) {
-      console.error("List error:", listErr.message);
-      process.exit(1);
-    }
-    if (!files?.length) break;
-
-    const paths = files.map((f) => `posts/${f.name}`);
-    const { error: removeErr } = await supabase.storage.from(BUCKET).remove(paths);
-    if (removeErr) {
-      console.error("Remove error:", removeErr.message);
-      process.exit(1);
-    }
-    totalDeleted += paths.length;
-    console.log(`Deleted ${paths.length} objects (total ${totalDeleted})`);
-    if (files.length < pageSize) break;
-    offset += pageSize;
+  const db = createClient(supabaseUrl(), supabaseServiceRoleKey());
+  await requireImageAssets(db);
+  // Snapshot the IDs before deleting; offset pagination during deletion skips rows.
+  const posts = [];
+  for (let offset = 0; ; offset += 500) {
+    const { data, error } = await db.from('posts').select('id, storage_path').order('id').range(offset, offset + 499);
+    if (error) throw error;
+    posts.push(...data);
+    if (data.length < 500) break;
   }
-
-  // Delete all rows from posts (id is UUID; fetch ids then delete in batches)
-  const batchSize = 200;
-  let deletedRows = 0;
-  while (true) {
-    const { data: rows, error: selectErr } = await supabase
-      .from("posts")
-      .select("id")
-      .limit(batchSize);
-    if (selectErr) {
-      console.error("Select posts error:", selectErr.message);
-      process.exit(1);
-    }
-    if (!rows?.length) break;
-    const ids = rows.map((r) => r.id);
-    const { error: deleteErr } = await supabase.from("posts").delete().in("id", ids);
-    if (deleteErr) {
-      console.error("Delete posts error:", deleteErr.message);
-      process.exit(1);
-    }
-    deletedRows += ids.length;
-    if (rows.length < batchSize) break;
+  let removedStorage = 0;
+  let pending = 0;
+  for (const post of posts) {
+    const result = await deleteLibraryPost(db, { id: post.id, storagePath: post.storage_path });
+    removedStorage += result.removedStorage;
+    pending += result.cleanupPending.length;
   }
-  console.log(`Cleared posts table (${deletedRows} rows).`);
-  console.log("Done. Re-import with: npm run bulk  (or collect-links then import-links)");
+  console.log(`Cleared ${posts.length} Library posts and ${removedStorage} unused files. Shared assets retained. ${pending} storage removals need a cleanup retry.`);
 }
-
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+main().catch(error => { console.error(error.message); process.exitCode = 1; });

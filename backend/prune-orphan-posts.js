@@ -1,3 +1,4 @@
+import { listImageObjects } from './image-assets.js';
 /**
  * Deletes rows from the posts table whose storage_path no longer exists in the
  * instagram-posts bucket (e.g. after you manually deleted files from Storage).
@@ -18,28 +19,10 @@ function env(name) {
 async function main() {
   const supabase = createClient(supabaseUrl(), supabaseServiceRoleKey());
 
-  // 1. List all objects in bucket posts/
-  const existingPaths = new Set();
+  // Include shared renders under drafts/ and nested medium files.
+  const existingPaths = new Set((await listImageObjects(supabase)).map(item => item.path));
   let offset = 0;
   const pageSize = 1000;
-
-  while (true) {
-    const { data: files, error: listErr } = await supabase.storage
-      .from(BUCKET)
-      .list("posts", { limit: pageSize, offset });
-
-    if (listErr) {
-      console.error("List error:", listErr.message);
-      process.exit(1);
-    }
-    if (!files?.length) break;
-
-    for (const f of files) {
-      existingPaths.add(`posts/${f.name}`);
-    }
-    offset += files.length;
-    if (files.length < pageSize) break;
-  }
 
   console.log(`Found ${existingPaths.size} files in storage.`);
 

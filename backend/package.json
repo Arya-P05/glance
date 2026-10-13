@@ -19,7 +19,9 @@
     "clear-posts": "node clear-posts-and-storage.js",
     "prune-orphans": "node prune-orphan-posts.js",
     "admin": "node admin-server.js",
-    "install-browser": "npx playwright install chromium"
+    "install-browser": "npx playwright install chromium",
+    "assets:cleanup": "node cleanup-images.js",
+    "gen:recover": "node recover-backgrounds.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

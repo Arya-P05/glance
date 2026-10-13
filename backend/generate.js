@@ -1,3 +1,6 @@
+import { persistGeneratedBackground } from './generated-backgrounds.js';
+import { requireImageAssets } from './image-assets.js';
+import { randomUUID } from 'node:crypto';
 import {loadRunInspiration, validateInspirationIds, runInspirationImages, analyzeInspiration, inspirationDirectorPrompt, inspirationWriterPrompt, reviewInspirationFit} from './run-inspiration.js';
 import { visualSetupKeys } from './poster-concepts.js';
 import { feedbackHash } from './generation-feedback.js';
@@ -1020,27 +1023,7 @@ async function upsertWithSchemaFallback(supabase, table, row, { onConflict, opti
   }
 }
 
-async function uploadBackgroundToDb(supabase, { name, imageBytes, metadata }) {
-  const storagePath = `${DRAFT_PREFIX}/backgrounds/${name}.png`;
-  const { error: uploadErr } = await supabase.storage
-    .from(BUCKET)
-    .upload(storagePath, imageBytes, { contentType: "image/png", upsert: true });
-  if (uploadErr) throw uploadErr;
-
-  await upsertWithSchemaFallback(supabase, "backgrounds",
-    {
-      name,
-      storage_path: storagePath,
-      scene: metadata.scene ?? null,
-      image_prompt: metadata.scenePrompt ?? null,
-      metadata,
-      image_model: metadata.imageModel ?? null,
-      prompt_model: metadata.promptModel ?? null,
-      status: "pending",
-    },
-    { onConflict: "name", optionalColumns: ["metadata", "image_model", "prompt_model"] }
-  );
-}
+const uploadBackgroundToDb = persistGeneratedBackground;
 
 async function uploadPromptToDb(supabase, { name, prompt, metadata }) {
   await upsertWithSchemaFallback(supabase, "prompts",
@@ -1075,6 +1058,7 @@ async function main() {
   } catch {
     console.warn("Supabase not configured — drafts/prompts won't be saved to DB");
   }
+  if (supabase && !args.dryRun && args.mode !== "prompts") await requireImageAssets(supabase);
   let taste = await loadTaste(supabase);
   if(args.fromPrompts && args.inspirationIds.length) throw new Error("Choose fresh generation when using Library inspiration");
   taste.runInspiration=await loadRunInspiration(supabase,args.inspirationIds,path=>supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl);
@@ -1147,16 +1131,18 @@ async function main() {
     const itemNumber = completed + 1;
     const prefix = `[${itemNumber}/${args.count}]`;
 
-    let scene, scenePrompt, promptWriterPrompt, name;
+    let scene, scenePrompt, promptWriterPrompt, name, sourcePromptName;
     let generationTaste = taste;
 
     if (promptSources) {
       const source = promptSources[completed];
       if (!source) break;
       ({ scene, prompt: scenePrompt, promptWriterPrompt, name } = source);
-      generationTaste = source.generationTaste;
+      sourcePromptName = name;
+      if (args.mode !== "prompts") name = `${name}_${randomUUID().slice(0,8)}`;
+      generationTaste = source.generationTaste ?? taste;
     } else {
-      name = makeBackgroundName(conceptAttempts);
+      name = `${makeBackgroundName(conceptAttempts)}_${randomUUID().slice(0,8)}`;
       if (taste.runInspiration.length && openai) {
         scene = await generateSceneFromDirector({client:openai,model:args.promptModel,avoidSignatures:avoidSceneSignatures,taste,batchScenes,direction:directionMetadata(args)});
         if (!isAllowedScene(scene,avoidSceneSignatures)) {rejected++;console.log(`${prefix} repeated concept; trying another idea`);continue;}
@@ -1217,6 +1203,7 @@ async function main() {
       continue;
     }
 
+    let localImageSaved = false;
     try {
       attempted++;
       console.log(`${prefix} ${sceneSummary(scene)}`);
@@ -1270,15 +1257,6 @@ async function main() {
         generateImage({ client: openai, model: args.model, prompt: scenePrompt, size: args.size })
       );
 
-      let review = null;
-      if (args.reviewBatch) {
-        review = await withProgress(`${prefix} writing reviewed caption options`, () => generateReviewedCaptions({
-          client:openai,model:process.env.OPENAI_CAPTION_MODEL || DEFAULT_CAPTION_MODEL,
-          scene,imageBytes:rawImageBytes,taste,recentCaptions:batchCaptions,
-        }));
-        batchCaptions.push(review.caption);
-      }
-      const placement = review ? defaultCaptionPlacement() : null;
       const draftMetadata = {
         imageModel: args.model,
         promptModel: args.promptModel,
@@ -1290,8 +1268,7 @@ async function main() {
         promptWriterPrompt,
         generationTaste,
         reviewBatchId,
-        ...(placement ? {captionLayout:placement.layout,mediumCaptionLayout:placement.mediumLayout,placementFeedbackIds:placement.feedbackIds} : {}),
-        ...(review ? {captionOptions:review.options,selectedCaptionIndex:0,captionPrompt:review.prompt,captionTaste:taste} : {}),
+        sourcePromptName,
       };
       const paths = await withProgress(`${prefix} saving background`, () =>
         saveGeneratedAsset({
@@ -1304,11 +1281,7 @@ async function main() {
           metadata: draftMetadata,
         })
       );
-      if (review) {
-        const previewPath = join(args.outDir, `${name}.review.png`);
-        await writeFile(previewPath, await overlayCaption(rawImageBytes,review.caption,placement.layout));
-        console.log(`${prefix} review preview → ${previewPath}`);
-      }
+      localImageSaved = true;
       if (supabase) {
         await withProgress(`${prefix} saving background to DB`, () =>
           uploadBackgroundToDb(supabase, {
@@ -1319,8 +1292,33 @@ async function main() {
         );
         if (promptSources) {
           await withProgress(`${prefix} removing used prompt`, () =>
-            removePromptFromDb(supabase, name)
+            removePromptFromDb(supabase, sourcePromptName)
           );
+        }
+      }
+
+      if (args.reviewBatch) {
+        try {
+          const review = await withProgress(`${prefix} writing reviewed caption options`, () => generateReviewedCaptions({
+            client:openai,model:process.env.OPENAI_CAPTION_MODEL || DEFAULT_CAPTION_MODEL,
+            scene,imageBytes:rawImageBytes,taste,recentCaptions:batchCaptions,
+          }));
+          const placement = defaultCaptionPlacement();
+          const patch = {captionLayout:placement.layout,mediumCaptionLayout:placement.mediumLayout,placementFeedbackIds:placement.feedbackIds,
+            captionOptions:review.options,selectedCaptionIndex:0,captionPrompt:review.prompt,captionTaste:taste};
+          Object.assign(draftMetadata, patch);
+          await saveGeneratedAsset({outputDir:args.outDir,metaDir:args.metaDir,name,imageBytes:rawImageBytes,
+            rawImageBytes:null,prompt:scenePrompt,metadata:draftMetadata});
+          if (supabase) {
+            const {error}=await supabase.rpc('merge_image_generation',{background_name:name,patch});
+            if(error) throw error;
+          }
+          batchCaptions.push(review.caption);
+          const previewPath = join(args.outDir, `${name}.review.png`);
+          await writeFile(previewPath, await overlayCaption(rawImageBytes,review.caption,placement.layout));
+          console.log(`${prefix} review preview → ${previewPath}`);
+        } catch(error) {
+          console.warn(`${prefix} Background saved; caption preview incomplete: ${error.message}. Continue in Approved.`);
         }
       }
 
@@ -1333,6 +1331,9 @@ async function main() {
     } catch (e) {
       failed++;
       console.error(`${prefix} failed: ${e.message || e}\n`);
+      if (localImageSaved) {
+        throw new Error(`Generated image is saved locally as ${name}. Stopping to avoid paying for a replacement. Run npm run gen:recover (then -- --apply) after fixing storage.`);
+      }
     }
   }
 
