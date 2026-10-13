@@ -136,6 +136,7 @@ export default function LibraryScreen() {
         <View style={{ flex: 1 }} />
         {selected.size > 0 && (
           <>
+            {selectedImages.length === 1 && <Btn label="Use as typography reference" onPress={() => router.push({ pathname: "/typography", params: { reference: selectedImages[0].id } })} small variant="outline" />}
             <Btn label="Use as inspiration" onPress={() => router.push({pathname:"/generate",params:{inspiration:selectedImages.map(image=>image.id).join(",")}})} disabled={selectedImages.length > 5 || busy} small variant="outline" />
             <Btn label="Add to references" onPress={addSelectedReferences} loading={busy} disabled={selected.size > 50} small variant="outline" />
             {filter === "active" && (
@@ -280,6 +281,7 @@ export default function LibraryScreen() {
                   ) : (
                     <Btn label="Reactivate" onPress={() => setStatusOne(detail, "active")} loading={busy} small />
                   )}
+                  <Btn label="Use as typography reference" onPress={() => { setDetail(null); router.push({ pathname: "/typography", params: { reference: detail.id } }); }} small variant="outline" />
                   <Btn label="Preview" onPress={() => {
                     if (typeof window !== "undefined") sessionStorage.setItem("previewUri", detail.publicUrl);
                     setDetail(null);

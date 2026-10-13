@@ -1,3 +1,5 @@
+import { loadApprovedCaptionExamples } from "./motivational-generator.js";
+import { readTypographyDefaults } from "./typography-defaults.js";
 import {prepareGrain} from './image-grain.js';
 import {suggestCarousels} from './carousel-suggestions.js';
 let suggestingCarousels = false;
@@ -31,7 +33,7 @@ import {
 } from "./instagram-helper.js";
 import { getDraftForPublish, publishDraftFromDb } from "./publish-draft.js";
 import { reviewEvent, approvalEvents, feedbackReason } from "./generation-feedback.js";
-import { suggestReviewedPlacement } from "./reviewed-placement.js";
+import { defaultCaptionPlacement } from "./reviewed-placement.js";
 import { loadTaste } from "./generation-taste.js";
 import { generateReviewedCaptions } from "./reviewed-captions.js";
 import { addReferences, listReferences, updateReference } from "./creative-references.js";
@@ -1097,7 +1099,7 @@ async function findBackgroundMatch(supabase, { id, dbId, statuses }) {
   return matches[0];
 }
 
-async function stagePendingBackground(supabase, { id, dbId, reason, grain = false }) {
+async function stagePendingBackground(supabase, { id, dbId, reason, grain = true }) {
   const row = await findBackgroundMatch(supabase, { id, dbId, statuses: ["pending"] });
   const metadata = row.metadata && typeof row.metadata === "object" ? row.metadata : {};
   if (typeof grain !== "boolean") throw httpError("grain must be a boolean",400);
@@ -1302,7 +1304,7 @@ async function generateCaptionOptionsForBackground(supabase, { id, captionModel 
   }
   const selectedCaptionIndex = captionOptions.findIndex((caption) => captionSignature(caption) === selectedCaptionSig);
 
-  const placement=await suggestReviewedPlacement({client:openai,model,imageBytes,caption:captionResult.caption,scene,taste});
+  const placement=defaultCaptionPlacement();
   const nextMetadata = {
     ...metadata,
     captionLayout:placement.layout,
@@ -1553,6 +1555,15 @@ async function main() {
       return;
     }
 
+    if (url.pathname === "/api/typography" && ["GET", "PUT"].includes(req.method)) {
+      try {
+        if (req.method === "PUT") { json(res, 405, { error: "Caption typography is locked." }); return; }
+        const defaults = readTypographyDefaults();
+        json(res, 200, { defaults });
+      } catch (e) { json(res, e.status || 500, { error: e.message }); }
+      return;
+    }
+
     if (url.pathname === "/api/references" && ["GET", "POST"].includes(req.method)) {
       try {
         if (req.method === "GET") {
@@ -1637,7 +1648,9 @@ async function main() {
             .order("created_at", { ascending: false }));
         }
         if (error) throw error;
+        const transcriptions = new Map(loadApprovedCaptionExamples({ includePosterImages: true }).map(row => [row.path, { smallText: row.smallText, bigText: row.bigText }]));
         const items = (data ?? []).map(row => ({
+          referenceText: transcriptions.get(row.storage_path) ?? null,
           id: row.id,
           instagramId: row.instagram_id,
           storagePath: row.storage_path,
@@ -1667,7 +1680,7 @@ async function main() {
 
     if (url.pathname === "/api/carousel-suggestions" && req.method === "GET") {
       try {
-        const result=await supabase.from("carousel_suggestions").select("*").eq("status","pending").order("created_at");
+        const result=await supabase.from("carousel_suggestions").select("*").eq("status","pending").order("created_at", {ascending:false}).order("id");
         if(result.error)throw result.error;
         json(res,200,{suggestions:result.data});
       } catch(e) {json(res,500,{error:e.message});}
@@ -1677,7 +1690,7 @@ async function main() {
       if (suggestingCarousels) { json(res,409,{error:"Suggestions are already being prepared"}); return; }
       suggestingCarousels = true;
       try {
-        await suggestCarousels(supabase,new OpenAI({apiKey:env("OPENAI_API_KEY")}),path=>publicObjectUrl(projectUrl,path),process.env.OPENAI_PROMPT_MODEL || "gpt-4.1-mini");
+        await suggestCarousels(supabase);
         json(res,200,{success:true});
       } catch(e) {json(res,400,{error:e.message});}
       finally {suggestingCarousels = false;}
