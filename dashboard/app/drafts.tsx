@@ -259,6 +259,9 @@ export default function DraftsScreen() {
           </Text>
         </View>
         <CaptionEditor
+          key={draft.id}
+          recoveryKey={`draft:${draft.id}`}
+          recoveryVersion={JSON.stringify([draft.rawImageUrl,draft.meta?.caption,draft.meta?.captionLayout,draft.meta?.mediumCaptionLayout])}
           backgroundUri={draftBackgroundUri(draft)}
           caption={caption}
           initialLayout={draft.meta?.captionLayout}

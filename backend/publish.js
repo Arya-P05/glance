@@ -105,7 +105,7 @@ async function getUnpublishedDrafts(supabase, { id, count }) {
 }
 
 async function publishDraft({ supabase, draft, dryRun, status = "active" }) {
-  if (dryRun) return `posts/${draft.name}.jpg`;
+  if (dryRun) return draft.storage_path;
   return publishDraftFromDb(supabase, draft, { status });
 }
 

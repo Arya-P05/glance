@@ -1,5 +1,6 @@
 import sharp from 'sharp';
 import { createHash } from 'node:crypto';
+import { imageExists, reserveImageAsset, saveImageAsset } from './image-assets.js';
 
 export const GRAIN_VERSION = 'grain-v1';
 export async function applyGrain(bytes) {
@@ -24,8 +25,10 @@ export async function prepareGrain(db, bucket, row) {
   const bytes = Buffer.from(await data.arrayBuffer());
   const digest = createHash('sha256').update(bytes).digest('hex');
   const storagePath = `drafts/backgrounds/grain/${digest}-${GRAIN_VERSION}.png`;
-  const output = await applyGrain(bytes);
-  const uploaded = await db.storage.from(bucket).upload(storagePath, output, { contentType: 'image/png', upsert: true });
-  if (uploaded.error) throw uploaded.error;
+  await reserveImageAsset(db, storagePath, { kind: 'grain', source: sourcePath });
+  if (!await imageExists(db, storagePath, bucket)) {
+    const output = await applyGrain(bytes);
+    await saveImageAsset(db, storagePath, output, { kind: 'grain', source: sourcePath, bucket });
+  }
   return { storagePath, originalStoragePath: sourcePath, version: GRAIN_VERSION };
 }

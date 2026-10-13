@@ -1,4 +1,5 @@
-import React, { useRef, useState } from "react";
+import { clearEditorRecovery, readEditorRecovery, writeEditorRecovery, type EditorRecovery } from '../lib/editorRecovery';
+import React, { useEffect, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, PanResponder, Pressable, TextInput,
 } from "react-native";
@@ -43,6 +44,10 @@ type Props = {
   allowMediumRejection?: boolean;
   placementReason?: string;
   onPlacementReasonChange?: (value:string)=>void;
+  recoveryKey?: string;
+  recoveryVersion?: string;
+  recoveryContext?: EditorRecovery['context'];
+  onRecover?: (state: EditorRecovery) => void;
 };
 
 export function CaptionEditor({
@@ -57,13 +62,38 @@ export function CaptionEditor({
   allowMediumRejection = false,
   placementReason,
   onPlacementReasonChange,
+  recoveryKey,
+  recoveryVersion = '',
+  recoveryContext,
+  onRecover,
 }: Props) {
+  const [recovered] = useState(() => recoveryKey ? readEditorRecovery(recoveryKey, recoveryVersion) : null);
+  const [recoveryReady, setRecoveryReady] = useState(false);
+  const recoveryConsumed = useRef(false);
+  useEffect(() => {
+    if (recovered) {
+      setLayout(normalizeCaptionLayout(recovered.layout));
+      setMediumLayout(normalizeMediumCaptionLayout(recovered.mediumLayout, recovered.layout));
+      setMediumRejected(recovered.mediumRejected);
+      setMediumReason(recovered.mediumReason);
+      if (onRecover) onRecover(recovered);
+      else onCaptionChange?.(recovered.caption);
+    }
+    setRecoveryReady(true);
+  }, []);
   const [layout, setLayout] = useState<CaptionLayout>(() => normalizeCaptionLayout(initialLayout));
   const [mediumLayout, setMediumLayout] = useState<MediumCaptionLayout>(() =>
     normalizeMediumCaptionLayout(initialMediumLayout, initialLayout ?? DEFAULT_MEDIUM_CAPTION_LAYOUT)
   );
   const [mediumRejected, setMediumRejected] = useState(false);
   const [mediumReason, setMediumReason] = useState("");
+  const [recoveryFailed, setRecoveryFailed] = useState(false);
+  useEffect(() => {
+    if (!recoveryKey || !recoveryReady || recoveryConsumed.current) return;
+    setRecoveryFailed(!writeEditorRecovery(recoveryKey, recoveryVersion, {
+      caption, layout, mediumLayout, mediumRejected, mediumReason, context: recoveryContext,
+    }));
+  }, [recoveryKey, recoveryVersion, recoveryReady, caption, layout, mediumLayout, mediumRejected, mediumReason, recoveryContext]);
   const [saving, setSaving] = useState(false);
   const [draggingText, setDraggingText] = useState(false);
   const [draggingMediumText, setDraggingMediumText] = useState(false);
@@ -193,6 +223,8 @@ export function CaptionEditor({
     setSaving(true);
     try {
       await onApply(layout, mediumLayout, mediumRejected, mediumReason);
+      recoveryConsumed.current = true;
+      if (recoveryKey) clearEditorRecovery(recoveryKey);
     } finally {
       setSaving(false);
     }
@@ -219,6 +251,7 @@ export function CaptionEditor({
       <View style={styles.main}>
         <View style={styles.editorCol}>
           <Text style={styles.sectionTitle}>Caption editor</Text>
+          {recoveryKey && <Text style={styles.hint}>{recoveryFailed ? 'Edit recovery is unavailable in this browser. Keep this editor open until you save.' : 'Edits are recovered in this browser. Use the save button to apply them to the poster.'}</Text>}
           <Text style={styles.hint}>Drag the text to reposition. Toggle color, then apply to bake onto the poster.</Text>
 
           <View
