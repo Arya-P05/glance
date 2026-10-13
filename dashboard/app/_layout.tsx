@@ -159,6 +159,13 @@ export default function RootLayout() {
   );
 }
 
+// React Native's style type omits these supported React Native Web properties.
+const webTransition = (property: string, duration: string, timing?: string) => ({
+  transitionProperty: property,
+  transitionDuration: duration,
+  ...(timing ? { transitionTimingFunction: timing } : {}),
+});
+
 const styles = StyleSheet.create({
   root: { flex: 1, flexDirection: "row", backgroundColor: C.bg },
   sidebar: {
@@ -174,9 +181,7 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     justifyContent: "flex-start",
     overflow: "hidden",
-    transitionProperty: "width" as any,
-    transitionDuration: "220ms" as any,
-    transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)" as any,
+    ...webTransition("width", "220ms", "cubic-bezier(0.32, 0.72, 0, 1)"),
   },
   sidebarCollapsed: {
     width: 54,
@@ -216,9 +221,7 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
     paddingHorizontal: 0,
     borderRadius: 8,
-    transitionProperty: "width, background-color" as any,
-    transitionDuration: "180ms" as any,
-    transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)" as any,
+    ...webTransition("width, background-color", "180ms", "cubic-bezier(0.32, 0.72, 0, 1)"),
   },
   navIconSlot: {
     width: 38,
@@ -227,7 +230,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   navItemActive: { backgroundColor: C.surfaceHigh },
-  navLabel: { color: C.textSecondary, fontSize: 13, fontWeight: "500", transitionProperty: "opacity" as any, transitionDuration: "150ms" as any },
+  navLabel: { color: C.textSecondary, fontSize: 13, fontWeight: "500", ...webTransition("opacity", "150ms") },
   navLabelActive: { color: C.textPrimary },
 
   content: { flex: 1, backgroundColor: C.bg },
