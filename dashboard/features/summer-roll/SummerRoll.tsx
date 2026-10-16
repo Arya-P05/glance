@@ -5,7 +5,7 @@ import { css } from './styles';
 const SERVICE = 'http://127.0.0.1:3848';
 const DRAFT_KEY = 'glance.summer-roll.brief.v1';
 type Scene = typeof guide.scenes[number];
-type Frame = { id: string; title: string; scene: string; quality: 'medium' | 'high'; status: 'generating' | 'ready' | 'failed'; createdAt: string; prompt: string; imageUrl?: string; error?: string; model: string };
+type Frame = { id: string; title: string; scene: string; quality: 'medium' | 'high'; status: 'generating' | 'ready' | 'failed'; createdAt: string; prompt: string; imageUrl?: string; error?: string; model: string; background?: { id: string; name: string } };
 type ServiceState = { ready: boolean; busy: boolean; model: string; frames: Frame[] };
 const categories = ['All scenes', ...new Set(guide.scenes.map(scene => scene.category))];
 const energies = ['All moments', 'High energy', 'Quiet', 'In between'];
@@ -22,6 +22,8 @@ export default function SummerRoll() {
   const [service, setService] = useState<ServiceState | null>(null);
   const [connection, setConnection] = useState('Connecting to the studio…');
   const [sending, setSending] = useState(false);
+  const [importing, setImporting] = useState<string[]>([]);
+  const [removing, setRemoving] = useState<string[]>([]);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [activeTab, setActiveTab] = useState<'compose' | 'roll' | 'guide'>('compose');
@@ -89,6 +91,32 @@ export default function SummerRoll() {
     try { await navigator.clipboard.writeText(text); setNotice('Prompt copied'); }
     catch { setError('Clipboard access is unavailable. Expand the full prompt to select and copy it.'); }
   }
+  async function removeFromRoll(frame: Frame) {
+    if (removing.includes(frame.id) || importing.includes(frame.id)) return;
+    setRemoving(previous => [...previous, frame.id]); setError('');
+    try {
+      const response = await fetch(`${SERVICE}/frames/${frame.id}/remove`, { method: 'POST', signal: AbortSignal.timeout(15000) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Unable to remove this frame.');
+      setService(previous => previous ? { ...previous, frames: previous.frames.filter(item => item.id !== frame.id) } : previous);
+      setNotice(frame.background ? 'Removed from roll. Your Backgrounds copy is still there.' : 'Removed from roll.');
+    } catch (cause) {
+      setError(cause instanceof Error && cause.message !== 'Failed to fetch' ? cause.message : 'Could not reach the studio. Retry to remove this frame.');
+    } finally { setRemoving(previous => previous.filter(id => id !== frame.id)); }
+  }
+  async function sendToBackgrounds(frame: Frame) {
+    if (importing.includes(frame.id) || frame.background) return;
+    setImporting(previous => [...previous, frame.id]); setError('');
+    try {
+      const response = await fetch(`${SERVICE}/frames/${frame.id}/background`, { method: 'POST', signal: AbortSignal.timeout(60000) });
+      const result: Frame & { error?: string } = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Unable to send this photograph.');
+      setService(previous => previous ? { ...previous, frames: previous.frames.filter(item => item.id !== frame.id) } : previous);
+      setNotice('Sent to Backgrounds and removed from your roll.');
+    } catch (cause) {
+      setError(cause instanceof Error && cause.message !== 'Failed to fetch' ? cause.message : 'Could not reach the studio. Retry to send this photograph.');
+    } finally { setImporting(previous => previous.filter(id => id !== frame.id)); }
+  }
   async function generate() {
     if (!valid || sending || service?.busy) return;
     setSending(true); setError('');
@@ -138,8 +166,8 @@ export default function SummerRoll() {
       </div>
     </div>}
 
-    {activeTab === 'roll' && <section className="sr-roll"><div className="sr-section-heading"><div><h2>Your summer, frame by frame.</h2><p>Make a few. Keep the ones that feel real.</p></div><button className="sr-secondary" onClick={() => setActiveTab('compose')}>Make another ↗</button></div>
-      {!frames.length ? <div className="sr-empty"><div className="sr-empty-frame"><span>01</span><span>Your first memory<br />goes here.</span><span>SUMMER ROLL</span></div><h3>A roll waiting to happen.</h3><p>Start with a scene. Every finished photograph will be saved here.</p><button className="sr-primary" onClick={() => setActiveTab('compose')}>Find a moment ↗</button></div> : <div className="sr-contact-sheet">{frames.map((frame, index) => <article className="sr-photo" key={frame.id}><div className="sr-photo-image">{frame.status === 'ready' && frame.imageUrl ? <a href={`${SERVICE}${frame.imageUrl}`} target="_blank" rel="noreferrer" aria-label={`Open ${frame.title}`}><img src={`${SERVICE}${frame.imageUrl}`} alt={frame.scene} loading="lazy" /></a> : <div className={`sr-developing ${frame.status}`}><span aria-hidden="true">{frame.status === 'failed' ? '↺' : '◌'}</span><h3>{frame.status === 'failed' ? 'This frame didn’t develop.' : 'A moment in the making.'}</h3><p>{frame.status === 'failed' ? frame.error : 'Your photograph is developing. Feel free to explore another scene.'}</p></div>}</div><div className="sr-photo-caption"><span>{String(frames.length - index).padStart(2, '0')}</span><h3>{frame.title}</h3></div><div className="sr-photo-actions"><button onClick={() => { setSelected(''); setTitle(frame.title); setScene(frame.scene); setQuality(frame.quality); setError(''); setActiveTab('compose'); }}>Use brief</button>{frame.status === 'ready' && <a href={`${SERVICE}${frame.imageUrl}?download=1`}>Download PNG ↓</a>}</div><details className="sr-frame-details"><summary>Frame details</summary><p>{new Date(frame.createdAt).toLocaleString()} · {frame.model} · {frame.quality}</p><p>{frame.scene}</p><button onClick={() => copy(frame.prompt)}>Copy original prompt</button></details></article>)}</div>}
+    {activeTab === 'roll' && <section className="sr-roll"><div className="sr-section-heading"><div><h2>Your summer, frame by frame.</h2><p>Send your favorites to Backgrounds for review and captions.</p></div><button className="sr-secondary" onClick={() => setActiveTab('compose')}>Make another ↗</button></div>
+      {!frames.length ? <div className="sr-empty"><div className="sr-empty-frame"><span>01</span><span>Your first memory<br />goes here.</span><span>SUMMER ROLL</span></div><h3>A roll waiting to happen.</h3><p>Start with a scene. Every finished photograph will be saved here.</p><button className="sr-primary" onClick={() => setActiveTab('compose')}>Find a moment ↗</button></div> : <div className="sr-contact-sheet">{frames.map((frame, index) => <article className="sr-photo" key={frame.id}><div className="sr-photo-image">{frame.status === 'ready' && frame.imageUrl ? <a href={`${SERVICE}${frame.imageUrl}`} target="_blank" rel="noreferrer" aria-label={`Open ${frame.title}`}><img src={`${SERVICE}${frame.imageUrl}`} alt={frame.scene} loading="lazy" /></a> : <div className={`sr-developing ${frame.status}`}><span aria-hidden="true">{frame.status === 'failed' ? '↺' : '◌'}</span><h3>{frame.status === 'failed' ? 'This frame didn’t develop.' : 'A moment in the making.'}</h3><p>{frame.status === 'failed' ? frame.error : 'Your photograph is developing. Feel free to explore another scene.'}</p></div>}</div><div className="sr-photo-caption"><span>{String(frames.length - index).padStart(2, '0')}</span><h3>{frame.title}</h3></div><div className="sr-photo-actions"><button onClick={() => { setSelected(''); setTitle(frame.title); setScene(frame.scene); setQuality(frame.quality); setError(''); setActiveTab('compose'); }}>Use brief</button>{frame.status === 'ready' && <><a href={`${SERVICE}${frame.imageUrl}?download=1`}>Download PNG ↓</a>{frame.background ? <a href="/backgrounds">Sent to Backgrounds ↗</a> : <button disabled={importing.includes(frame.id) || removing.includes(frame.id) || !!connection} onClick={() => sendToBackgrounds(frame)}>{importing.includes(frame.id) ? 'Sending…' : 'Send to Backgrounds ↗'}</button>}</>}{frame.status !== 'generating' && <button disabled={removing.includes(frame.id) || importing.includes(frame.id) || !!connection} onClick={() => removeFromRoll(frame)}>{removing.includes(frame.id) ? 'Removing…' : 'Remove from roll'}</button>}</div><details className="sr-frame-details"><summary>Frame details</summary><p>{new Date(frame.createdAt).toLocaleString()} · {frame.model} · {frame.quality}</p><p>{frame.scene}</p><button onClick={() => copy(frame.prompt)}>Copy original prompt</button></details></article>)}</div>}
     </section>}
 
     {activeTab === 'guide' && <section className="sr-guide"><div className="sr-guide-intro"><span className="sr-eyebrow">THE FEELING, NOT THE FORMULA</span><h2>Different days.<br />The same summer.</h2><p>The consistency lives in the camera, color and atmosphere. Let the people, places and moments change.</p><a href={guide.source} target="_blank" rel="noreferrer">Read the original conversation ↗</a></div><div className="sr-principles">{guide.principles.map((principle, index) => <article key={principle.title}><span>0{index + 1}</span><div><h3>{principle.title}</h3><p>{principle.detail}</p></div></article>)}</div><div className="sr-rhythm"><span className="sr-eyebrow">GIVE YOUR ROLL A RHYTHM</span><div>{[['High energy','A jump, a splash, a run downhill.'],['Quiet','Bare feet over a dock. The last light in a valley.'],['In between','A snack stop. A ferry crossing. The ride home.']].map(([label, detail]) => <button key={label} onClick={() => { setEnergy(label); setCategory('All scenes'); setQuery(''); setActiveTab('compose'); }}><h3>{label} ↗</h3><p>{detail}</p></button>)}</div></div></section>}
