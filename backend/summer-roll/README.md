@@ -2,7 +2,7 @@
 
 A new, isolated background studio at `http://localhost:8081/summer-roll`.
 
-Start the service from `backend` with `npm run summer-roll`, and start the dashboard from `dashboard` with `npm run web`. The service listens on loopback port 3848. It reads `OPENAI_API_KEY` from `backend/.env`; the key never reaches the browser. `SUMMER_ROLL_MODEL` optionally overrides the default `gpt-image-1.5` model.
+Start the service from `backend` with `npm run summer-roll`, and start the dashboard from `dashboard` with `npm run web`. The service listens on loopback port 3848. It reads `OPENAI_IMAGE_API_KEY` from `backend/.env`; the key never reaches the browser. `SUMMER_ROLL_MODEL` optionally overrides the default `gpt-image-1.5` model.
 
 The page has 30 editable scenes adapted from the [shared conversation](https://chatgpt.com/share/6accde88-764c-83ea-b183-9d52269aa383). Its independent style guide fixes the camera treatment while varying activity, composition, lighting and energy. The scene library and guide live in `dashboard/features/summer-roll/guide.json`. The original reference image attachments were not available in the shared page; the implementation is based on the complete text conversation.
 

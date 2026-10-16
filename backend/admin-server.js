@@ -7,7 +7,6 @@ import { prepareBackgroundRender } from './background-render.js';
 import {suggestCarousels} from './carousel-suggestions.js';
 let suggestingCarousels = false;
 import {carouselSchedule} from './carousel-schedule.js';
-import {loadRunInspiration, validateInspirationIds} from './run-inspiration.js';
 /**
  * Local admin UI + dashboard API.
  * Security: uses SUPABASE_SERVICE_ROLE_KEY — localhost only.
@@ -1124,7 +1123,7 @@ async function revisePendingBackground(supabase, { id, instruction, imageModel, 
   if (downloadErr) throw downloadErr;
 
   const imageBytes = Buffer.from(await blob.arrayBuffer());
-  const openai = new OpenAI({ apiKey: env("OPENAI_API_KEY") });
+  const openai = new OpenAI({ apiKey: env("OPENAI_IMAGE_API_KEY") });
   const revisionPrompt = buildBackgroundRevisionPrompt(row, cleanInstruction);
   const imageFile = await toFile(imageBytes, `${row.name}.png`, { type: "image/png" });
   const editParams = {
@@ -1216,7 +1215,7 @@ async function generateCaptionOptionsForBackground(supabase, { id, captionModel 
   if (downloadErr) throw downloadErr;
 
   const imageBytes = Buffer.from(await blob.arrayBuffer());
-  const openai = new OpenAI({ apiKey: env("OPENAI_API_KEY") });
+  const openai = new OpenAI({ apiKey: env("OPENAI_GENERAL_API_KEY") });
   const recentCaptions = await loadRecentCaptions(supabase);
   const taste = await loadTaste(supabase);
   const captionResult = await (taste.references.length || taste.feedback?.caption?.length ? generateReviewedCaptions : generateCaptionForScene)({
@@ -2116,43 +2115,7 @@ async function main() {
     // ── Generate ───────────────────────────────────────────────────────────
 
     if (req.method === "POST" && url.pathname === "/api/generate") {
-      const payload = await readBody(req);
-      if (!payload) { json(res, 400, { error: "Invalid JSON" }); return; }
-
-      const args = [];
-      try {
-        const ids=validateInspirationIds(payload.inspirationIds);
-        if(ids.length) {
-          if(payload.promptIds?.length) throw Object.assign(new Error("Use fresh generation with Library inspiration"),{statusCode:400});
-          await loadRunInspiration(supabase,ids,path=>publicObjectUrl(supabaseUrl(),path));
-          args.push("--inspiration-ids",ids.join(","));
-        }
-      } catch(e) { json(res,e.statusCode || 500,{error:e.message}); return; }
-      if (payload.count) args.push("--count", String(payload.count));
-      if (payload.mode) args.push("--mode", payload.mode);
-      if (payload.model) args.push("--model", payload.model);
-      if (payload.promptModel) args.push("--prompt-model", payload.promptModel);
-      if (payload.size) args.push("--size", payload.size);
-      if (payload.dryRun) args.push("--dry-run");
-      if (payload.reviewBatch) args.push("--review-batch");
-      if (payload.idea && String(payload.idea).trim()) args.push("--idea", String(payload.idea));
-      if (payload.directionMode) args.push("--direction-mode", String(payload.directionMode));
-      if (payload.styleRecipe) args.push("--style-recipe", String(payload.styleRecipe));
-      if (payload.subject && String(payload.subject).trim()) args.push("--subject", String(payload.subject));
-      if (payload.location && String(payload.location).trim()) args.push("--location", String(payload.location));
-      if (payload.gender && String(payload.gender).trim()) args.push("--gender", String(payload.gender));
-      if (payload.gear && String(payload.gear).trim()) args.push("--gear", String(payload.gear));
-      if (payload.action && String(payload.action).trim()) args.push("--action", String(payload.action));
-      if (payload.cameraLook) args.push("--camera-look", String(payload.cameraLook));
-      if (payload.vibePreset) args.push("--vibe-preset", String(payload.vibePreset));
-      if (payload.styleNotes && String(payload.styleNotes).trim()) args.push("--style-notes", String(payload.styleNotes));
-      if (Array.isArray(payload.promptIds) && payload.promptIds.length) {
-        args.push("--prompt-ids", payload.promptIds.join(","));
-      }
-
-      console.log(`[generate] ${args.join(" ") || "(default random generation)"}`);
-      const jobId = spawnJob("generate", "generate.js", args);
-      json(res, 200, { jobId });
+      json(res, 410, { error: "The old generator has been retired. Open Generate to use the validated production generator.", redirect: "/generate" });
       return;
     }
 

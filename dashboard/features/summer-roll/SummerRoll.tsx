@@ -142,7 +142,7 @@ export default function SummerRoll() {
     <nav className="sr-tabs" aria-label="Summer roll sections">{(['compose', 'roll', 'guide'] as const).map(tab => <button key={tab} aria-current={activeTab === tab ? 'page' : undefined} onClick={() => setActiveTab(tab)}>{tab === 'compose' ? 'Make a photograph' : tab === 'roll' ? `Your roll${complete ? ` · ${complete}` : ''}` : 'The feeling'}<span /></button>)}<span className="sr-format">1:1 photographs · Always text-free</span></nav>
     <div className="sr-notice" role="status" aria-live="polite">{notice}</div>
     {connection && <div className="sr-banner">{connection}</div>}
-    {!connection && service && !service.ready && <div className="sr-banner">Add OPENAI_API_KEY to backend/.env and restart the Summer roll service to generate. You can explore scenes and copy prompts now.</div>}
+    {!connection && service && !service.ready && <div className="sr-banner">Add OPENAI_IMAGE_API_KEY to backend/.env and restart the Summer roll service to generate. You can explore scenes and copy prompts now.</div>}
     {error && <div className="sr-error" role="alert">{error}</div>}
 
     {activeTab === 'compose' && <div className="sr-workspace">

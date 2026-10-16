@@ -1,3 +1,11 @@
+## API credentials
+
+Set `OPENAI_IMAGE_API_KEY` in `backend/.env` for image generation and edits, including Summer Roll. Set `OPENAI_GENERAL_API_KEY` for captions and model evaluations. Services must be restarted after changing credentials. The legacy `OPENAI_API_KEY` is no longer used; there is no fallback between keys. Keep `.env` local and uncommitted.
+
+# Generation rebuild (October 13)
+
+Image generation now lives in **Generate**. From `backend`, run `npm run generation-lab`, then open `/generate` in the dashboard. It uses the human-validated v6 recipe, with reference guidance enabled by default; selected outputs can be sent into the existing Backgrounds review queue. The comparison studio remains at `/generation-lab`. See [the lab README](generation-lab/README.md) for the reference bank, matched experiments and measured validation. Summer Roll remains available. The older generation CLI and endpoint described in historical sections below have been retired; saved assets and downstream review/publishing are preserved.
+
 # Instagram → Supabase sync
 
 Single Instagram username (set in env). Run once as bulk to import all posts, then run weekly (e.g. cron) to add new posts only.
@@ -39,7 +47,7 @@ The generator builds a high-variety creative brief, asks a prompt model to write
 
 Local output is written under ignored `backend/content/` folders for inspection, while the dashboard uses Supabase tables/storage as the source of truth.
 
-Set `OPENAI_API_KEY` in `.env`, then run:
+The commands below describe the retired generator and are historical only:
 
 ```bash
 npm run gen -- --count 10

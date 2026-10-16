@@ -116,7 +116,7 @@ export async function createSummerRollServer({ directory = defaultDirectory, cli
         try { brief = validateBrief(JSON.parse(raw)); } catch (error) { return send(400, { error: error.message }); }
         const existing = [...frames.values()].find(frame => frame.requestId === brief.requestId);
         if (existing) return send(200, existing);
-        if (!client) return send(503, { error: 'Set OPENAI_API_KEY in backend/.env, then restart npm run summer-roll.' });
+        if (!client) return send(503, { error: 'Set OPENAI_IMAGE_API_KEY in backend/.env, then restart npm run summer-roll.' });
         if (busy) return send(409, { error: 'A frame is developing. Wait for it to finish before starting another.' });
         busy = true;
         const frame = { ...brief, id: randomUUID(), status: 'generating', createdAt: new Date().toISOString(), model, version: guide.version, prompt: buildPrompt(brief.scene) };
@@ -150,7 +150,7 @@ export async function createSummerRollServer({ directory = defaultDirectory, cli
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const client = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 300000, maxRetries: 0 }) : undefined;
+  const client = process.env.OPENAI_IMAGE_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_IMAGE_API_KEY, timeout: 300000, maxRetries: 0 }) : undefined;
   const server = await createSummerRollServer({ client });
   server.listen(Number(process.env.SUMMER_ROLL_PORT || 3848), '127.0.0.1', () => console.log(`Summer roll service: http://127.0.0.1:${server.address().port} (${client ? 'ready' : 'API key missing'})`));
 }

@@ -283,7 +283,6 @@ export default function ApprovedBackgroundsScreen() {
         <View style={styles.messageBody}>
           <View style={styles.optionPanel}>
             <Text style={styles.panelTitle}>Review text</Text>
-            <Text style={S.body}>Unselected options stay unreviewed. Regenerate asks for more without rejecting these.</Text>
             <ScrollView style={{flex:1,minHeight:0,marginVertical:8}} contentContainerStyle={styles.optionList}>
               {captionOptions.map((option, idx) => {
                 const active = idx === selectedCaptionIndex;
@@ -303,7 +302,6 @@ export default function ApprovedBackgroundsScreen() {
             </ScrollView>
             <TextInput accessibilityLabel="Caption feedback" value={captionReason} onChangeText={setCaptionReason} placeholder="Optional: too generic, forced slang, better wording…" placeholderTextColor={C.textMuted} multiline maxLength={1000} style={{color:C.textPrimary,backgroundColor:C.bg,padding:12,borderWidth:1,borderColor:C.border,borderRadius:8,minHeight:70,flexShrink:0}} />
             <Btn label={isRejected(originalOptions[selectedCaptionIndex] || caption) ? "Caption rejected" : "Reject this caption"} onPress={rejectCaption} loading={busy} disabled={isRejected(originalOptions[selectedCaptionIndex] || caption)} variant="outline" />
-            <Text style={S.body}>Rejection keeps the background. Select another option, edit the wording, or regenerate.</Text>
           </View>
           <View style={styles.editorWrap}>
             <CaptionEditor

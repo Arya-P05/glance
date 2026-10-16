@@ -14,6 +14,7 @@ const NAV: { href: string; label: string; Icon: NavIcon }[] = [
   { href: "/",           label: "Overview",    Icon: Home },
   { href: "/generate",   label: "Generate",    Icon: Sparks },
   { href: "/summer-roll", label: "Summer roll", Icon: MediaImage },
+  { href: "/generation-lab", label: "Generation lab", Icon: List },
   { href: "/prompts",    label: "Prompts",     Icon: List },
   { href: "/backgrounds",label: "Backgrounds", Icon: MediaImage },
   { href: "/approved-backgrounds", label: "Approved", Icon: Check },

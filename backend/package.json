@@ -21,7 +21,18 @@
     "admin": "node admin-server.js",
     "install-browser": "npx playwright install chromium",
     "assets:cleanup": "node cleanup-images.js",
-    "gen:recover": "node recover-backgrounds.js"
+    "gen:recover": "node recover-backgrounds.js",
+    "generation-lab": "node generation-lab/server.js",
+    "generation-lab:prepare": "node generation-lab/prepare.js",
+    "generation-lab:analyze": "node generation-lab/analyze-bank.js",
+    "generation-lab:analyze-human": "node generation-lab/analyze-human-reviews.js",
+    "generation-lab:build-validation": "node generation-lab/build-validation.js",
+    "generation-lab:build-human-round": "node generation-lab/build-human-round.js",
+    "generation-lab:build-emotion-round": "node generation-lab/build-emotion-round.js",
+    "generation-lab:build-emotion-validation": "node generation-lab/build-emotion-validation.js",
+    "generation-lab:retry-failures": "node generation-lab/retry-failures.js",
+    "generation-lab:report-validation": "node generation-lab/report-validation.js",
+    "generation-lab:test": "node --test generation-lab/lab.test.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
