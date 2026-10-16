@@ -6,13 +6,16 @@ import { resolve, join } from 'node:path';
 import { config } from 'dotenv';
 import OpenAI from 'openai';
 import { guide, validateBrief, buildPrompt, renderFrame } from './core.js';
+import { createBackgroundImporter } from './backgrounds.js';
 
 config({ path: fileURLToPath(new URL('../.env', import.meta.url)), quiet: true });
 const defaultDirectory = fileURLToPath(new URL('../content/summer-roll', import.meta.url));
 
-export async function createSummerRollServer({ directory = defaultDirectory, client, model = process.env.SUMMER_ROLL_MODEL || 'gpt-image-1.5' } = {}) {
+export async function createSummerRollServer({ directory = defaultDirectory, client, model = process.env.SUMMER_ROLL_MODEL || 'gpt-image-1.5', importBackground = createBackgroundImporter() } = {}) {
   await mkdir(directory, { recursive: true });
   const frames = new Map();
+  const imports = new Map();
+  const removals = new Map();
   let busy = false;
   const save = async frame => {
     const path = join(directory, `${frame.id}.json`);
@@ -25,6 +28,10 @@ export async function createSummerRollServer({ directory = defaultDirectory, cli
     if (frame.status === 'generating') {
       frame.status = 'failed';
       frame.error = 'Generation was interrupted when the service stopped. You can retry this brief.';
+      await save(frame);
+    }
+    if (frame.background && !frame.removedAt) {
+      frame.removedAt = new Date().toISOString();
       await save(frame);
     }
     frames.set(frame.id, frame);
@@ -44,11 +51,56 @@ export async function createSummerRollServer({ directory = defaultDirectory, cli
     const url = new URL(req.url, 'http://127.0.0.1');
     try {
       if (req.method === 'GET' && url.pathname === '/state') {
-        return send(200, { ready: Boolean(client), model, busy, version: guide.version, frames: [...frames.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)) });
+        return send(200, { ready: Boolean(client), model, busy, version: guide.version, frames: [...frames.values()].filter(frame => !frame.removedAt).sort((a, b) => b.createdAt.localeCompare(a.createdAt)) });
+      }
+      const removeMatch = url.pathname.match(/^\/frames\/([a-f0-9-]{36})\/remove$/);
+      if (req.method === 'POST' && removeMatch) {
+        const frame = frames.get(removeMatch[1]);
+        if (!frame) return send(404, { error: 'Frame not found.' });
+        if (frame.removedAt) return send(200, { removed: frame.id });
+        if (frame.status === 'generating' || imports.has(frame.id)) return send(409, { error: 'Wait for this frame to finish generating or sending before removing it.' });
+        if (!removals.has(frame.id)) {
+          const task = (async () => {
+            const updated = { ...frame, removedAt: new Date().toISOString() };
+            await save(updated);
+            frames.set(frame.id, updated);
+          })();
+          removals.set(frame.id, task);
+          task.finally(() => removals.delete(frame.id)).catch(() => {});
+        }
+        await removals.get(frame.id);
+        return send(200, { removed: frame.id });
+      }
+      const importMatch = url.pathname.match(/^\/frames\/([a-f0-9-]{36})\/background$/);
+      if (req.method === 'POST' && importMatch) {
+        const frame = frames.get(importMatch[1]);
+        if (!frame) return send(404, { error: 'Frame not found.' });
+        // Completed sends remain retryable after automatic removal.
+        if (frame.background) return send(200, frame);
+        if (frame.removedAt) return send(404, { error: 'Frame not found.' });
+        if (removals.has(frame.id)) return send(409, { error: 'This frame is being removed.' });
+        if (frame.status !== 'ready') return send(409, { error: 'Wait until this photograph is ready.' });
+        if (!imports.has(frame.id)) {
+          const task = (async () => {
+            const bytes = await readFile(join(directory, `${frame.id}.png`));
+            const background = await importBackground(frame, bytes);
+            const updated = { ...frame, background, removedAt: new Date().toISOString() };
+            await save(updated);
+            frames.set(frame.id, updated);
+            return updated;
+          })();
+          imports.set(frame.id, task);
+          task.finally(() => imports.delete(frame.id)).catch(() => {});
+        }
+        try { return send(200, await imports.get(frame.id)); }
+        catch (error) {
+          console.error('Summer roll import failed:', error.message);
+          return send(500, { error: 'Could not send this frame to Backgrounds. Check the backend Supabase connection and retry.' });
+        }
       }
       const imageMatch = url.pathname.match(/^\/images\/([a-f0-9-]{36})\.png$/);
       if (req.method === 'GET' && imageMatch) {
-        if (frames.get(imageMatch[1])?.status !== 'ready') return send(404, { error: 'Image not found.' });
+        if (frames.get(imageMatch[1])?.status !== 'ready' || frames.get(imageMatch[1])?.removedAt) return send(404, { error: 'Image not found.' });
         const bytes = await readFile(join(directory, `${imageMatch[1]}.png`));
         res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'private, max-age=31536000, immutable', ...(url.searchParams.has('download') ? { 'Content-Disposition': `attachment; filename="summer-roll-${imageMatch[1]}.png"` } : {}) });
         return res.end(bytes);
