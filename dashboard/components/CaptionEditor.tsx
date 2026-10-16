@@ -35,6 +35,7 @@ type Props = {
   initialMediumLayout?: MediumCaptionLayoutInput | null;
   onCaptionChange?: (caption: CaptionText) => void;
   onApply: (layout: CaptionLayout, mediumLayout: MediumCaptionLayout, mediumRejected?: boolean, mediumReason?: string) => Promise<void>;
+  onPrepare?: (caption: CaptionText, layout: CaptionLayout, mediumLayout: MediumCaptionLayout, mediumRejected: boolean) => Promise<unknown>;
   onCancel: () => void;
   applyLabel?: string;
   allowMediumRejection?: boolean;
@@ -53,6 +54,7 @@ export function CaptionEditor({
   initialMediumLayout,
   onCaptionChange,
   onApply,
+  onPrepare,
   onCancel,
   applyLabel = "Apply to poster",
   allowMediumRejection = false,
@@ -91,6 +93,23 @@ export function CaptionEditor({
     }));
   }, [recoveryKey, recoveryVersion, recoveryReady, caption, layout, mediumLayout, mediumRejected, mediumReason, recoveryContext]);
   const [saving, setSaving] = useState(false);
+  const prepareRef = useRef(onPrepare);
+  prepareRef.current = onPrepare;
+  const preparation = useRef<Promise<unknown> | null>(null);
+  useEffect(() => {
+    if (!recoveryReady || saving || !prepareRef.current) return;
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      // Coalesce edits made during an upload into the latest editor state.
+      await preparation.current;
+      if (cancelled) return;
+      preparation.current = Promise.resolve().then(() => prepareRef.current?.(caption, layout, mediumLayout, mediumRejected)).catch(() => {
+        // Saving retries preparation and surfaces any error to the user.
+      });
+    }, 1200);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [caption, layout, mediumLayout, mediumRejected, recoveryReady, saving]);
+
   const [draggingMediumCrop, setDraggingMediumCrop] = useState(false);
   const [mediumMode, setMediumMode] = useState<"text" | "image">("text");
   const mediumModeRef = useRef(mediumMode);

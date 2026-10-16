@@ -112,6 +112,8 @@ export const api = {
       imageModel: string;
       revisionPrompt: string;
     }>("/api/backgrounds/revise", { method: "POST", body: JSON.stringify(opts) }),
+  prepareBackgroundDraft: (opts: { id: string; caption: CaptionText; layout: CaptionLayout; mediumLayout: MediumCaptionLayout; mediumRejected: boolean }) =>
+    request<{ success: boolean }>("/api/backgrounds/prepare-draft", { method: "POST", body: JSON.stringify(opts) }),
   approveBackground: (opts: {
     id: string;
     captionReason?: string;

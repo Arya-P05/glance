@@ -25,3 +25,35 @@ test('preview creates a derivative from original, never overwrites source or com
  assert.equal(downloaded,'original.png');assert.equal(first.storagePath,next.storagePath);
  assert.notEqual(first.storagePath,'original.png');assert.equal(writes.length,1); // Approval reuses the preview instead of reprocessing/reuploading.
 });
+
+test('concurrent preview and approval share work, cached requests skip original download, missing derivatives recover', async () => {
+ const original = await sharp({create:{width:8,height:8,channels:3,background:'#777'}}).png().toBuffer();
+ const files = new Map(); let downloads = 0; let uploads = 0;
+ const db = {rpc:async()=>({}),storage:{from:()=>({
+  exists:async path=>({data:files.has(path)}),
+  download:async path=>{if(path==='source.png') downloads++; return {data:new Blob([files.get(path)||original])};},
+  upload:async(path,bytes)=>{uploads++; files.set(path,bytes); return {};},
+ })}};
+ const row = {storage_path:'source.png'};
+ const [first, second] = await Promise.all([prepareGrain(db,'test',row), prepareGrain(db,'test',row)]);
+ assert.deepEqual(first,second); assert.equal(downloads,1); assert.equal(uploads,1);
+ await prepareGrain(db,'test',row);
+ assert.equal(downloads,1);
+ files.clear();
+ await prepareGrain(db,'test',row);
+ assert.equal(downloads,2); assert.equal(uploads,2);
+});
+
+test('a failed preparation can be retried and does not block later jobs', async () => {
+ const original = await sharp({create:{width:2,height:2,channels:3,background:'#777'}}).png().toBuffer();
+ const files = new Map(); let fail = true;
+ const db = {rpc:async()=>({}),storage:{from:()=>({
+  exists:async path=>({data:files.has(path)}),
+  download:async path=> fail ? {error:new Error('offline')} : {data:new Blob([files.get(path)||original])},
+  upload:async(path,bytes)=>{files.set(path,bytes);return {};},
+ })}};
+ await assert.rejects(prepareGrain(db,'test',{storage_path:'source.png'}),/offline/);
+ fail = false;
+ await prepareGrain(db,'test',{storage_path:'source.png'});
+ assert.equal(files.size,1);
+});

@@ -328,6 +328,9 @@ export default function ApprovedBackgroundsScreen() {
               initialLayout={background.meta?.captionLayout}
               initialMediumLayout={background.meta?.mediumCaptionLayout}
               onCaptionChange={updateCaption}
+              onPrepare={(nextCaption, layout, mediumLayout, mediumRejected) => api.prepareBackgroundDraft({
+                id: background.id, caption: normalizeCaption(nextCaption), layout, mediumLayout, mediumRejected,
+              })}
               onApply={saveToDrafts}
               onCancel={closeEdit}
               applyLabel="Accept text & save to drafts"

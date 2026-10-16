@@ -2,6 +2,8 @@ import { loadApprovedCaptionExamples } from "./motivational-generator.js";
 import { readTypographyDefaults } from "./typography-defaults.js";
 import { imageAssetPath, saveImageAsset, listImageObjects, deleteLibraryPost } from './image-assets.js';
 import {prepareGrain} from './image-grain.js';
+import { startGrainWarmer } from './grain-warmer.js';
+import { prepareBackgroundRender } from './background-render.js';
 import {suggestCarousels} from './carousel-suggestions.js';
 let suggestingCarousels = false;
 import {carouselSchedule} from './carousel-schedule.js';
@@ -1327,22 +1329,16 @@ async function approveBackgroundWithCaption(supabase, {
   finalCaptionOptions[selectedIndex] = finalCaption;
 
   const model = captionModel || metadata.captionModel || process.env.OPENAI_CAPTION_MODEL || DEFAULT_CAPTION_MODEL;
-  const { data: blob, error: downloadErr } = await supabase.storage.from(BUCKET).download(row.storage_path);
-  if (downloadErr) throw downloadErr;
-
-  const imageBytes = Buffer.from(await blob.arrayBuffer());
   const rawStoragePath = row.storage_path;
   const normalizedLayout = normalizeCaptionLayout(layout || metadata.captionLayout || {});
   const normalizedMediumLayout = normalizeMediumCaptionLayout(
     mediumLayout || metadata.mediumCaptionLayout || {},
     metadata.mediumCaptionLayout || normalizedLayout
   );
-  const rendered = await overlayCaption(imageBytes, finalCaption, normalizedLayout);
-  const renderedMedium = (!mediumRejected) ? await overlayMediumCaption(imageBytes, finalCaption, normalizedMediumLayout) : null;
-  const finalStoragePath = imageAssetPath("captioned", rendered);
-  const finalMediumStoragePath = mediumRejected ? null : imageAssetPath("medium", renderedMedium);
-  await uploadVerifiedObject(supabase, finalStoragePath, rendered, row.raw_storage_path || row.storage_path);
-  if (finalMediumStoragePath) await uploadVerifiedObject(supabase, finalMediumStoragePath, renderedMedium, row.raw_storage_path || row.storage_path);
+  const { finalStoragePath, finalMediumStoragePath } = await prepareBackgroundRender(supabase, BUCKET, {
+    source: row.storage_path, caption: finalCaption, layout: normalizedLayout,
+    mediumLayout: normalizedMediumLayout, mediumRejected,
+  });
 
   const nextMetadata = {
     ...metadata,
@@ -1910,6 +1906,26 @@ async function main() {
       return;
     }
 
+    if (req.method === "POST" && url.pathname === "/api/backgrounds/prepare-draft") {
+      try {
+        const payload = await readBody(req);
+        if (!payload?.id) throw httpError("id required", 400);
+        if (payload.mediumRejected !== undefined && typeof payload.mediumRejected !== "boolean") throw httpError("mediumRejected must be boolean", 400);
+        const row = await loadBackgroundWithStatuses(supabase, payload.id, ["staged"]);
+        const metadata = row.metadata || {};
+        const layout = normalizeCaptionLayout(payload.layout || metadata.captionLayout || {});
+        const mediumLayout = normalizeMediumCaptionLayout(
+          payload.mediumLayout || metadata.mediumCaptionLayout || {}, metadata.mediumCaptionLayout || layout
+        );
+        await prepareBackgroundRender(supabase, BUCKET, {
+          source: row.storage_path, caption: normalizeSelectedCaption(payload.caption),
+          layout, mediumLayout, mediumRejected: payload.mediumRejected ?? false,
+        });
+        json(res, 200, { success: true });
+      } catch (e) { json(res, e.statusCode || 500, { error: e.message }); }
+      return;
+    }
+
     if (req.method === "POST" && url.pathname === "/api/backgrounds/approve") {
       const payload = await readBody(req);
       if (!payload?.id) { json(res, 400, { error: "id required" }); return; }
@@ -2374,6 +2390,8 @@ async function main() {
   });
 
   server.listen(port, host, () => {
+    const stopGrainWarmer = startGrainWarmer(supabase, BUCKET);
+    server.once("close", stopGrainWarmer);
     console.log(`Admin UI: http://${host}:${port}/`);
     console.log(`Dashboard API: http://${host}:${port}/api/`);
     if (process.env.ADMIN_TOKEN) console.log("ADMIN_TOKEN is set.");
