@@ -7,6 +7,7 @@ import { prepareBackgroundRender } from './background-render.js';
 import {suggestCarousels} from './carousel-suggestions.js';
 let suggestingCarousels = false;
 import {carouselSchedule} from './carousel-schedule.js';
+import {normalizeBackgroundScene} from './background-scene.js';
 /**
  * Local admin UI + dashboard API.
  * Security: uses SUPABASE_SERVICE_ROLE_KEY — localhost only.
@@ -1076,8 +1077,8 @@ async function discardBackgroundWithStatuses(supabase, { id, dbId, statuses, rea
 
 function sceneForBackground(row) {
   const metadata = row.metadata && typeof row.metadata === "object" ? row.metadata : {};
-  const scene = row.scene || metadata.scene;
-  if (!scene || typeof scene !== "object") {
+  const scene = normalizeBackgroundScene(row.scene ?? metadata.scene);
+  if (!scene) {
     throw new Error("Background has no saved scene metadata for caption generation");
   }
   return { scene, metadata };

@@ -61,9 +61,11 @@ test('background recovery inserts without resetting an existing review', async (
     inserted = row;
     return {};
   } });
-  await persistGeneratedBackground(db, { name: 'one', imageBytes: Buffer.from('original'), metadata: { scene: { subject: 'test' } } });
+  await persistGeneratedBackground(db, { name: 'one', imageBytes: Buffer.from('original'), metadata: { scene: 'A friend laughing beside the ocean.' } });
   assert.ok(files.has(inserted.storage_path));
   assert.equal(inserted.status, 'pending');
+  assert.deepEqual(inserted.scene, { name: 'Generated moment', description: 'A friend laughing beside the ocean.' });
+  assert.deepEqual(inserted.metadata.scene, inserted.scene);
 });
 
 test('cleanup previews are read-only and apply rechecks every candidate', async () => {
