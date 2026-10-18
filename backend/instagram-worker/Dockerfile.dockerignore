@@ -1,0 +1,7 @@
+**
+!backend/
+!backend/instagram-music.json
+!backend/instagram-worker/
+!backend/instagram-worker/requirements.txt
+!backend/instagram-worker/worker.py
+!backend/instagram-worker/Dockerfile

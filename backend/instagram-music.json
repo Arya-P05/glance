@@ -1,0 +1,62 @@
+{
+  "duration_ms": 30000,
+  "on_unavailable": "stop",
+  "avoid_consecutive_repeats": true,
+  "tracks": [
+    {
+      "track_id": "7375253115870186",
+      "title": "aruarian dance",
+      "artist": "Nujabes",
+      "keywords": [
+        "reflect",
+        "perspective",
+        "peace",
+        "slow",
+        "breathe",
+        "rest",
+        "patience"
+      ]
+    },
+    {
+      "track_id": "184658682208458",
+      "title": "Sunset Lover",
+      "artist": "Petit Biscuit",
+      "keywords": [
+        "hope",
+        "begin",
+        "start",
+        "new",
+        "better",
+        "sun",
+        "life",
+        "opportunities"
+      ]
+    },
+    {
+      "track_id": "1727395634277264",
+      "title": "The Latter Teens",
+      "artist": "Vansire",
+      "keywords": [
+        "enough",
+        "yourself",
+        "believe",
+        "trust",
+        "today"
+      ]
+    },
+    {
+      "track_id": "2451351895177019",
+      "title": "A Walk",
+      "artist": "Tycho",
+      "keywords": [
+        "keep",
+        "going",
+        "consistency",
+        "discipline",
+        "progress",
+        "forward",
+        "failures"
+      ]
+    }
+  ]
+}

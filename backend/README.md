@@ -160,6 +160,14 @@ Generation memory: `generation_history` durably records generated background con
 
 Run-specific inspiration: select 1–5 Library posts and choose **Use as inspiration**. Generate previews the selection and clears it after a successful job launch. The server validates post IDs; both scene direction and prompt writing receive the images. A model check rejects proposed concepts that closely repeat their subject/action, setting or composition before image rendering. Lighting, texture and mood can transfer. Selection is saved in the output generation snapshot but does not modify permanent References. Originality checks reduce copying but are not a guarantee of visual uniqueness.
 
+### Instagram carousel music
+
+`instagram-music.json` defines a 30-second music rotation: **aruarian dance — Nujabes**, **Sunset Lover — Petit Biscuit**, **The Latter Teens — Vansire**, and **A Walk — Tycho**. These exact recordings were found in @dailyglance's catalog on 2026-10-18. Show Me How is excluded for now: searches returned live versions, not the requested original recording. `instagram-music.js` matches simple mood keywords from the title and slide captions, prefers the least recently used matching track, and prohibits consecutive repeats. Only approved asset IDs may be used; stop if no available non-repeating choice exists.
+
+The local experimental publisher in ignored `content/instagram-music-test/` reads this configuration and checks exact asset IDs. Run its `music_probe.py preflight` before preparing a carousel; `prepare-v2.mjs` selects music using the local `music-history.json`, which is updated after publication. History starts with the verified Vansire post. Direct instagrapi login with persisted mobile settings successfully published and verified a five-photo music carousel on 2026-10-18: https://www.instagram.com/p/DepT5Z2o2ts/. Keep its session files private and out of Git. The existing cloud Graph API scheduler below has **not yet been migrated** to this music publisher; changing the track configuration alone does not add music to its posts.
+
+The cloud worker implementation and Render deployment blueprint are in `instagram-worker/`; see its README for the staged cutover and recovery procedure. The music migration keeps Graph publishing selected until the cloud worker passes its startup checks and an operator switches the publisher.
+
 ### Cloud Instagram schedule
 
 `instagram-scheduler` runs on Supabase Edge Functions, invoked every minute by the `glance-instagram-publisher` Cron job. The `instagram_schedule` row controls enablement, start time, `America/New_York`, and the 9/14/19 hours. Slots begin preparing at those times; Instagram processing can delay publication by a few minutes. Missed slots older than 15 minutes are skipped, not backfilled. Only ready carousels are claimed, newest first (the queue's displayed order).

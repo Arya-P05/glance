@@ -1,0 +1,22 @@
+services:
+  - type: worker
+    name: glance-instagram-music
+    runtime: docker
+    plan: starter
+    region: virginia
+    numInstances: 1
+    dockerfilePath: ./backend/instagram-worker/Dockerfile
+    dockerContext: .
+    autoDeployTrigger: 'off'
+    maxShutdownDelaySeconds: 300
+    disk:
+      name: instagram-session
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: INSTAGRAM_USERNAME
+        value: dailyglance
