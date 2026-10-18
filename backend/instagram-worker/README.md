@@ -4,7 +4,31 @@ Publishes five swipeable photos with Instagram catalog music using the proven
 instagrapi session. It polls Supabase once per minute and uses the existing queue,
 timezone, hours, and slot history. Instagram controls distribution into Reels.
 
-## Deployment
+## Free GitHub Actions deployment
+
+The production target is standard GitHub-hosted Ubuntu runners in this public
+repository. `.github/workflows/instagram-music-health.yml` runs at minutes 3 and 9
+of the possible Eastern posting hours in UTC. Supabase selects the actual due slot;
+extra daylight-saving slots do nothing. GitHub can delay or drop scheduled jobs,
+and jobs arriving more than 15 minutes after a slot are skipped. Public-repository
+schedules are disabled by GitHub after 60 days without repository activity.
+
+Apply `20261018010000_instagram_worker_state.sql` and seed `dailyglance` with the
+successful mobile settings using service-role access. This table has RLS enabled,
+no client policies, and no anonymous/authenticated grants. Set repository secrets
+`IG_MUSIC_SUPABASE_URL` and `IG_MUSIC_SUPABASE_KEY`. The session is never committed
+or uploaded as an Actions artifact. `cloud.py` saves refreshed settings in this
+private table, and records confirmed media IDs before verification/finalization.
+
+Pushes to the deployment branch and manual workflow runs perform health checks only.
+Scheduled events publish only after the database publisher is set to `music`.
+Merge the workflow into the default branch to activate its schedule. Validate a
+cloud health run before switching the publisher. Runner IP changes can still cause
+future Instagram challenges; failures need review rather than repeated logins.
+GitHub workflow failures are visible in Actions and use the account's existing
+notification settings. No paid runner or external hosting service is required.
+
+## Alternative Render deployment (not provisioned)
 
 1. Apply `supabase/migrations/20261018000000_instagram_music_worker.sql` through
    the normal migration workflow. Its default publisher remains `graph`.

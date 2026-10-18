@@ -122,6 +122,7 @@ class Worker:
         self.attempt = None
         self.configure_started = False
         self.receipt = None
+        self.failed = False
 
     def event(self, event, **fields):
         record = {'time': now(), 'stage': self.stage, 'event': event, **fields}
@@ -163,8 +164,14 @@ class Worker:
             session.hooks.setdefault('response', []).append(self.capture)
         if c.account_info().username != os.environ.get('INSTAGRAM_USERNAME', 'dailyglance'):
             raise RuntimeError('Account mismatch')
-        private_json(path, c.get_settings())
+        self.save_session(c.get_settings())
         return c
+
+    def save_session(self, settings):
+        private_json(self.state/'session.json', settings)
+
+    def save_receipt(self, receipt):
+        private_json(self.attempt/'receipt.json', receipt)
 
     def catalog(self, c, required=None):
         self.stage = 'music_catalog'
@@ -202,6 +209,7 @@ class Worker:
         self.run = run
         self.configure_started = False
         self.receipt = None
+        self.failed = False
         name = hashlib.sha256((run['slot'] + run['lease']).encode()).hexdigest()[:24]
         self.attempt = self.state/'attempts'/name
         self.attempt.mkdir(parents=True, mode=0o700, exist_ok=False)
@@ -261,7 +269,7 @@ class Worker:
                     configure_handler=configure)
                 self.receipt = {'media_id':str(media.pk), 'permalink':f'https://www.instagram.com/p/{media.code}/',
                                 'track_id':track['track_id'], 'carousel_id':carousel['id'], 'slot':run['slot']}
-                private_json(self.attempt/'receipt.json', self.receipt)
+                self.save_receipt(self.receipt)
                 self.stage = 'verify_music'
                 verified = False
                 try:
@@ -273,11 +281,12 @@ class Worker:
                 self.db.rpc('finish_instagram_music_slot', p_slot=run['slot'], p_lease=run['lease'],
                             p_media=str(media.pk), p_permalink=self.receipt['permalink'], p_verified=verified)
                 private_json(self.attempt/'result.json', {**self.receipt, 'music_verified':verified})
-                private_json(self.state/'session.json', c.get_settings())
+                self.save_session(c.get_settings())
                 for path in paths:
                     path.unlink(missing_ok=True)
             emit('posted', **self.receipt, music_verified=verified)
         except (Exception, KeyboardInterrupt) as error:
+            self.failed = True
             kind = type(error).__name__
             self.event('failed', error_type=kind, configure_started=self.configure_started)
             try:
