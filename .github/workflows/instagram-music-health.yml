@@ -1,0 +1,43 @@
+name: Instagram music cloud health
+on:
+  push:
+    branches: [codex/instagram-music-worker]
+    paths: [.github/workflows/instagram-music-health.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: instagram-music
+  cancel-in-progress: false
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install publisher
+        run: pip install -r backend/instagram-worker/requirements.txt
+      - name: Validate saved session and music without publishing
+        env:
+          SUPABASE_URL: ${{ secrets.IG_MUSIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.IG_MUSIC_SUPABASE_KEY }}
+          IG_SESSION_JSON: ${{ secrets.IG_MUSIC_SESSION }}
+          INSTAGRAM_STATE_DIR: ${{ runner.temp }}/instagram
+          INSTAGRAM_USERNAME: dailyglance
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          os.umask(0o077)
+          state = Path(os.environ['INSTAGRAM_STATE_DIR'])
+          state.mkdir(parents=True, exist_ok=True)
+          (state/'session.json').write_text(json.dumps(json.loads(os.environ.pop('IG_SESSION_JSON'))))
+          PY
+          unset IG_SESSION_JSON
+          python backend/instagram-worker/worker.py --health
+      - name: Remove private session
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/instagram"
