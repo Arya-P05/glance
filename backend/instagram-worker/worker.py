@@ -285,6 +285,8 @@ class Worker:
                 for path in paths:
                     path.unlink(missing_ok=True)
             emit('posted', **self.receipt, music_verified=verified)
+            self.failed = not verified
+            return {'outcome': 'posted' if verified else 'verification_failed', **self.receipt, 'music_verified': verified}
         except (Exception, KeyboardInterrupt) as error:
             self.failed = True
             kind = type(error).__name__
@@ -298,6 +300,7 @@ class Worker:
             emit('failed', slot=run['slot'], stage=self.stage, error_type=kind, receipt_saved=bool(self.receipt))
             if isinstance(error, KeyboardInterrupt):
                 raise
+            return {'outcome': 'publish_uncertain' if self.configure_started else 'failed', 'slot': run['slot'], 'stage': self.stage, 'error_type': kind}
         finally:
             self.run = None
 
@@ -315,8 +318,11 @@ class Worker:
 
     def tick(self):
         run = self.db.rpc('claim_instagram_music_slot')
-        if run:
-            self.execute(run)
+        if run and run.get('lease'):
+            return self.execute(run)
+        result = run or {'outcome': 'no_claim'}
+        emit('skipped', **result)
+        return result
 
 
 def main():

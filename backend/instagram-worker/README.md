@@ -7,11 +7,18 @@ timezone, hours, and slot history. Instagram controls distribution into Reels.
 ## Free GitHub Actions deployment
 
 The production target is standard GitHub-hosted Ubuntu runners in this public
-repository. `.github/workflows/instagram-music-health.yml` runs at minutes 3 and 9
-of the possible Eastern posting hours in UTC. Supabase selects the actual due slot;
-extra daylight-saving slots do nothing. GitHub can delay or drop scheduled jobs,
-and jobs arriving more than 15 minutes after a slot are skipped. Public-repository
-schedules are disabled by GitHub after 60 days without repository activity.
+repository. `.github/workflows/instagram-music-health.yml` checks every 15 minutes
+at :07/:22/:37/:52. Supabase chooses only the latest due Eastern slot, accepts
+up to four hours of delay, and enforces at least one hour since the last post.
+It never drains an old backlog. Duplicate or already-handled slots do nothing.
+GitHub can delay or drop scheduled jobs, so exact times remain best-effort.
+Public-repository schedules are disabled after 60 days without repository activity.
+
+Apply `20261019000000_music_schedule_catchup.sql` for this late-run policy.
+Each invocation logs an explicit outcome and writes an Actions summary. Missed
+windows, uncertain results and verification failures exit unsuccessfully. Ordinary
+idle checks explain why they did not publish. A manual workflow run defaults to
+`health`; selecting `publish` processes the latest due slot under the same guards.
 
 Apply `20261018010000_instagram_worker_state.sql` and seed `dailyglance` with the
 successful mobile settings using service-role access. This table has RLS enabled,
@@ -20,7 +27,7 @@ no client policies, and no anonymous/authenticated grants. Set repository secret
 or uploaded as an Actions artifact. `cloud.py` saves refreshed settings in this
 private table, and records confirmed media IDs before verification/finalization.
 
-Pushes to the deployment branch and manual workflow runs perform health checks only.
+Pushes to the deployment branch perform health checks only. Manual runs default to health checks.
 Scheduled events publish only after the database publisher is set to `music`.
 Merge the workflow into the default branch to activate its schedule. Validate a
 cloud health run before switching the publisher. Runner IP changes can still cause

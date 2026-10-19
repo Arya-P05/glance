@@ -4,10 +4,15 @@ on:
     branches: [codex/instagram-music-worker]
     paths: [.github/workflows/instagram-music-health.yml]
   workflow_dispatch:
+    inputs:
+      mode:
+        description: Health check or publish the latest due slot
+        type: choice
+        default: health
+        options: [health, publish]
   schedule:
-    # Cover Eastern standard/daylight time. Supabase decides which slot is due.
-    # Avoid the busy top of the hour, with a second chance inside the 15-minute window.
-    - cron: '3,9 0,13,14,18,19,23 * * *'
+    # Poll throughout the day; Supabase enforces slots, catch-up limits and deduplication.
+    - cron: '7,22,37,52 * * * *'
 permissions:
   contents: read
 concurrency:
@@ -25,14 +30,14 @@ jobs:
       - name: Install publisher
         run: pip install -r backend/instagram-worker/requirements.txt
       - name: Validate cloud session without publishing
-        if: github.event_name != 'schedule'
+        if: github.event_name != 'schedule' && inputs.mode != 'publish'
         env:
           SUPABASE_URL: ${{ secrets.IG_MUSIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.IG_MUSIC_SUPABASE_KEY }}
           INSTAGRAM_USERNAME: dailyglance
         run: python backend/instagram-worker/cloud.py --health
       - name: Publish the due queue slot
-        if: github.event_name == 'schedule'
+        if: github.event_name == 'schedule' || inputs.mode == 'publish'
         env:
           SUPABASE_URL: ${{ secrets.IG_MUSIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.IG_MUSIC_SUPABASE_KEY }}

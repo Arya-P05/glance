@@ -7,15 +7,16 @@ begin
  then raise exception 'Internal claim exposed'; end if;
  if has_function_privilege('anon','claim_instagram_music_slot()','EXECUTE')
  then raise exception 'Public claim exposed'; end if;
- if claim_instagram_music_slot() is not null then raise exception 'Music enabled prematurely';end if;
+ if claim_instagram_music_slot()->>'outcome'<>'inactive' then raise exception 'Music enabled prematurely';end if;
  perform switch_instagram_publisher('music');
  update instagram_schedule set enabled=true;
  insert into instagram_carousels(id,status) values(c,'posting');
  insert into instagram_schedule_runs(slot,carousel_id,phase) values(s,c,'children');
+ update instagram_schedule_runs set publisher='music';
  if claim_instagram_slot() is not null then raise exception 'Graph publisher not gated';end if;
  r:=claim_instagram_music_slot(); l:=(r->>'lease')::uuid;
  if l is null or r->>'publisher'<>'music' then raise exception 'Music claim failed';end if;
- if claim_instagram_music_slot() is not null then raise exception 'Double claim';end if;
+ if claim_instagram_music_slot()->>'outcome'<>'busy' then raise exception 'Double claim';end if;
  begin
   perform switch_instagram_publisher('graph');
   raise exception 'Switch allowed during active run';
@@ -42,7 +43,7 @@ begin
  update instagram_carousels set status='posting' where id=c;
  insert into instagram_schedule_runs(slot,carousel_id,phase,publisher,lease,lease_until)
  values(s,c,'publishing','music',gen_random_uuid(),now()-interval '1 minute');
- if claim_instagram_music_slot() is not null then raise exception 'Uncertain publication replayed';end if;
+ if claim_instagram_music_slot()->>'outcome'<>'blocked_uncertain' then raise exception 'Uncertain publication replayed';end if;
  if (select phase from instagram_schedule_runs)<>'uncertain' then raise exception 'Uncertainty not recorded';end if;
 end $$;
 rollback;
