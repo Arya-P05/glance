@@ -1,5 +1,75 @@
 import React from "react";
 import { Image, ImageStyle, Platform, StyleProp, StyleSheet } from "react-native";
+import { enqueueImage } from "../lib/image-queue";
+
+function QueuedWebImage({ src, original, priority, onLoad, onError, ...props }: Omit<React.ImgHTMLAttributes<HTMLImageElement>, "onLoad" | "onError"> & {
+  original: string;
+  priority: boolean;
+  onLoad?: () => void;
+  onError?: () => void;
+}) {
+  const element = React.useRef<HTMLImageElement>(null);
+  const [visible, setVisible] = React.useState(priority);
+  const [attempt, setAttempt] = React.useState(0);
+  const [ready, setReady] = React.useState(false);
+  const finish = React.useRef<(ok: boolean) => void>(() => {});
+  const callbacks = React.useRef({ onLoad, onError });
+  callbacks.current = { onLoad, onError };
+
+  React.useEffect(() => {
+    if (visible) return;
+    if (typeof IntersectionObserver === "undefined") { setVisible(true); return; }
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) {
+        setVisible(true);
+        observer.disconnect();
+      }
+    }, { rootMargin: "200px" });
+    if (element.current) observer.observe(element.current);
+    return () => observer.disconnect();
+  }, [visible]);
+
+  React.useEffect(() => {
+    if (!visible) return;
+    let disposed = false;
+    let settled = false;
+    let timeout: ReturnType<typeof setTimeout>;
+    let retry: ReturnType<typeof setTimeout>;
+    const cancel = enqueueImage(release => {
+      finish.current = ok => {
+        if (disposed || settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        release();
+        if (ok) {
+          callbacks.current.onLoad?.();
+        } else {
+          setReady(false);
+          if (attempt < 3) {
+            retry = setTimeout(() => setAttempt(value => value + 1), 1000 * 2 ** attempt + Math.random() * 500);
+          } else {
+            callbacks.current.onError?.();
+          }
+        }
+      };
+      setReady(true);
+      timeout = setTimeout(() => finish.current(false), 20000);
+    });
+    return () => {
+      disposed = true;
+      clearTimeout(timeout);
+      clearTimeout(retry);
+      finish.current = () => {};
+      cancel();
+    };
+  }, [visible, attempt]);
+
+  return <img {...props} ref={element} key={attempt}
+    src={ready ? (attempt === 3 ? original : src) : undefined}
+    onLoad={() => finish.current(true)}
+    onError={() => finish.current(false)}
+  />;
+}
 
 type Props = {
   uri: string;
@@ -53,18 +123,21 @@ export function RemoteImage({
 
   if (Platform.OS === "web") {
     const flattened = StyleSheet.flatten(style) ?? {};
-    return React.createElement("img", {
+    return React.createElement(QueuedWebImage, {
+      key: src,
       src,
+      original: uri,
+      priority,
       onLoad,
       onError,
       alt: accessibilityLabel ?? "",
-      loading: priority ? "eager" : "lazy",
+      loading: "eager",
       decoding: "async",
       fetchPriority: priority ? "high" : "low",
       style: {
         width: flattened.width ?? "100%",
         height: flattened.height ?? "100%",
-        objectFit: resizeMode,
+        objectFit: resizeMode === "stretch" ? "fill" : resizeMode === "center" || resizeMode === "repeat" ? "none" : resizeMode,
         opacity: flattened.opacity,
         objectPosition: "center",
         display: "block",
@@ -75,7 +148,7 @@ export function RemoteImage({
         right: flattened.right,
         bottom: flattened.bottom,
         ...webStyle,
-      },
+      } as React.CSSProperties,
     });
   }
 

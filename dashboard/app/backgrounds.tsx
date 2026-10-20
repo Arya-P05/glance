@@ -67,6 +67,10 @@ export default function BackgroundsScreen() {
   const [screen, setScreen] = useState<Screen>("grid");
   const [reviewIdx, setReviewIdx] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [gridGrain, setGridGrain] = useState(true);
+  const [progress, setProgress] = useState<string | null>(null);
+  const gridActionLock = useRef(false);
   const [grainChoices,setGrainChoices] = useState<Record<string,{enabled:boolean;url:string}>>({});
   const [grainError, setGrainError] = useState<string | null>(null);
   const [grainRetry, setGrainRetry] = useState(0);
@@ -119,7 +123,9 @@ export default function BackgroundsScreen() {
       setLoading(true);
       setError(null);
       const { backgrounds: b } = await api.backgrounds();
-      setBackgrounds(batch ? b.filter(item => item.meta?.reviewBatchId === batch) : b);
+      const next = batch ? b.filter(item => item.meta?.reviewBatchId === batch) : b;
+      setBackgrounds(next);
+      setSelected(prev => new Set([...prev].filter(id => next.some(item => item.id === id))));
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -128,6 +134,12 @@ export default function BackgroundsScreen() {
   }
 
   useEffect(() => { load(); }, [batch]);
+  useEffect(() => {
+    setSelected(prev => {
+      const next = new Set([...prev].filter(id => backgrounds.some(item => item.id === id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [backgrounds]);
 
   useEffect(() => {
     if (screen !== "review" || typeof document === "undefined") return;
@@ -150,6 +162,55 @@ export default function BackgroundsScreen() {
   function openReview(startIdx = 0) {
     setReviewIdx(startIdx);
     setScreen("review");
+  }
+
+  function toggleSelected(id: string) {
+    if (busy || loading) return;
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function reviewSelected(action: "approve" | "reject") {
+    if (busy || loading || gridActionLock.current) return;
+    const items = backgrounds.filter(item => selected.has(item.id));
+    if (!items.length) return;
+    gridActionLock.current = true;
+    setBusy(true);
+    setError(null);
+    const failures: string[] = [];
+    try {
+      // Keep storage/grain work serial; successful items disappear immediately.
+      for (const [index, item] of items.entries()) {
+        setProgress(`${action === "approve" ? "Approving" : "Rejecting"} ${index + 1} of ${items.length}…`);
+        try {
+          if (action === "approve") {
+            await api.stageBackground({ id: item.id, dbId: item.dbId, grain: gridGrain });
+          } else {
+            const result = await api.discardBackground({ id: item.id, dbId: item.dbId, status: "pending" });
+            if (!result.updated) throw new Error("Background was not rejected. Refresh and try again.");
+          }
+          setBackgrounds(prev => prev.filter(background => background.id !== item.id));
+          setSelected(prev => {
+            const next = new Set(prev);
+            next.delete(item.id);
+            return next;
+          });
+        } catch (e: any) {
+          failures.push(e?.message ?? "Request failed");
+        }
+      }
+      if (failures.length) {
+        setError(`${failures.length} of ${items.length} backgrounds could not be ${action === "approve" ? "approved" : "rejected"}. They remain selected so you can retry. ${failures[0]}`);
+      }
+    } finally {
+      setProgress(null);
+      setBusy(false);
+      gridActionLock.current = false;
+    }
   }
 
   function previousBackground() {
@@ -430,9 +491,12 @@ export default function BackgroundsScreen() {
         )}
         <View style={{ flex: 1 }} />
         {backgrounds.length > 0 && (
-          <Btn label="Review" onPress={() => openReview(0)} small />
+          <>
+            <Btn label="Select all" onPress={() => setSelected(new Set(backgrounds.map(item => item.id)))} disabled={busy || loading} small variant="outline" />
+            <Btn label="Review" onPress={() => openReview(Math.max(0, backgrounds.findIndex(item => selected.has(item.id))))} disabled={busy || loading} small />
+          </>
         )}
-        <Pressable onPress={load} style={styles.refreshBtn} disabled={loading}>
+        <Pressable onPress={load} style={styles.refreshBtn} disabled={loading || busy}>
           {loading
             ? <ActivityIndicator size="small" color={C.textMuted} />
             : <RefreshDouble color={C.textSecondary} width={16} height={16} />
@@ -440,6 +504,21 @@ export default function BackgroundsScreen() {
         </Pressable>
       </View>
 
+      {backgrounds.length > 0 && (
+        <View style={styles.selectionBar}>
+          <Text style={S.body}>{progress ?? (selected.size ? `${selected.size} selected` : "Click images to select them, then approve or reject.")}</Text>
+          {selected.size > 0 && (
+            <>
+              <View style={{ flex: 1 }} />
+              <Text style={S.body}>Film grain</Text>
+              <Switch accessibilityLabel="Film grain for selected backgrounds" value={gridGrain} onValueChange={setGridGrain} disabled={busy} trackColor={{ false: C.border, true: C.accentDim }} thumbColor={C.textPrimary} />
+              <Btn label={`Approve ${selected.size}`} onPress={() => reviewSelected("approve")} disabled={busy || loading} small />
+              <Btn label={`Reject ${selected.size}`} onPress={() => reviewSelected("reject")} disabled={busy || loading} small variant="danger" />
+              <Btn label="Clear selection" onPress={() => setSelected(new Set())} disabled={busy} small variant="ghost" />
+            </>
+          )}
+        </View>
+      )}
       {error && <Text style={styles.error}>{error}</Text>}
 
       <ScrollView contentContainerStyle={styles.grid}>
@@ -456,8 +535,12 @@ export default function BackgroundsScreen() {
           backgrounds.map((background, idx) => (
             <Pressable
               key={background.id}
-              onPress={() => openReview(idx)}
-              style={[styles.cell, { width: gridCell, height: gridCell }]}
+              onPress={() => toggleSelected(background.id)}
+              disabled={busy || loading}
+              accessibilityRole="checkbox"
+              accessibilityLabel={`Select background ${idx + 1}`}
+              accessibilityState={{ checked: selected.has(background.id), disabled: busy || loading }}
+              style={[styles.cell, { width: gridCell, height: gridCell }, selected.has(background.id) && styles.cellSelected]}
             >
               <RemoteImage
                 uri={backgroundGridImageUri(background)}
@@ -468,6 +551,9 @@ export default function BackgroundsScreen() {
                 resizeMode="contain"
                 priority={idx < gridColumns}
               />
+              <View pointerEvents="none" style={[styles.selectionBadge, selected.has(background.id) && styles.selectionBadgeChecked]}>
+                <Text style={styles.selectionCheck}>{selected.has(background.id) ? "✓" : ""}</Text>
+              </View>
             </Pressable>
           ))
         )}
@@ -480,6 +566,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
   toolbar: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
     gap: 8,
     paddingHorizontal: 24,
@@ -487,6 +574,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: C.border,
   },
+  selectionBar: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 10, paddingHorizontal: 24, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.border },
+  cellSelected: { borderColor: C.accent, borderWidth: 3 },
+  selectionBadge: { position: "absolute", top: 10, right: 10, width: 26, height: 26, borderRadius: 7, borderWidth: 1, borderColor: C.textSecondary, backgroundColor: "rgba(0,0,0,0.65)", alignItems: "center", justifyContent: "center" },
+  selectionBadgeChecked: { backgroundColor: C.accent, borderColor: C.accent },
+  selectionCheck: { color: C.bg, fontSize: 17, fontWeight: "700" },
   refreshBtn: {
     width: 34,
     height: 34,

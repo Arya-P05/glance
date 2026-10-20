@@ -20,6 +20,7 @@ export function Btn({ label, onPress, loading, disabled, variant = "primary", sm
   };
   return (
     <Pressable
+      accessibilityRole="button"
       onPress={onPress}
       disabled={disabled || loading}
       style={({ pressed }) => [
