@@ -30,11 +30,16 @@ function captionOverlap(a, b) {
 }
 
 export function buildCarouselSuggestions(posts, carousels = [], previous = [], covers = [], random = Math.random) {
-  const recent = carousels.filter(item => item.status === 'posted')
+  const published = carousels.filter(item => item.posted_at || item.status === 'posted');
+  const recent = published
     .sort((a, b) => String(b.posted_at || '').localeCompare(String(a.posted_at || ''))).slice(0, 20);
   const excluded = new Set([...carousels.filter(item => ['ready', 'posting'].includes(item.status)), ...recent]
     .flatMap(item => (item.instagram_carousel_items || []).map(slide => slide.post_id)));
-  const excludedPaths = new Set(posts.filter(post => excluded.has(post.id)).map(imageKey));
+  const excludedPaths = new Set([
+    ...posts.filter(post => excluded.has(post.id)).map(imageKey),
+    ...[...carousels.filter(item => ['ready', 'posting'].includes(item.status)), ...recent]
+      .flatMap(item => (item.instagram_carousel_items || []).map(slide => slide.storage_path_snapshot)).filter(Boolean),
+  ]);
   const candidates = [...new Map(posts.filter(post => post.storage_path && !excluded.has(post.id) && !excludedPaths.has(imageKey(post)))
     .map(post => [imageKey(post), post])).values()];
   if (candidates.length < SUGGESTION_COUNT * SLIDE_COUNT) {
@@ -47,21 +52,34 @@ export function buildCarouselSuggestions(posts, carousels = [], previous = [], c
   if (candidates.filter(post => !blocked.has(post.id)).length < SUGGESTION_COUNT) {
     throw new Error('Need five unused first slides for five suggestions. Add new Library images.');
   }
-  const usage = new Map();
-  for (const item of previous) for (const id of item.post_ids) usage.set(id, (usage.get(id) || 0) + 1);
+  // Count actual publications, including archived carousels and storage-path aliases.
+  const publicationStats = post => {
+    const appearances = published.filter(carousel => (carousel.instagram_carousel_items || []).some(slide =>
+      slide.post_id === post.id || slide.storage_path_snapshot === post.storage_path));
+    return { count: appearances.length, last: appearances.map(item => item.posted_at || '').sort().at(-1) || '' };
+  };
+  const stats = new Map(candidates.map(post => [post.id, publicationStats(post)]));
+  const priority = (a, b) => {
+    const left = stats.get(a.id), right = stats.get(b.id);
+    return left.count - right.count || (left.count === 0
+      ? String(b.created_at || '').localeCompare(String(a.created_at || ''))
+      : left.last.localeCompare(right.last)) || a.id.localeCompare(b.id);
+  };
+  const prioritized = candidates.slice().sort(priority);
+  // Reserve the best five eligible covers, then fill with the highest-priority
+  // remaining images. Randomness only arranges this fixed pool into fresh groups.
+  const openings = prioritized.filter(post => !blocked.has(post.id)).slice(0, SUGGESTION_COUNT);
+  const reserved = new Set(openings.map(post => post.id));
+  const pool = prioritized.filter(post => !reserved.has(post.id)).slice(0, SUGGESTION_COUNT * (SLIDE_COUNT - 1));
   const words = new Map(candidates.map(post => [post.id, captionWords(post.caption)]));
   const seen = new Set(previous.map(item => signature(item.post_ids)));
 
   // Randomized retries avoid previously proposed sets, even with a small Library.
   // Reserve all five covers first so later groups cannot run out of eligible covers.
   for (let attempt = 0; attempt < 200; attempt++) {
-    const ranked = candidates.map(post => ({ post, score: random() * 3 + 1 / (1 + (usage.get(post.id) || 0)) }))
-      .sort((a, b) => b.score - a.score);
-    const openings = ranked.filter(item => !blocked.has(item.post.id)).slice(0, SUGGESTION_COUNT);
-    const reserved = new Set(openings.map(item => item.post.id));
-    let remaining = ranked.filter(item => !reserved.has(item.post.id));
+    let remaining = pool.map(post => ({ post, score: random() * 3 }));
     const proposals = [];
-    for (const { post: cover } of openings) {
+    for (const cover of openings) {
       const selected = [cover];
       while (selected.length < SLIDE_COUNT) {
         remaining.sort((a, b) => {
@@ -75,7 +93,7 @@ export function buildCarouselSuggestions(posts, carousels = [], previous = [], c
       const title = String(cover.caption || '').split(/\n\s*\n|@/)[0].replace(/\s+/g, ' ').trim().slice(0, 80);
       proposals.push({
         title: title || `Library mix ${proposals.length + 1}`,
-        reason: 'An unused cover with four eligible Library images, selected with a preference for less-used images and varied captions.',
+        reason: 'Never-posted images come first, newest first; repeats favor fewer publications and the longest time since posting. Each mix has an unused cover and varied captions.',
         postIds,
       });
     }
@@ -96,8 +114,8 @@ async function readAll(query) {
 
 export async function suggestCarousels(db) {
   const [posts, carousels, history, covers] = await Promise.all([
-    readAll(() => db.from('posts').select('id,storage_path,caption').eq('status', 'active').order('id')),
-    readAll(() => db.from('instagram_carousels').select('id,status,posted_at,instagram_carousel_items(post_id)').in('status', ['ready', 'posting', 'posted']).order('id')),
+    readAll(() => db.from('posts').select('id,storage_path,caption,created_at').eq('status', 'active').order('id')),
+    readAll(() => db.from('instagram_carousels').select('id,status,posted_at,instagram_carousel_items(post_id,storage_path_snapshot)').in('status', ['ready', 'posting', 'posted', 'archived']).order('id')),
     readAll(() => db.from('carousel_suggestions').select('post_ids,status').order('id')),
     readAll(() => db.from('instagram_cover_history').select('post_id,storage_path').order('storage_path')),
   ]);

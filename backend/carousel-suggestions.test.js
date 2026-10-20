@@ -73,3 +73,35 @@ test('database workflow needs no AI client and pages full history before one bat
  assert.ok(ranges.some(([table,start])=>table==='carousel_suggestions'&&start===500));
  assert.equal(writes.length,1);assert.equal(writes[0].length,5);
 });
+
+const datedLibrary = library.map((post, i) => ({...post, created_at:new Date(Date.UTC(2026, 0, i + 1)).toISOString()}));
+const selectedIds = result => new Set(result.flatMap(group => group.post_ids));
+const cooldownHistory = Array.from({length:20}, (_, i) => ({status:'posted',posted_at:new Date(Date.UTC(2026, 9, i + 1)).toISOString(),instagram_carousel_items:[{post_id:`external-${i}`}]}));
+test('selects the newest 25 never-posted images regardless of suggestion history or randomness',()=>{
+ const previous=datedLibrary.slice(35).map(post=>({post_ids:[post.id],status:'dismissed'}));
+ for(const seed of [1,42,99]) {
+  const ids=selectedIds(buildCarouselSuggestions(datedLibrary,[],previous,[],seededRandom(seed)));
+  assert.deepEqual(ids,new Set(datedLibrary.slice(35).map(p=>p.id)));
+ }
+});
+test('never-posted images precede newer repeats, including archived publications and path aliases',()=>{
+ const history=[...cooldownHistory,...datedLibrary.slice(25).map(post=>({status:'archived',posted_at:'2025-01-01T00:00:00Z',instagram_carousel_items:[{post_id:`alias-${post.id}`,storage_path_snapshot:post.storage_path}]}))];
+ assert.deepEqual(selectedIds(buildCarouselSuggestions(datedLibrary,history,[],[],seededRandom())),new Set(datedLibrary.slice(0,25).map(p=>p.id)));
+});
+test('repeat fallback prefers publication count, then oldest last publication',()=>{
+ const posts=datedLibrary.slice(0,30);
+ const history=[...cooldownHistory];
+ for(const post of posts.slice(5)) {
+  const id=Number(post.id);
+  history.push({status:'posted',posted_at:id===29?'2025-12-01T00:00:00Z':'2025-06-01T00:00:00Z',instagram_carousel_items:[{post_id:post.id}]});
+  if(id>=25&&id<=28)history.push({status:'archived',posted_at:'2024-01-01T00:00:00Z',instagram_carousel_items:[{post_id:post.id}]});
+ }
+ const covers=posts.slice(5).map(p=>({post_id:p.id}));
+ assert.deepEqual(selectedIds(buildCarouselSuggestions(posts,history,[],covers,seededRandom())),new Set(posts.slice(0,25).map(p=>p.id)));
+});
+test('archived recent publications exclude storage aliases from the cooldown',()=>{
+ const history=[{status:'archived',posted_at:'2026-10-20T00:00:00Z',instagram_carousel_items:[{post_id:'old-alias',storage_path_snapshot:'image-59.png'}]}];
+ const ids=selectedIds(buildCarouselSuggestions(datedLibrary,history,[],[],seededRandom()));
+ assert.equal(ids.has('59'),false);
+ assert.deepEqual(ids,new Set(datedLibrary.slice(34,59).map(p=>p.id)));
+});

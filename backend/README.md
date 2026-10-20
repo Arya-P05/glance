@@ -192,6 +192,12 @@ Earlier pending suggestions remain available when requesting more; new suggestio
 
 Requires migrations `20261009020000_carousel_suggestions.sql` and `20261009030000_carousel_cover_history.sql`.
 
+### Fresh-image priority
+
+New carousel suggestions exclude queued images and images from the last 20 published carousels, including archived publications. Eligible images are ranked by actual publication count: never-posted images first, newest Library additions first; repeats then favor fewer publications and the oldest last publication. Publication history matches post IDs and saved storage paths. Suggestion acceptance/dismissal counts do not affect this priority.
+
+The builder reserves the five highest-priority unused covers, then fills the remaining 20 slots by that ranking. Randomness and caption variety arrange this fixed pool into fresh groups; they cannot displace higher-priority images. Existing pending suggestions and queued posts are unchanged. This history covers publications recorded by the app, not manual Instagram posts or copies saved under different paths and IDs.
+
 ### First-slide history
 
 `instagram_cover_history` permanently records first-slide post IDs and storage paths independently of carousel archival/deletion. Existing published carousels, including archived rows with `posted_at`, are backfilled. Covers are reserved when publishing starts and marked with the publication time when it succeeds. Failed or uncertain attempts retain reservations; retrying the same carousel is allowed.
