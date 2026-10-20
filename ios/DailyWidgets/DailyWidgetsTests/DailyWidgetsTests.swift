@@ -3,6 +3,30 @@ import Testing
 @testable import DailyWidgets
 
 struct DailyWidgetsTests {
+    @Test func alreadyOptimizedImportsKeepTheirOriginalBytes() {
+        let url = SupabaseConfig.widgetImageURL(storagePath: "posts/import-1.jpg")
+        #expect(url.path == "/storage/v1/object/public/instagram-posts/posts/import-1.jpg")
+        #expect(url.query == nil)
+        // JPEGs from other pipelines aren't guaranteed to be widget-sized.
+        #expect(SupabaseConfig.widgetImageURL(storagePath: "drafts/large.jpg").path.contains("/render/image/"))
+    }
+
+    @Test func widgetDownloadsAreSizedBeforeTransferAndAllowCaching() throws {
+        let path = "drafts/captioned/photo #1.png"
+        let request = GlancePhotoRefresh.imageRequest(storagePath: path)
+        let url = try #require(request.url)
+        let components = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
+        #expect(url.path == "/storage/v1/render/image/public/instagram-posts/\(path)")
+        #expect(components.fragment == nil)
+        let options = Dictionary(uniqueKeysWithValues: (components.queryItems ?? []).map { ($0.name, $0.value) })
+        #expect(options["width"] == "800")
+        #expect(options["height"] == "800")
+        #expect(options["resize"] == "contain")
+        #expect(options["quality"] == "95")
+        #expect(request.value(forHTTPHeaderField: "Accept") == "image/webp")
+        #expect(request.cachePolicy == .useProtocolCachePolicy)
+    }
+
     private func snapshot(at date: Date = Date()) -> SharedPhotoSnapshot.Snapshot {
         .init(
             standard: .init(data: Data(repeating: 1, count: 64), caption: "square", postId: UUID()),

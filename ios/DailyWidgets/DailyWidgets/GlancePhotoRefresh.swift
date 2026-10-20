@@ -15,7 +15,7 @@ enum GlancePhotoRefresh {
 
     static var refreshInterval: TimeInterval {
         let seconds = UserDefaults(suiteName: SharedPhotoSnapshot.appGroupID)?.double(forKey: "photo.refreshIntervalSeconds") ?? 0
-        return [1800, 3600, 7200, 43200, 86400].contains(Int(seconds)) ? seconds : 3600
+        return [600, 900, 1800, 3600, 7200, 43200, 86400].contains(Int(seconds)) ? seconds : 3600
     }
 
     @discardableResult
@@ -102,14 +102,23 @@ enum GlancePhotoRefresh {
         )
     }
 
-    private static func loadResizedJPEGData(storagePath: String) async -> Data? {
-        var request = URLRequest(url: SupabaseConfig.publicImageURL(storagePath: storagePath), cachePolicy: .reloadIgnoringLocalCacheData)
+    static func imageRequest(storagePath: String) -> URLRequest {
+        var request = URLRequest(url: SupabaseConfig.widgetImageURL(storagePath: storagePath), cachePolicy: .useProtocolCachePolicy)
+        request.setValue("image/webp", forHTTPHeaderField: "Accept")
         request.timeoutInterval = 25
+        return request
+    }
+
+    private static func loadResizedJPEGData(storagePath: String) async -> Data? {
+        let request = imageRequest(storagePath: storagePath)
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
                   let image = UIImage(data: data) else { return nil }
-            let scale = min(1, 800 / max(image.size.width, image.size.height))
+            // Keep the existing JPEG snapshot format for recents, saving and sharing.
+            // On transform/network failure, keep the last snapshot rather than
+            // silently falling back to a multi-megabyte original download.
+            let scale = min(1, CGFloat(SupabaseConfig.widgetImageMaxDimension) / max(image.size.width, image.size.height))
             let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
             let format = UIGraphicsImageRendererFormat()
             format.scale = 1

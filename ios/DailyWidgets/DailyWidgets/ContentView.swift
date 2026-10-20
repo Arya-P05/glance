@@ -984,6 +984,8 @@ private final class PickerScrollDelegateForwarder: NSObject, UIScrollViewDelegat
 }
 
 private enum PhotoRefreshInterval: String, CaseIterable, Identifiable {
+    case tenMinutes
+    case fifteenMinutes
     case thirtyMinutes
     case oneHour
     case twoHours
@@ -994,6 +996,8 @@ private enum PhotoRefreshInterval: String, CaseIterable, Identifiable {
 
     var seconds: TimeInterval {
         switch self {
+        case .tenMinutes: return 600
+        case .fifteenMinutes: return 900
         case .thirtyMinutes: return 1800
         case .oneHour: return 3600
         case .twoHours: return 7200
@@ -1004,6 +1008,8 @@ private enum PhotoRefreshInterval: String, CaseIterable, Identifiable {
 
     init?(seconds: TimeInterval) {
         switch Int(seconds) {
+        case 600: self = .tenMinutes
+        case 900: self = .fifteenMinutes
         case 1800: self = .thirtyMinutes
         case 3600: self = .oneHour
         case 7200: self = .twoHours
@@ -1016,6 +1022,8 @@ private enum PhotoRefreshInterval: String, CaseIterable, Identifiable {
     /// Short labels for the compact inline wheel only.
     var wheelLabel: String {
         switch self {
+        case .tenMinutes: return "10m"
+        case .fifteenMinutes: return "15m"
         case .thirtyMinutes: return "30m"
         case .oneHour: return "1h"
         case .twoHours: return "2h"

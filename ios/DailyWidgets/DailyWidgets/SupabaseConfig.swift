@@ -21,5 +21,27 @@ enum SupabaseConfig {
         let projectRef = url.host?.components(separatedBy: ".").first ?? "your-project"
         return URL(string: "https://\(projectRef).supabase.co/storage/v1/object/public/instagram-posts/\(storagePath)")!
     }
-}
 
+    // Match the existing on-device resolution. Resize on the server so originals
+    // never need to cross the network just to be reduced to this size.
+    static let widgetImageMaxDimension = 800
+
+    static func widgetImageURL(storagePath: String) -> URL {
+        // The Instagram import pipeline already writes <=800px JPEGs here.
+        // Re-encoding these as high-quality WebP can actually increase their size.
+        if storagePath.hasPrefix("posts/"), storagePath.lowercased().hasSuffix(".jpg") {
+            return url.appendingPathComponent("storage/v1/object/public/instagram-posts")
+                .appendingPathComponent(storagePath)
+        }
+        let imageURL = url.appendingPathComponent("storage/v1/render/image/public/instagram-posts")
+            .appendingPathComponent(storagePath)
+        var components = URLComponents(url: imageURL, resolvingAgainstBaseURL: false)!
+        components.queryItems = [
+            URLQueryItem(name: "width", value: String(widgetImageMaxDimension)),
+            URLQueryItem(name: "height", value: String(widgetImageMaxDimension)),
+            URLQueryItem(name: "resize", value: "contain"),
+            URLQueryItem(name: "quality", value: "95"),
+        ]
+        return components.url!
+    }
+}
