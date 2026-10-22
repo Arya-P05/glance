@@ -331,7 +331,7 @@ export default function DraftsScreen() {
 
         {/* Main review area */}
         <View style={styles.reviewBody}>
-          {/* Widget previews — all three in a single centered row */}
+          {/* Only preview widget formats enabled for this draft. */}
           <View style={styles.previewArea}>
             <View style={styles.previewRow}>
               <View style={styles.previewBlock}>
@@ -342,10 +342,12 @@ export default function DraftsScreen() {
                 <Text style={styles.previewLabel}>Small</Text>
                 <WidgetSmall imageUri={imgUri} />
               </View>
-              <View style={styles.previewBlock}>
-                <Text style={styles.previewLabel}>Medium</Text>
-                <WidgetMedium imageUri={mediumImgUri} />
-              </View>
+              {draft.meta?.mediumRejected !== true && (
+                <View style={styles.previewBlock}>
+                  <Text style={styles.previewLabel}>Medium</Text>
+                  <WidgetMedium imageUri={mediumImgUri} />
+                </View>
+              )}
             </View>
           </View>
 

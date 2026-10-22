@@ -316,6 +316,7 @@ export interface DraftMeta {
   backgroundStatus?: "pending" | "staged" | "approved" | "discarded" | null;
   imageApprovedAt?: string | null;
   approvedAt?: string | null;
+  mediumRejected?: boolean;
   mediumStoragePath?: string | null;
   mediumImageUrl?: string | null;
   scene?: Record<string, string>;

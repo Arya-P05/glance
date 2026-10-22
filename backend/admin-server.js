@@ -737,6 +737,7 @@ async function listDrafts(supabase, projectUrl) {
         captionPrompt: row.metadata?.captionPrompt ?? null,
         captionLayout: row.metadata?.captionLayout ?? null,
         mediumCaptionLayout: row.metadata?.mediumCaptionLayout ?? null,
+        mediumRejected: row.metadata?.mediumRejected === true,
         mediumStoragePath: row.metadata?.mediumStoragePath ?? null,
         mediumImageUrl: row.metadata?.mediumStoragePath
           ? publicObjectUrl(projectUrl, row.metadata.mediumStoragePath)
