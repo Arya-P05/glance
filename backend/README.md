@@ -267,3 +267,20 @@ python3 tests/run-image-assets-integration.py
 ```
 
 The SQL runner uses a disposable `postgres:15` Docker container with no published ports and removes it afterward. It checks backfill, ownership, publication rollback/idempotency, cleanup claims, and existing feedback, widget and carousel behavior.
+
+### Caption voice and retired lab
+
+Background captions now use the 25 user-authored examples in `caption-voice.json`
+as their primary voice reference. The reviewed-caption generator attaches the
+image to guide emotional fit, allows questions and censored profanity, and checks
+length and repeated wording without substituting generic fallback copy. Its
+recipe version and voice hash are saved with each new caption batch. Existing
+captions change only when explicitly regenerated. Fresh variations still require
+human review; automated checks do not certify writing quality.
+
+Caption Lab has been removed from the dashboard and its API routes retired. Local
+calibration decisions, notes, comparisons and generated samples remain under
+`backend/content/caption-lab/`. The retired source is preserved in that directory's
+`retired-source/` folder as a historical snapshot, not a supported runnable tool.
+These archives are gitignored; preserve them when moving machines. Production
+caption generation does not depend on the archive.

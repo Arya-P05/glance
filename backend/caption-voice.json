@@ -1,0 +1,193 @@
+{
+  "version": 1,
+  "source": "User-authored examples explicitly loved in chat on 2026-10-21",
+  "examples": [
+    {
+      "id": "b2e54cf1b3f1d9501314e6dd",
+      "text": "If not us, then who?",
+      "author": "user",
+      "wordingDecision": "keep",
+      "imageFit": null
+    },
+    {
+      "id": "ec3b47974133e76d8833984d",
+      "text": "Choose who, choose you.",
+      "author": "user",
+      "wordingDecision": "keep",
+      "imageFit": null
+    },
+    {
+      "id": "f53ccbdd785ba23473881282",
+      "text": "Life’s good, when you smile bro.",
+      "author": "user",
+      "wordingDecision": "keep",
+      "imageFit": null
+    },
+    {
+      "id": "c3fa4547eab8d2ab4b69b795",
+      "text": "I’m weird but I’m really tho.",
+      "author": "user",
+      "wordingDecision": "keep",
+      "imageFit": null
+    },
+    {
+      "id": "827e2cd96503983b7aa1ecc1",
+      "text": "Cant rush greatness twin.",
+      "author": "user",
+      "wordingDecision": "keep",
+      "imageFit": null
+    },
+    {
+      "id": "4c2338a5aa4d257e0e714c18",
+      "text": "They’ll hate anyway, just be yourself.",
+      "author": "user",
+      "wordingDecision": "keep",
+      "imageFit": null
+    },
+    {
+      "id": "81b37db5261c129685bd04a4",
+      "text": "Relax gng, life is not a race.",
+      "author": "user",
+      "wordingDecision": "keep",
+      "imageFit": null
+    },
+    {
+      "id": "cbcfb0c9e519126a610c14aa",
+      "text": "One life, make it legendary.",
+      "author": "user",
+      "wordingDecision": "keep",
+      "imageFit": null
+    },
+    {
+      "id": "21027e9fce67918aeec80e6d",
+      "text": "One life, make it fun.",
+      "author": "user",
+      "wordingDecision": "keep",
+      "imageFit": null
+    },
+    {
+      "id": "7e447e057dcff8204800494f",
+      "text": "One life, don’t make it boring.",
+      "author": "user",
+      "wordingDecision": "keep",
+      "imageFit": null
+    },
+    {
+      "id": "373224063bf2079fdc9528be",
+      "text": "I know I’ll win, I’m crazy.",
+      "author": "user",
+      "wordingDecision": "keep",
+      "imageFit": null
+    },
+    {
+      "id": "da53789803a5199843e6fa52",
+      "text": "Remember to f*ck their opinion.",
+      "author": "user",
+      "wordingDecision": "keep",
+      "imageFit": null
+    },
+    {
+      "id": "c1ba982e33fb429ab9305fce",
+      "text": "Smile bro, life’s not over.",
+      "author": "user",
+      "wordingDecision": "keep",
+      "imageFit": null
+    },
+    {
+      "id": "03113bc4f64e1890ebcd6a56",
+      "text": "Not a friend, but a brother.",
+      "author": "user",
+      "wordingDecision": "keep",
+      "imageFit": null
+    },
+    {
+      "id": "425ac1d9c6980df7a1efa241",
+      "text": "Life update: I’m up again.",
+      "author": "user",
+      "wordingDecision": "keep",
+      "imageFit": null
+    },
+    {
+      "id": "1cd789af05a4a14c89afa383",
+      "text": "Life update: we’re so back.",
+      "author": "user",
+      "wordingDecision": "keep",
+      "imageFit": null
+    },
+    {
+      "id": "f64864679d6562b370445940",
+      "text": "Work hard but, enjoy life too.",
+      "author": "user",
+      "wordingDecision": "keep",
+      "imageFit": null
+    },
+    {
+      "id": "780d6da8975b8565bb1bb62a",
+      "text": "U got so much potential bro.",
+      "author": "user",
+      "wordingDecision": "keep",
+      "imageFit": null
+    },
+    {
+      "id": "f4a4d7babd265cfa035ca3b6",
+      "text": "Time flies, memories don’t.",
+      "author": "user",
+      "wordingDecision": "keep",
+      "imageFit": null
+    },
+    {
+      "id": "984bc1480a87d4dfd9ef4d11",
+      "text": "We stay loyal, forever twin.",
+      "author": "user",
+      "wordingDecision": "keep",
+      "imageFit": null
+    },
+    {
+      "id": "6c8d75064808950f1742b5ce",
+      "text": "Stay iconic, it’s goated af.",
+      "author": "user",
+      "wordingDecision": "keep",
+      "imageFit": null
+    },
+    {
+      "id": "1d456bf5d28f75d668da790b",
+      "text": "Always remember, dream big friend.",
+      "author": "user",
+      "wordingDecision": "keep",
+      "imageFit": null
+    },
+    {
+      "id": "e683a8e19027b0cf204b0e39",
+      "text": "“You’re acting crazy”, I’m not acting.",
+      "author": "user",
+      "wordingDecision": "keep",
+      "imageFit": null
+    },
+    {
+      "id": "d0a5106a671879eae1023fe5",
+      "text": "It’ll pass, as all things do.",
+      "author": "user",
+      "wordingDecision": "keep",
+      "imageFit": null
+    },
+    {
+      "id": "6ce54519a00d1305db62c1ce",
+      "text": "Nothings promised, have fun today.",
+      "author": "user",
+      "wordingDecision": "keep",
+      "imageFit": null
+    }
+  ],
+  "guidance": {
+    "priority": "These explicit positive examples take precedence over inferred preferences from the earlier calibration.",
+    "verbatim": "Preserve original spelling, punctuation, capitalization and wording. Line splits are not user-approved yet.",
+    "imageRelationship": "Match the image’s vibe and feeling subtly; do not narrate its contents. Image fit remains unreviewed for these examples.",
+    "interpretation": [
+      "Allow rhetorical questions, defiance, loyalty, confidence, humor, reassurance and enjoyment.",
+      "Slang and censored profanity are explicitly represented; do not sanitize the voice into generic wellness copy.",
+      "Do not ban relaxing or taking your time: Relax gng, life is not a race and Cant rush greatness twin are explicit positives.",
+      "Simple familiar phrasing and closely related variations are allowed, as demonstrated by the One life and Life update families.",
+      "Do not silently correct ambiguous wording such as I’m weird but I’m really tho."
+    ]
+  }
+}

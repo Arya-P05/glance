@@ -43,15 +43,11 @@ import { addReferences, listReferences, updateReference } from "./creative-refer
 import { getInstagramConnectionStatus, publishInstagramCarousel } from "./instagram-publisher.js";
 import {
   DEFAULT_CAPTION_MODEL,
-  buildCaptionPrompt,
   captionSignature,
-  completeCaptionOptions,
   normalizeCaptionLayout,
   normalizeMediumCaptionLayout,
   overlayCaption,
   overlayMediumCaption,
-  parseCaptionOptions,
-  variedFallbackCaption,
 } from "./motivational-generator.js";
 import { supabaseServiceRoleKey, supabaseUrl } from "./supabase-env.js";
 
@@ -864,31 +860,6 @@ async function renderDraftCaption(supabase, { id, caption, layout, mediumLayout 
   };
 }
 
-function responseText(response) {
-  if (typeof response.output_text === "string" && response.output_text.trim()) {
-    return response.output_text;
-  }
-  const chunks = [];
-  for (const item of response.output || []) {
-    for (const content of item.content || []) {
-      if (content.type === "output_text" && content.text) chunks.push(content.text);
-      if (content.type === "text" && content.text) chunks.push(content.text);
-    }
-  }
-  return chunks.join("\n");
-}
-
-function captionRequestContent(prompt, imageBytes) {
-  const content = [{ type: "input_text", text: prompt }];
-  if (imageBytes?.length) {
-    content.push({
-      type: "input_image",
-      image_url: `data:image/png;base64,${imageBytes.toString("base64")}`,
-    });
-  }
-  return content;
-}
-
 async function loadRecentCaptions(supabase, limit = 30) {
   const recent = [];
 
@@ -927,36 +898,6 @@ async function loadRecentCaptions(supabase, limit = 30) {
     seen.add(key);
     return true;
   });
-}
-
-async function generateCaptionForScene({ client, model, scene, imageBytes = null, recentCaptions }) {
-  let lastPrompt = buildCaptionPrompt(scene, { recentCaptions, hasImage: Boolean(imageBytes?.length) });
-
-  for (let attempt = 0; attempt < 5; attempt++) {
-    lastPrompt = buildCaptionPrompt(scene, { recentCaptions, attempt, hasImage: Boolean(imageBytes?.length) });
-    const response = await client.responses.create({
-      model,
-      temperature: 0.7,
-      input: [{ role: "user", content: captionRequestContent(lastPrompt, imageBytes) }],
-    });
-    const options = completeCaptionOptions(parseCaptionOptions(responseText(response)), scene, recentCaptions, 5, {
-      requireSeed: true,
-    });
-    if (options.length) {
-      return {
-        caption: options[Math.floor(Math.random() * options.length)],
-        options,
-        prompt: lastPrompt,
-      };
-    }
-  }
-
-  const fallbackOptions = completeCaptionOptions([], scene, recentCaptions);
-  return {
-    caption: fallbackOptions[0] || variedFallbackCaption(scene, recentCaptions),
-    options: fallbackOptions,
-    prompt: lastPrompt,
-  };
 }
 
 function normalizeSelectedCaption(caption) {
@@ -1219,7 +1160,7 @@ async function generateCaptionOptionsForBackground(supabase, { id, captionModel 
   const openai = new OpenAI({ apiKey: env("OPENAI_GENERAL_API_KEY") });
   const recentCaptions = await loadRecentCaptions(supabase);
   const taste = await loadTaste(supabase);
-  const captionResult = await (taste.references.length || taste.feedback?.caption?.length ? generateReviewedCaptions : generateCaptionForScene)({
+  const captionResult = await generateReviewedCaptions({
     taste,
     client: openai,
     model,
@@ -1243,7 +1184,7 @@ async function generateCaptionOptionsForBackground(supabase, { id, captionModel 
     captionOptions,
     selectedCaptionIndex,
     captionPrompt: captionResult.prompt,
-    captionTaste: taste,
+    captionTaste: captionResult.taste,
     captionModel: model,
     captionGeneratedAt: new Date().toISOString(),
     scene,
@@ -1251,7 +1192,8 @@ async function generateCaptionOptionsForBackground(supabase, { id, captionModel 
 
   const { data: savedMetadata, error: updateErr } = await supabase.rpc("merge_background_generation", {
     target_id:row.id,
-    patch:{captionOptions,selectedCaptionIndex,captionPrompt:captionResult.prompt,captionTaste:taste,captionModel:model,
+    patch:{captionOptions,selectedCaptionIndex,captionPrompt:captionResult.prompt,captionTaste:captionResult.taste,captionModel:model,
+      captionGenerationAttempts:captionResult.attempts.map(({responseId,usage}) => ({responseId,usage})),
       captionGeneratedAt:nextMetadata.captionGeneratedAt,captionLayout:placement.layout,mediumCaptionLayout:placement.mediumLayout,
       placementFeedbackIds:placement.feedbackIds},
   });
@@ -1279,7 +1221,7 @@ async function generateCaptionOptionsForBackground(supabase, { id, captionModel 
     captionOptions,
     selectedCaptionIndex,
     captionPrompt: captionResult.prompt,
-    captionTaste: taste,
+    captionTaste: captionResult.taste,
     captionRejections:savedMetadata.captionRejections || [],
     captionLayout:placement.layout,
     mediumCaptionLayout:placement.mediumLayout,
