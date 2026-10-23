@@ -1,8 +1,8 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Platform, Switch, TextInput, useWindowDimensions,
 } from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useFocusEffect, useRouter, useLocalSearchParams } from "expo-router";
 import { NavArrowLeft, NavArrowRight, RefreshDouble, Trash } from "iconoir-react-native";
 import { API_BASE, api, Draft } from "../lib/api";
 import { Btn } from "../components/Btn";
@@ -13,6 +13,11 @@ import { WidgetLarge } from "../components/iPhoneMockup/WidgetLarge";
 import { previewImageUrl, RemoteImage } from "../components/RemoteImage";
 import { normalizeCaptionLayout } from "../lib/captionLayout";
 import { ActionKey } from "../components/ActionKey";
+
+import { backgroundsCache } from "../lib/review-list-cache";
+
+const EMPTY_ITEMS: Draft[] = [];
+const setBackgrounds = backgroundsCache.set;
 
 type Screen = "grid" | "review";
 
@@ -62,8 +67,13 @@ export default function BackgroundsScreen() {
   const router = useRouter();
   const { batch } = useLocalSearchParams<{batch?: string}>();
   const { width } = useWindowDimensions();
-  const [backgrounds, setBackgrounds] = useState<Draft[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cachedItems = useSyncExternalStore(backgroundsCache.subscribe, backgroundsCache.get, () => null);
+  const backgrounds = useMemo(() => {
+    const items = cachedItems ?? EMPTY_ITEMS;
+    return batch ? items.filter(item => item.meta?.reviewBatchId === batch) : items;
+  }, [cachedItems, batch]);
+  const [loading, setLoading] = useState(cachedItems === null);
+  const [refreshing, setRefreshing] = useState(false);
   const [screen, setScreen] = useState<Screen>("grid");
   const [reviewIdx, setReviewIdx] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -118,22 +128,22 @@ export default function BackgroundsScreen() {
     finally { setBusy(false); }
   }
 
-  async function load() {
+  const load = useCallback(async () => {
     try {
-      setLoading(true);
+      setLoading(backgroundsCache.get() === null);
+      setRefreshing(true);
       setError(null);
-      const { backgrounds: b } = await api.backgrounds();
-      const next = batch ? b.filter(item => item.meta?.reviewBatchId === batch) : b;
-      setBackgrounds(next);
-      setSelected(prev => new Set([...prev].filter(id => next.some(item => item.id === id))));
+      await backgroundsCache.refresh();
     } catch (e: any) {
       setError(e.message);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }
+  }, []);
 
-  useEffect(() => { load(); }, [batch]);
+  useFocusEffect(useCallback(() => { void load(); }, [load]));
+
   useEffect(() => {
     setSelected(prev => {
       const next = new Set([...prev].filter(id => backgrounds.some(item => item.id === id)));
@@ -295,7 +305,8 @@ export default function BackgroundsScreen() {
       const insertAt = reviewIdx + 1;
       setBackgrounds(prev => {
         const next = prev.filter(item => item.id !== result.background.id);
-        next.splice(Math.min(insertAt, next.length), 0, result.background);
+        const sourceIndex = next.findIndex(item => item.id === background.id);
+        next.splice(sourceIndex < 0 ? next.length : sourceIndex + 1, 0, result.background);
         return next;
       });
       setReviewIdx(insertAt);
@@ -496,8 +507,8 @@ export default function BackgroundsScreen() {
             <Btn label="Review" onPress={() => openReview(Math.max(0, backgrounds.findIndex(item => selected.has(item.id))))} disabled={busy || loading} small />
           </>
         )}
-        <Pressable onPress={load} style={styles.refreshBtn} disabled={loading || busy}>
-          {loading
+        <Pressable onPress={load} style={styles.refreshBtn} disabled={refreshing || busy}>
+          {refreshing
             ? <ActivityIndicator size="small" color={C.textMuted} />
             : <RefreshDouble color={C.textSecondary} width={16} height={16} />
           }
@@ -521,7 +532,7 @@ export default function BackgroundsScreen() {
       )}
       {error && <Text style={styles.error}>{error}</Text>}
 
-      <ScrollView contentContainerStyle={styles.grid}>
+      <ScrollView contentContainerStyle={backgrounds.length === 0 ? styles.emptyContent : styles.grid}>
         {loading && !backgrounds.length ? (
           <View style={{ padding: 40 }}><ActivityIndicator color={C.accent} /></View>
         ) : backgrounds.length === 0 ? (
@@ -596,6 +607,7 @@ const styles = StyleSheet.create({
     padding: GRID_PADDING,
     gap: GRID_GAP,
   },
+  emptyContent: { flexGrow: 1, alignItems: "center", justifyContent: "center", padding: GRID_PADDING },
   empty: { padding: 40, alignItems: "center", gap: 10 },
   emptyTitle: { color: C.textSecondary, fontSize: 18, fontWeight: "700" },
   cell: {

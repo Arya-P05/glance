@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { useFocusEffect } from "expo-router";
 import {
   View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Image, Platform, useWindowDimensions,
 } from "react-native";
@@ -13,6 +14,11 @@ import { previewImageUrl, RemoteImage } from "../components/RemoteImage";
 import { CaptionEditor } from "../components/CaptionEditor";
 import { CaptionLayout, CaptionText, MediumCaptionLayout } from "../lib/captionLayout";
 import { ActionKey } from "../components/ActionKey";
+
+import { draftsCache } from "../lib/review-list-cache";
+
+const EMPTY_ITEMS: Draft[] = [];
+const setDrafts = draftsCache.set;
 
 type Screen = "grid" | "review" | "edit";
 
@@ -46,8 +52,10 @@ function normalizeCaption(caption: CaptionText): CaptionText {
 
 export default function DraftsScreen() {
   const { width } = useWindowDimensions();
-  const [drafts, setDrafts] = useState<Draft[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cachedItems = useSyncExternalStore(draftsCache.subscribe, draftsCache.get, () => null);
+  const drafts = cachedItems ?? EMPTY_ITEMS;
+  const [loading, setLoading] = useState(cachedItems === null);
+  const [refreshing, setRefreshing] = useState(false);
   const [screen, setScreen] = useState<Screen>("grid");
   const [reviewIdx, setReviewIdx] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -64,20 +72,21 @@ export default function DraftsScreen() {
     Math.floor((gridViewportWidth - GRID_GAP * (gridColumns - 1)) / gridColumns)
   );
 
-  async function load() {
+  const load = useCallback(async () => {
     try {
-      setLoading(true);
+      setLoading(draftsCache.get() === null);
+      setRefreshing(true);
       setError(null);
-      const { drafts: d } = await api.drafts();
-      setDrafts(d);
+      await draftsCache.refresh();
     } catch (e: any) {
       setError(e.message);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }
+  }, []);
 
-  useEffect(() => { load(); }, []);
+  useFocusEffect(useCallback(() => { void load(); }, [load]));
 
   function openReview(startIdx = 0) {
     setReviewIdx(startIdx);
@@ -102,7 +111,7 @@ export default function DraftsScreen() {
     try {
       await action();
       const next = drafts.filter(d => d.id !== draft.id);
-      setDrafts(next);
+      setDrafts(prev => prev.filter(item => item.id !== draft.id));
       if (next.length === 0) setScreen("grid");
       else setReviewIdx(i => Math.min(i, next.length - 1));
       if (next.length === 0) load();
@@ -430,8 +439,8 @@ export default function DraftsScreen() {
         {drafts.length > 0 && (
           <Btn label="Review" onPress={() => openReview(0)} small />
         )}
-        <Pressable onPress={load} style={styles.refreshBtn} disabled={loading}>
-          {loading
+        <Pressable onPress={load} style={styles.refreshBtn} disabled={refreshing}>
+          {refreshing
             ? <ActivityIndicator size="small" color={C.textMuted} />
             : <RefreshDouble color={C.textSecondary} width={16} height={16} />
           }
@@ -440,7 +449,7 @@ export default function DraftsScreen() {
 
       {error && <Text style={styles.error}>{error}</Text>}
 
-      <ScrollView contentContainerStyle={styles.grid}>
+      <ScrollView contentContainerStyle={drafts.length === 0 ? styles.emptyContent : styles.grid}>
         {loading && !drafts.length ? (
           <View style={{ padding: 40 }}><ActivityIndicator color={C.accent} /></View>
         ) : drafts.length === 0 ? (
@@ -509,6 +518,7 @@ const styles = StyleSheet.create({
     padding: GRID_PADDING,
     gap: GRID_GAP,
   },
+  emptyContent: { flexGrow: 1, alignItems: "center", justifyContent: "center", padding: GRID_PADDING },
   empty: { padding: 40, alignItems: "center", gap: 10 },
   emptyTitle: { color: C.textSecondary, fontSize: 18, fontWeight: "700" },
   cell: {
