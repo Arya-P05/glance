@@ -360,7 +360,10 @@ export default function ApprovedBackgroundsScreen() {
 
       {error && <Text style={styles.error}>{error}</Text>}
 
-      <ScrollView contentContainerStyle={styles.grid}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={backgrounds.length === 0 ? styles.emptyContent : styles.grid}
+      >
         {loading && !backgrounds.length ? (
           <View style={{ padding: 40 }}><ActivityIndicator color={C.accent} /></View>
         ) : backgrounds.length === 0 ? (
@@ -428,8 +431,9 @@ const styles = StyleSheet.create({
     padding: GRID_PADDING,
     gap: GRID_GAP,
   },
+  emptyContent: { flexGrow: 1, justifyContent: "center", alignItems: "center", padding: GRID_PADDING },
   empty: { padding: 40, alignItems: "center", gap: 10 },
-  emptyTitle: { color: C.textSecondary, fontSize: 18, fontWeight: "700" },
+  emptyTitle: { color: C.textSecondary, fontSize: 18, fontWeight: "700", textAlign: "center" },
   cell: {
     borderRadius: 10,
     overflow: "hidden",
